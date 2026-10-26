@@ -110,7 +110,8 @@ Example set pieces:
    - the "Ga verder" bubble rectangle;
    - the road, its stroke width plus 18px on each side;
    - every placed set-piece footprint;
-   - week banners.
+   - week banners;
+   - the finale gate.
 4. **Filler flora:** Poisson-disc sampling (Bridson) at a minimum distance of about 26px,
    using the biome's flora weights, and rejecting every point inside an exclusion zone. The
    density is higher at the screen edges and lower near the road.
@@ -131,6 +132,14 @@ Example set pieces:
 
 Road: paved below the current lesson, dirt track above it, as in the mockup.
 
+**Finale:** the road ends 200px above the last lesson at a campus gate (the world is sized to
+fit it, with no empty road above). Closed and padlocked, lanterns lit, until every lesson is
+done; then open, with flags and falling confetti. Its sign ("Finish", then "Diploma!" /
+"Graduated!") is drawn in the text layer. The gate has its own exclusion zone.
+
+**Screen edge:** set pieces stay within x 4…386. Where a full-size piece no longer fits, it is
+tried at 0.86 scale (drawn scaled about its anchor) before the next candidate.
+
 ### Performance
 
 - The world SVG is generated once per (reader, lesson-state signature) and memoised.
@@ -139,6 +148,12 @@ Road: paved below the current lesson, dirt track above it, as in the mockup.
 - **Animations only run while visible:** an IntersectionObserver per world segment toggles a
   `paused` class. Reduced motion: no animation at all.
 - No `<filter>` per prop. Shared filter definitions only, applied per group: fog, mute, grain.
+- **One SVG per week segment** (stacked over a ground-and-road SVG, under the grain and dusk
+  layers): an animating piece then repaints only its own segment, not the whole 10,000px
+  world. On a 4×-throttled phone this cut main-thread time while scrolling a 40-lesson world
+  by about 37% (paint about 4×). The evening grade itself costs nothing measurable.
+- `world:build` (compose + render) and `world:painted` User Timing entries show up in the
+  DevTools Performance panel.
 
 ### Dark mode
 

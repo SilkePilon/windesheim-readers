@@ -21,12 +21,21 @@ import {
 } from "../lib/game";
 import { getQuests, recordQuestEvent } from "../lib/quests";
 import type { QuestEvent, QuestId } from "../../shared/quests";
-import { computeMastery, levelFromXp, XP, type BadgeId } from "../../shared/game";
+import { computeMastery, levelFromXp, quizXpFactor, quizXpPerCorrect, XP, type BadgeId } from "../../shared/game";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
 import { getModel } from "../ai/providers";
 
 const scheduler = fsrs({ enable_fuzz: true });
+
+/** Today's quiz XP factor for this user and lesson (diminishing after 3 quizzes per day). */
+async function todayQuizFactor(userId: string, lessonId: string) {
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: count() })
+    .from(schema.attempt)
+    .where(and(eq(schema.attempt.userId, userId), eq(schema.attempt.lessonId, lessonId), eq(schema.attempt.kind, "quiz"), gte(schema.attempt.createdAt, startOfDay())));
+  return quizXpFactor(n);
+}
 
 /** Next-due interval (ms from `now`) per rating, from FSRS `repeat()` previews. */
 function previewIntervals(card: Card, now: Date) {
@@ -387,7 +396,8 @@ export const learn = new Hono<AppEnv>()
     // Easy -> hard ramp within a random sample.
     const picked = shuffle(qs).slice(0, n).sort((a, b) => a.difficulty - b.difficulty);
     const sessionId = createQuizSession(u.id, row.lesson.id, picked.map((q) => q.id));
-    return c.json({ sessionId, questions: picked.map(publicQuestion) });
+    const xpPerCorrect = quizXpPerCorrect(await todayQuizFactor(u.id, row.lesson.id));
+    return c.json({ sessionId, questions: picked.map(publicQuestion), xpPerCorrect });
   })
 
   .post("/questions/:id/check", async (c) => {
@@ -414,11 +424,7 @@ export const learn = new Hono<AppEnv>()
     const correct = [...session.results.values()].filter(Boolean).length;
 
     // Diminishing XP after 3 quizzes on the same lesson per day, to keep the leaderboard fair.
-    const [{ n: todayAttempts } = { n: 0 }] = await db
-      .select({ n: count() })
-      .from(schema.attempt)
-      .where(and(eq(schema.attempt.userId, u.id), eq(schema.attempt.lessonId, lessonId), eq(schema.attempt.kind, "quiz"), gte(schema.attempt.createdAt, startOfDay())));
-    const factor = todayAttempts < 3 ? 1 : 0.25;
+    const factor = await todayQuizFactor(u.id, lessonId);
     const perfect = correct === max && max >= 5;
 
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId, kind: "quiz", score: correct, maxScore: max });

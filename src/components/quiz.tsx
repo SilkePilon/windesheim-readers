@@ -54,13 +54,21 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
   const [combo, setCombo] = useState(0);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [xpPerCorrect, setXpPerCorrect] = useState<number>(XP.quizCorrect);
   const n = Math.min(10, available);
+  // Synchronous guard: `busy` state lags a render, so a double tap could check or submit twice.
+  const lock = useRef(false);
 
   const start = useCallback(async () => {
+    if (lock.current) return;
+    lock.current = true;
     setBusy(true);
     try {
-      const res = await api.get<{ sessionId: string; questions: PublicQuestion[] }>(`/lessons/${lessonId}/quiz?n=${n}`);
+      const res = await api.get<{ sessionId: string; questions: PublicQuestion[]; xpPerCorrect?: number }>(
+        `/lessons/${lessonId}/quiz?n=${n}`,
+      );
       setSessionId(res.sessionId);
+      setXpPerCorrect(res.xpPerCorrect ?? XP.quizCorrect);
       setQuestions(res.questions);
       setIndex(0);
       setAnswers([]);
@@ -73,6 +81,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
     } catch {
       setPhase("error");
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   }, [lessonId, n]);
@@ -90,7 +99,8 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
   const isLast = index + 1 >= questions.length;
 
   const check = useCallback(async () => {
-    if (!q || reveal || !isAnswered(q, value) || busy) return;
+    if (!q || reveal || !isAnswered(q, value) || lock.current) return;
+    lock.current = true;
     setBusy(true);
     try {
       const res = await api.post<CheckResult>(`/questions/${q.id}/check`, { sessionId, answer: value });
@@ -98,12 +108,13 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
       setAnswers((a) => [...a, res.correct]);
       setCombo((c) => (res.correct ? c + 1 : 0));
     } finally {
+      lock.current = false;
       setBusy(false);
     }
-  }, [q, reveal, value, busy, sessionId]);
+  }, [q, reveal, value, sessionId]);
 
   const next = async () => {
-    if (busy) return;
+    if (!reveal || lock.current) return;
     if (!isLast) {
       setIndex(index + 1);
       setValue(undefined);
@@ -111,6 +122,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
       window.scrollTo({ top: 0 });
       return;
     }
+    lock.current = true;
     setBusy(true);
     try {
       const res = await api.post<QuizResult>(`/lessons/${lessonId}/quiz/submit`, { sessionId });
@@ -120,6 +132,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
       setPhase("result");
       window.scrollTo({ top: 0 });
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   };
@@ -196,7 +209,13 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
         {reveal ? (
           <FeedbackSheet
             tone={reveal.correct ? "success" : "danger"}
-            title={reveal.correct ? t("quiz.goodJob", { n: XP.quizCorrect }) : t("quiz.incorrect")}
+            title={
+              reveal.correct
+                ? xpPerCorrect > 0
+                  ? t("quiz.goodJobXp", { n: xpPerCorrect })
+                  : t("quiz.goodJob")
+                : t("quiz.incorrect")
+            }
             body={
               <>
                 {answerText && <p className="mb-1">{t("quiz.correctAnswerWas", { answer: answerText })}</p>}

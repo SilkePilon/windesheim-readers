@@ -13,6 +13,16 @@ export const XP = {
   battleParticipation: 10,
 };
 
+/** Quiz XP multiplier: full XP for the first 3 quizzes on a lesson per day, then 25%. */
+export function quizXpFactor(todayAttempts: number) {
+  return todayAttempts < 3 ? 1 : 0.25;
+}
+
+/** XP shown per correct quiz answer (awardXp rounds the same way). */
+export function quizXpPerCorrect(factor: number) {
+  return Math.round(XP.quizCorrect * factor);
+}
+
 /** XP needed to go from level n to n+1 grows linearly: 100, 150, 200 ... */
 export function levelFromXp(xp: number) {
   let level = 1;

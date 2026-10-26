@@ -114,6 +114,7 @@ export function FlashcardSession({
         // Leave real buttons and links to their own activation.
         if (e.target instanceof HTMLElement && e.target.closest("button, a")) return;
         e.preventDefault();
+        if (e.repeat) return; // holding Space must not flicker the card
         setFlipped((f) => !f);
       } else if (flipped && ["1", "2", "3", "4"].includes(e.key)) {
         void rate(Number(e.key));
@@ -158,14 +159,15 @@ export function FlashcardSession({
     dxRef.current = mx;
     setDx(mx);
   };
-  const onPointerEnd = () => {
+  const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     drag.current = null;
     if (!d?.active) return;
     setDragging(false);
     const x = dxRef.current;
     dxRef.current = 0;
-    if (Math.abs(x) <= SWIPE_THRESHOLD) {
+    // A cancelled gesture (the browser took it over) never rates: always spring back.
+    if (e.type === "pointercancel" || Math.abs(x) <= SWIPE_THRESHOLD) {
       setDx(0); // spring back
       return;
     }

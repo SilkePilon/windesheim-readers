@@ -42,6 +42,7 @@ console.log("detail:", detail.quizCount, detail.flashcardCount, detail.openCount
 const [, quiz] = await j(student, "GET", `/lessons/${lesson.id}/quiz?n=10`);
 const qs = quiz.questions;
 ok(typeof quiz.sessionId === "string" && qs.length > 0, "quiz session created");
+ok(typeof quiz.xpPerCorrect === "number" && quiz.xpPerCorrect >= 0, "quiz GET returns numeric xpPerCorrect");
 ok(!JSON.stringify(qs).includes("explanation"), "quiz questions leak no explanations");
 console.log("quiz qs:", qs.map((q: any) => q.type).join(","));
 for (const q of qs) {

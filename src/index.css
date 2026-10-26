@@ -28,6 +28,39 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Tailwind v4 preflight gives buttons the default arrow; show the hand on everything clickable. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="checkbox"]:not(:disabled),
+  [role="radio"]:not(:disabled),
+  [role="switch"]:not(:disabled),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
+  [data-drag-handle][data-drag-handle],
+  [aria-roledescription="sortable"][role] {
+    cursor: grab;
+  }
+  [data-drag-handle][data-drag-handle]:active,
+  [aria-roledescription="sortable"][role]:active {
+    cursor: grabbing;
+  }
   html {
     -webkit-tap-highlight-color: transparent;
     @apply font-sans antialiased;

@@ -8,6 +8,8 @@ import { PlayerAvatar } from "@/components/game/player-avatar";
 import { Podium } from "@/components/game/podium";
 import type { PublicQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import type { BattleSettings } from "@shared/battle";
+import { SettingsCard, SettingsChips } from "./settings";
 import type { EndMsg, QuestionMsg, RankEntry, RevealMsg, RoomMsg } from "./use-battle-socket";
 
 /** Gold chunky button: the primary action on the dark stage (use with variant="chunky"). */
@@ -51,14 +53,21 @@ export function Lobby({
   room,
   meId,
   isHost,
+  isPlayer,
   onStart,
   onKick,
+  onSettings,
+  settingsNotice,
 }: {
   room: RoomMsg;
   meId?: string;
   isHost: boolean;
+  isPlayer: boolean;
   onStart: () => void;
   onKick: (id: string) => void;
+  onSettings: (patch: Partial<BattleSettings>) => void;
+  /** Shown in the host's settings card (e.g. a rejected change). */
+  settingsNotice?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -101,6 +110,9 @@ export function Lobby({
         <p className="text-xs font-bold break-all text-[#8c82b5]">{link}</p>
       </div>
 
+      {/* Players, and the host's presentation (beamer) view, see what's been set. */}
+      {(!isHost || !isPlayer) && <SettingsChips settings={room.settings} total={room.total} className="mt-5" />}
+
       <div className="mt-6 flex items-center gap-2">
         <Users className="size-5 shrink-0 text-gold" />
         <h2 className="font-heading text-lg font-semibold">{t("battle.players", { count: room.players.length })}</h2>
@@ -128,6 +140,8 @@ export function Lobby({
         ))}
         {room.players.length === 0 && <li className="text-sm font-bold text-muted-foreground">{t("battle.lobby")}</li>}
       </ul>
+
+      {isHost && <SettingsCard settings={room.settings} total={room.total} onChange={onSettings} notice={settingsNotice} />}
 
       {isHost ? (
         <BottomAction>
@@ -392,7 +406,15 @@ export function Play({
         </span>
       </div>
 
-      <QuestionPrompt text={q.question.prompt} className="mt-5 text-[22px] leading-tight md:mt-8 md:text-[32px]" />
+      {q.doubled && (
+        <p className="mt-4 inline-flex animate-pop items-center gap-1.5 self-center rounded-full bg-gold px-4 py-1.5 font-heading text-base font-semibold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)] motion-reduce:animate-none md:text-lg">
+          <Zap className="size-4 fill-current" aria-hidden /> {t("battle.doublePoints")}
+        </p>
+      )}
+      <QuestionPrompt
+        text={q.question.prompt}
+        className={cn("text-[22px] leading-tight md:text-[32px]", q.doubled ? "mt-3 md:mt-5" : "mt-5 md:mt-8")}
+      />
       {!reveal && (
         <p className="mt-2.5 text-[13px] font-bold text-muted-foreground md:text-[15px]" aria-live="polite">
           {t("battle.answered", { count: answeredCount, n: playerCount })}
@@ -433,7 +455,7 @@ export function Play({
             </div>
           )}
           {reveal.explanation && <p className="text-sm leading-relaxed font-semibold text-muted-foreground">{reveal.explanation}</p>}
-          <Ranking ranking={reveal.ranking} meId={meId} limit={5} />
+          {room.settings.showScoreboard && <Ranking ranking={reveal.ranking} meId={meId} limit={5} />}
         </div>
       )}
 

@@ -10,8 +10,19 @@ import { displayName } from "../middleware";
 import type { SessionUser } from "../auth";
 import { XP } from "../../shared/game";
 import { env } from "../env";
+import {
+  COUNT_MAX,
+  COUNT_MIN,
+  DEFAULT_BATTLE_SETTINGS,
+  DIFFICULTIES,
+  DIFFICULTY_LEVEL,
+  POINTS_MODES,
+  QUESTION_SECONDS,
+  isDoubled,
+  scoreAnswer,
+  type BattleSettings,
+} from "../../shared/battle";
 
-const QUESTION_MS = 20_000;
 const MAX_PLAYERS = 200;
 /** "Get ready" countdown before the first question. Tests may shorten it outside production. */
 const COUNTDOWN_MS = (!env.isProd && Number(process.env.BATTLE_COUNTDOWN_MS)) || 10_000;
@@ -22,6 +33,11 @@ interface Player {
   id: string;
   name: string;
   score: number;
+  /**
+   * Score under the default rules (normal points, both bonuses), whatever the host set:
+   * XP, the winner badge and the stored attempt come from this so settings can't change them.
+   */
+  baseScore: number;
   streak: number;
   sockets: Set<WSContext>;
   answers: Map<number, { answer: unknown; at: number; correct: boolean; points: number }>;
@@ -33,7 +49,10 @@ interface Room {
   hostPlays: boolean;
   title: string;
   lessonIds: string[];
+  /** Every mc/tf question of the chosen lessons; `questions` is picked from it. */
+  pool: Q[];
   questions: Q[];
+  settings: BattleSettings;
   players: Map<string, Player>;
   hostSockets: Set<WSContext>;
   state: "lobby" | "countdown" | "question" | "reveal" | "ended";
@@ -78,6 +97,16 @@ function broadcast(r: Room, msg: unknown) {
   for (const p of r.players.values()) for (const ws of p.sockets) send(ws, msg);
 }
 
+/** `count` questions from the pool at the given difficulty, or null when fewer than 3 match. */
+function pickQuestions(pool: Q[], difficulty: BattleSettings["difficulty"], count: number): Q[] | null {
+  const level = DIFFICULTY_LEVEL[difficulty];
+  const matching = level === null ? pool : pool.filter((q) => q.difficulty === level);
+  if (matching.length < 3) return null;
+  return shuffle(matching).slice(0, count);
+}
+
+const questionMs = (r: Room) => r.settings.questionSeconds * 1000;
+
 function ranking(r: Room) {
   return [...r.players.values()]
     .sort((a, b) => b.score - a.score)
@@ -93,6 +122,7 @@ function roomState(r: Room) {
     state: r.state,
     index: r.index,
     total: r.questions.length,
+    settings: r.settings,
     players: ranking(r),
   };
 }
@@ -104,8 +134,9 @@ function currentQuestionMsg(r: Room) {
     index: r.index,
     total: r.questions.length,
     question: publicQuestion(q),
-    endsAt: r.startedAt + QUESTION_MS,
-    durationMs: QUESTION_MS,
+    endsAt: r.startedAt + questionMs(r),
+    durationMs: questionMs(r),
+    doubled: isDoubled(r.settings, r.index + 1 >= r.questions.length),
     // Lets clients correct for their own clock being off.
     serverNow: Date.now(),
   };
@@ -139,7 +170,7 @@ function startQuestion(r: Room) {
   broadcast(r, currentQuestionMsg(r));
   broadcast(r, roomState(r));
   clearTimeout(r.timer);
-  r.timer = setTimeout(() => reveal(r), QUESTION_MS + 300);
+  r.timer = setTimeout(() => reveal(r), questionMs(r) + 300);
 }
 
 function reveal(r: Room) {
@@ -169,8 +200,12 @@ async function end(r: Room) {
   clearTimeout(r.timer);
   r.state = "ended";
   const rank = ranking(r);
+  // Progression ranks on the base score: the host's point/bonus settings never change XP.
+  const baseRank = [...r.players.values()]
+    .sort((a, b) => b.baseScore - a.baseScore)
+    .map((p, i) => ({ rank: i + 1, id: p.id, score: p.baseScore }));
   const xpById: Record<string, number> = {};
-  for (const p of rank) {
+  for (const p of baseRank) {
     if (r.players.size < 2 && p.score === 0) continue;
     const placeXp = r.players.size >= 2 ? (XP.battlePlace[p.rank - 1] ?? 0) : 0;
     const amount = placeXp + XP.battleParticipation;
@@ -195,12 +230,25 @@ const createMsg = z.object({
   count: z.number().int().min(3).max(30).default(10),
   hostPlays: z.boolean().default(true),
 });
+const settingsPatch = z
+  .object({
+    questionSeconds: z.literal(QUESTION_SECONDS),
+    points: z.enum(POINTS_MODES),
+    count: z.number().int().min(COUNT_MIN).max(COUNT_MAX),
+    difficulty: z.enum(DIFFICULTIES),
+    speedBonus: z.boolean(),
+    streakBonus: z.boolean(),
+    showScoreboard: z.boolean(),
+  })
+  .partial()
+  .strict();
 const clientMsg = z.discriminatedUnion("t", [
   createMsg,
   z.object({ t: z.literal("join"), code: z.string().regex(/^\d{6}$/) }),
   z.object({ t: z.literal("start") }),
   z.object({ t: z.literal("answer"), index: z.number().int(), answer: z.unknown() }),
   z.object({ t: z.literal("next") }),
+  z.object({ t: z.literal("settings"), settings: settingsPatch }),
   z.object({ t: z.literal("kick"), playerId: z.string() }),
   z.object({ t: z.literal("leave") }),
   z.object({ t: z.literal("end") }),
@@ -215,7 +263,7 @@ export function battleConnection(user: SessionUser) {
     let p = r.players.get(user.id);
     if (!p) {
       if (r.players.size >= MAX_PLAYERS) return send(ws, { t: "error", error: "ROOM_FULL" });
-      p = { id: user.id, name, score: 0, streak: 0, sockets: new Set(), answers: new Map() };
+      p = { id: user.id, name, score: 0, baseScore: 0, streak: 0, sockets: new Set(), answers: new Map() };
       r.players.set(user.id, p);
     }
     p.sockets.add(ws);
@@ -249,7 +297,9 @@ export function battleConnection(user: SessionUser) {
           hostPlays: msg.hostPlays,
           title: allowed.map((l) => l.code).join(", "),
           lessonIds: allowed.map((l) => l.id),
+          pool: qs,
           questions: shuffle(qs).slice(0, msg.count),
+          settings: { ...DEFAULT_BATTLE_SETTINGS, count: msg.count },
           players: new Map(),
           hostSockets: new Set([ws]),
           state: "lobby",
@@ -288,6 +338,19 @@ export function battleConnection(user: SessionUser) {
       const isHost = r.hostId === user.id;
 
       if (msg.t === "start" && isHost && r.state === "lobby") return startCountdown(r);
+
+      // Lobby only, host only. A new count or difficulty re-picks the questions.
+      if (msg.t === "settings") {
+        if (!isHost || r.state !== "lobby") return;
+        const next: BattleSettings = { ...r.settings, ...msg.settings };
+        if (next.count !== r.settings.count || next.difficulty !== r.settings.difficulty) {
+          const qs = pickQuestions(r.pool, next.difficulty, next.count);
+          if (!qs) return send(ws, { t: "error", error: "NOT_ENOUGH_QUESTIONS" });
+          r.questions = qs;
+        }
+        r.settings = next;
+        return broadcast(r, roomState(r));
+      }
 
       // Host ends the battle for everyone. An aborted battle awards no XP.
       if (msg.t === "end" && isHost) {
@@ -337,13 +400,13 @@ export function battleConnection(user: SessionUser) {
         const q = r.questions[r.index]!;
         const correct = checkAnswer(q.data, msg.answer);
         const elapsed = Date.now() - r.startedAt;
-        if (elapsed > QUESTION_MS + 500) return;
-        // Kahoot-style: 500 for correct + up to 500 for speed, + small streak bonus.
+        const totalMs = questionMs(r);
+        if (elapsed > totalMs + 500) return;
         p.streak = correct ? p.streak + 1 : 0;
-        const points = correct
-          ? Math.round(500 + 500 * Math.max(0, 1 - elapsed / QUESTION_MS)) + Math.min(5, p.streak - 1) * 50
-          : 0;
+        const scoring = { correct, msLeft: totalMs - elapsed, totalMs, streak: p.streak, isLast: r.index + 1 >= r.questions.length };
+        const points = scoreAnswer({ ...scoring, settings: r.settings });
         p.score += points;
+        p.baseScore += scoreAnswer({ ...scoring, settings: DEFAULT_BATTLE_SETTINGS });
         p.answers.set(r.index, { answer: msg.answer, at: elapsed, correct, points });
         send(ws, { t: "answered", index: r.index });
         const answered = answeredCount(r);

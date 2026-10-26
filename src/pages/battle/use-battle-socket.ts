@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicQuestion } from "@/lib/types";
+import type { BattleSettings } from "@shared/battle";
 
 // ---------- protocol types (server/live/battle.ts) ----------
 
@@ -18,6 +19,7 @@ export interface RoomMsg {
   state: "lobby" | "countdown" | "question" | "reveal" | "ended";
   index: number;
   total: number;
+  settings: BattleSettings;
   players: RankEntry[];
 }
 export interface QuestionMsg {
@@ -28,6 +30,8 @@ export interface QuestionMsg {
   /** On this device's clock (corrected with the server's `serverNow`). */
   endsAt: number;
   durationMs: number;
+  /** Points count double on this question. */
+  doubled: boolean;
 }
 /** "Get ready" before the first question. */
 export interface CountdownMsg {

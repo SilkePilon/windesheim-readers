@@ -90,6 +90,10 @@ export default function BattlePage() {
   };
 
   const errorCopy = b.error ? battleErrorCopy(i18n, b.error) : null;
+  // In the lobby a NOT_ENOUGH_QUESTIONS answers a settings change (count / difficulty).
+  const lobbyCopy =
+    b.error === "NOT_ENOUGH_QUESTIONS" ? (t("battle.settings.notEnough", { returnObjects: true }) as { title: string; description: string }) : errorCopy;
+  const lobbyNotice = lobbyCopy && <Notice tone="warning" variant="inset" title={lobbyCopy.title} description={lobbyCopy.description} />;
 
   if (!room) {
     return (
@@ -149,8 +153,11 @@ export default function BattlePage() {
         room={room}
         meId={meId}
         isHost={isHost}
+        isPlayer={isPlayer}
         onStart={() => b.send({ t: "start" })}
         onKick={(playerId) => b.send({ t: "kick", playerId })}
+        onSettings={(settings) => b.send({ t: "settings", settings })}
+        settingsNotice={lobbyNotice}
       />
     );
   } else if (ended) {

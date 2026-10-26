@@ -162,4 +162,113 @@ console.log("ws errors:", errs);
   await Bun.sleep(150);
   ok(h2.msgs.filter((m) => m.t === "error").pop()?.error === "NOT_IN_ROOM", "the host's old connection is out of the room");
 }
+
+// Lobby settings: host only, lobby only, server-authoritative.
+{
+  const { scoreAnswer, DEFAULT_BATTLE_SETTINGS } = await import("../../shared/battle");
+  // Seed answers (scripts/e2e/seed.ts): mc/tf prompts → correct answer; difficulty 1 = these 3.
+  const correctFor: Record<string, unknown> = {
+    "Wat is het verschil tussen effectiviteit en efficiëntie?": 0,
+    "Welke discipline hoort NIET bij bedrijfskunde volgens de reader?": 2,
+    "Een tennisvereniging is ook een organisatie.": true,
+    "HRM gaat over het beheer van financiële middelen.": false,
+  };
+  const easyPrompts = new Set(["Wat is het verschil tussen effectiviteit en efficiëntie?", "Een tennisvereniging is ook een organisatie.", "HRM gaat over het beheer van financiële middelen."]);
+  const wrongFor = (q: any) => (q.question.type === "mc" ? (correctFor[q.question.prompt] === 0 ? 1 : 0) : !correctFor[q.question.prompt]);
+  const lessonIds = readers[0].lessons.map((l: any) => l.id);
+  const studentId = (await j(student, "GET", "/me"))[1].user.id;
+  const bobId = (await j(bob, "GET", "/me"))[1].user.id;
+  const lastRoom = (c: { msgs: any[] }) => c.msgs.filter((m) => m.t === "room").pop();
+  const lastError = (c: { msgs: any[] }) => c.msgs.filter((m) => m.t === "error").pop()?.error;
+
+  /** Host (not playing) + student (always right) + bob (always wrong), with the given settings. */
+  async function play(settings: Record<string, unknown>, checks?: (h: any, a: any) => Promise<void>) {
+    const h = ws(admin), a = ws(student), b = ws(bob);
+    await Promise.all([h.ready, a.ready, b.ready]);
+    h.send({ t: "create", lessonIds, count: 3, hostPlays: false });
+    await Bun.sleep(300);
+    const code = lastRoom(h).code;
+    a.send({ t: "join", code }); b.send({ t: "join", code });
+    await Bun.sleep(200);
+    h.send({ t: "settings", settings });
+    await Bun.sleep(200);
+    await checks?.(h, a);
+    const total = lastRoom(h).total;
+    const rs = lastRoom(h).settings;
+    h.send({ t: "start" });
+    await Bun.sleep(150);
+    h.send({ t: "settings", settings: { questionSeconds: 30, points: "normal" } });
+    await Bun.sleep(400);
+    const results: { q: any; mine: any }[] = [];
+    for (let i = 0; i < total; i++) {
+      const q = a.msgs.filter((m) => m.t === "question").pop();
+      ok(q?.index === i, `question ${i} arrived`);
+      a.send({ t: "answer", index: i, answer: correctFor[q.question.prompt] });
+      b.send({ t: "answer", index: i, answer: wrongFor(q) });
+      await Bun.sleep(250);
+      const rev = a.msgs.filter((m) => m.t === "reveal").pop();
+      ok(rev?.index === i, `reveal ${i} arrived`);
+      results.push({ q, mine: rev.results[studentId] });
+      h.send({ t: "next" });
+      await Bun.sleep(250);
+    }
+    await Bun.sleep(300);
+    const end = h.msgs.find((m) => m.t === "end");
+    for (const c of [h, a, b]) c.s.close();
+    return { results, end, settings: rs, rooms: h.msgs.filter((m) => m.t === "room") };
+  }
+
+  // A: 10 s questions, everything doubled, easy only.
+  const A = await play({ questionSeconds: 10, points: "allDouble", difficulty: "easy" }, async (h, a) => {
+    const seen = lastRoom(a);
+    ok(seen.settings.questionSeconds === 10 && seen.settings.points === "allDouble" && seen.settings.difficulty === "easy", "settings: players see the host's change in room state");
+    ok(seen.total === 3, "settings: easy keeps the count (3)");
+    a.send({ t: "settings", settings: { questionSeconds: 60, showScoreboard: false } });
+    await Bun.sleep(200);
+    ok(lastRoom(h).settings.questionSeconds === 10 && lastRoom(h).settings.showScoreboard === true, "settings: a non-host settings message is ignored");
+    h.send({ t: "settings", settings: { difficulty: "hard" } });
+    await Bun.sleep(200);
+    ok(lastError(h) === "NOT_ENOUGH_QUESTIONS" && lastRoom(h).settings.difficulty === "easy", "settings: too few hard questions → NOT_ENOUGH_QUESTIONS, settings kept");
+    h.send({ t: "settings", settings: { questionSeconds: 15 } });
+    await Bun.sleep(150);
+    ok(lastError(h) === "BAD_MESSAGE" && lastRoom(h).settings.questionSeconds === 10, "settings: invalid values are rejected");
+    h.send({ t: "settings", settings: { count: 5 } });
+    await Bun.sleep(150);
+    ok(lastRoom(a).total === 5 && lastRoom(a).settings.count === 5, "settings: count re-picks the questions");
+  });
+  ok(A.rooms.every((r: any) => r.state === "lobby" || (r.settings.questionSeconds === 10 && r.settings.points === "allDouble")), "settings: a change after start is ignored");
+  ok(A.results.every(({ q }) => easyPrompts.has(q.question.prompt)), "difficulty easy: only difficulty-1 questions");
+  ok(
+    A.results.every(({ q }) => q.durationMs === 10_000 && Math.abs(q.endsAt - q.serverNow - 10_000) < 250),
+    "question timer = questionSeconds (endsAt - serverNow ≈ 10 s)",
+  );
+  ok(A.results.every(({ q }) => q.doubled === true), "allDouble: every question is marked doubled");
+  ok(
+    A.results.every(({ mine }, i) =>
+      mine.correct && mine.points === 2 * scoreAnswer({ correct: true, msLeft: 10_000 - mine.at, totalMs: 10_000, streak: i + 1, settings: DEFAULT_BATTLE_SETTINGS, isLast: false }),
+    ),
+    "allDouble: a correct answer scores twice the normal points",
+  );
+
+  // B: last question double, no speed/streak bonus → base 500, 1000 on the last.
+  const B = await play({ points: "lastDouble", speedBonus: false, streakBonus: false, showScoreboard: false });
+  ok(B.settings.showScoreboard === false, "settings: showScoreboard off is in room state");
+  ok(B.results.map(({ q }) => q.doubled).join() === "false,false,true", "lastDouble: only the last question is doubled");
+  ok(B.results.map(({ mine }) => mine.points).join() === "500,500,1000", "bonuses off: points = base (500), last doubled");
+
+  // C: defaults.
+  const C = await play({});
+  ok(
+    C.results.every(({ q, mine }, i) =>
+      !q.doubled && q.durationMs === 20_000 &&
+      mine.points === scoreAnswer({ correct: true, msLeft: 20_000 - mine.at, totalMs: 20_000, streak: i + 1, settings: DEFAULT_BATTLE_SETTINGS, isLast: false }),
+    ),
+    "normal: 20 s, nothing doubled, default scoring",
+  );
+  console.log("xp A/B/C:", JSON.stringify(A.end?.xp), JSON.stringify(B.end?.xp), JSON.stringify(C.end?.xp));
+  ok(
+    !!A.end && [A, B, C].every((x) => x.end.xp[studentId] === A.end.xp[studentId] && x.end.xp[bobId] === A.end.xp[bobId]) && A.end.xp[studentId] > A.end.xp[bobId],
+    "XP is identical whatever the points mode or bonuses",
+  );
+}
 process.exit(0);

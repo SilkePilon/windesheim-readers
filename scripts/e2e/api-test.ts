@@ -23,6 +23,15 @@ const student = await login("s1234567@student.windesheim.nl");
 const bob = await login("bob@student.windesheim.nl");
 console.log("student me:", (await j(student, "GET", "/me"))[1].user.role);
 ok((await j(student, "GET", "/admin/readers"))[0] === 403, "students cannot access admin");
+// AI key validation + model list (real network calls; bogus key must be rejected)
+const [, val] = await j(admin, "POST", "/admin/settings/ai/validate", { provider: "google", apiKey: "bogus" });
+console.log("validate bogus:", JSON.stringify(val));
+ok(val.ok === false, "bogus Google key is not ok");
+if (val.invalid !== true) console.log("note: invalid!=true (no network or non-auth error):", val.error);
+const [orSt, orModels] = await j(admin, "POST", "/admin/settings/ai/models", { provider: "openrouter" });
+console.log("openrouter models:", orSt, Array.isArray(orModels) ? orModels.length : JSON.stringify(orModels));
+ok(Array.isArray(orModels) || orSt === 502, "openrouter models returns array (or 502 without network)");
+ok((await j(student, "POST", "/admin/settings/ai/validate", { provider: "google" }))[0] === 403, "students cannot validate keys");
 const [, readers] = await j(student, "GET", "/readers");
 const lesson = readers[0].lessons[0];
 console.log("lessons visible:", readers[0].lessons.length, lesson.code);

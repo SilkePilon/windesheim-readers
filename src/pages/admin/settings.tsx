@@ -25,17 +25,16 @@ function ModelPicker({
   role,
   value,
   onChange,
-  suggestions,
+  defaults,
 }: {
   role: "generation" | "fast";
   value: ModelChoice;
   onChange: (v: ModelChoice) => void;
-  suggestions: AiSettings["suggestions"];
+  defaults: AiSettings["defaults"];
 }) {
   const { t } = useTranslation();
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
-  const listId = `models-${role}`;
 
   return (
     <Card>
@@ -47,7 +46,7 @@ function ModelPicker({
         <FieldGroup>
           <Field>
             <FieldLabel>{t("admin.ai.provider")}</FieldLabel>
-            <Select value={value.provider} onValueChange={(p) => onChange({ provider: p as ProviderId, model: suggestions[p as ProviderId]?.[1] ?? "" })}>
+            <Select value={value.provider} onValueChange={(p) => onChange({ provider: p as ProviderId, model: defaults[p as ProviderId] })}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -62,17 +61,7 @@ function ModelPicker({
           </Field>
           <Field>
             <FieldLabel htmlFor={`${role}-model`}>{t("admin.ai.model")}</FieldLabel>
-            <Input id={`${role}-model`} list={listId} value={value.model} onChange={(e) => onChange({ ...value, model: e.target.value })} className="font-mono" />
-            <datalist id={listId}>
-              {suggestions[value.provider]?.map((m) => <option key={m} value={m} />)}
-            </datalist>
-            <div className="flex flex-wrap gap-1">
-              {suggestions[value.provider]?.map((m) => (
-                <button key={m} type="button" onClick={() => onChange({ ...value, model: m })} className="rounded-md border px-2 py-0.5 font-mono text-xs hover:border-primary/50">
-                  {m}
-                </button>
-              ))}
-            </div>
+            <Input id={`${role}-model`} value={value.model} onChange={(e) => onChange({ ...value, model: e.target.value })} className="font-mono" />
           </Field>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -183,8 +172,8 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        <ModelPicker role="generation" value={generation} onChange={setGeneration} suggestions={data.suggestions} />
-        <ModelPicker role="fast" value={fast} onChange={setFast} suggestions={data.suggestions} />
+        <ModelPicker role="generation" value={generation} onChange={setGeneration} defaults={data.defaults} />
+        <ModelPicker role="fast" value={fast} onChange={setFast} defaults={data.defaults} />
 
         <div className="sticky bottom-20 flex justify-end md:bottom-4">
           <Button size="lg" onClick={() => save()} disabled={saving} className="shadow-lg">

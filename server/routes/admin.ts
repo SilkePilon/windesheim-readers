@@ -9,7 +9,8 @@ import { db, schema } from "../db";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
-import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, updateAiSettings } from "../ai/providers";
+import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings } from "../ai/providers";
+import { listModels, validateKey } from "../ai/models";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
@@ -256,6 +257,18 @@ export const admin = new Hono<AppEnv>()
       .parse(await c.req.json());
     await updateAiSettings(body);
     return c.json(await getAiSettingsPublic());
+  })
+  .post("/settings/ai/validate", async (c) => {
+    const body = z.object({ provider: providerEnum, apiKey: z.string().optional() }).parse(await c.req.json());
+    return c.json(await validateKey(body.provider, await resolveApiKey(body.provider, body.apiKey)));
+  })
+  .post("/settings/ai/models", async (c) => {
+    const body = z.object({ provider: providerEnum, apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
+    try {
+      return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh }));
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    }
   })
   .post("/settings/ai/test", async (c) => {
     const body = modelChoice.extend({ apiKey: z.string().optional() }).parse(await c.req.json());

@@ -1,0 +1,6 @@
+{"data":[
+{"id":"claude-opus-5-5","display_name":"Claude Opus 5.5","created_at":"2026-05-01T00:00:00Z","max_input_tokens":500000,"max_tokens":64000,"lifecycle":"active","capabilities":{"structured_outputs":{"supported":true}}},
+{"id":"claude-sonnet-5-5","display_name":"Claude Sonnet 5.5","created_at":"2026-04-01T00:00:00Z","max_input_tokens":500000,"max_tokens":64000,"lifecycle":"active","capabilities":{"structured_outputs":{"supported":true}}},
+{"id":"claude-old-dep","display_name":"Claude Old (deprecated)","created_at":"2025-01-01T00:00:00Z","max_input_tokens":200000,"max_tokens":8192,"lifecycle":"deprecated","capabilities":{"structured_outputs":{"supported":false}}},
+{"id":"claude-retired-x","display_name":"Claude Retired X","created_at":"2024-01-01T00:00:00Z","max_input_tokens":100000,"max_tokens":4096,"lifecycle":"retired","capabilities":{"structured_outputs":{"supported":false}}}
+],"has_more":false,"first_id":"claude-opus-5-5","last_id":"claude-retired-x"}

@@ -31,11 +31,11 @@ const ENV_KEYS: Record<ProviderId, string> = {
   openrouter: "OPENROUTER_API_KEY",
 };
 
-export const MODEL_SUGGESTIONS: Record<ProviderId, string[]> = {
-  google: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
-  anthropic: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
-  openai: ["gpt-5", "gpt-5-mini", "gpt-5-nano"],
-  openrouter: ["google/gemini-2.5-flash", "anthropic/claude-sonnet-5.5", "openai/gpt-5-mini"],
+export const DEFAULT_MODEL: Record<ProviderId, string> = {
+  google: "gemini-2.5-flash",
+  anthropic: "claude-sonnet-5-5",
+  openai: "gpt-5-mini",
+  openrouter: "google/gemini-2.5-flash",
 };
 
 const DEFAULTS: StoredAiSettings = {
@@ -66,6 +66,13 @@ function apiKeyFor(s: StoredAiSettings, provider: ProviderId) {
   return process.env[ENV_KEYS[provider]] || undefined;
 }
 
+/** Typed key if given, else the stored key, else the env key. */
+export async function resolveApiKey(provider: ProviderId, typedKey?: string): Promise<string | undefined> {
+  const typed = typedKey?.trim();
+  if (typed) return typed;
+  return apiKeyFor(await load(), provider);
+}
+
 /** Safe view for the admin UI: never returns keys, only whether one is set. */
 export async function getAiSettingsPublic() {
   const s = await load();
@@ -75,7 +82,7 @@ export async function getAiSettingsPublic() {
     keys: Object.fromEntries(
       PROVIDERS.map((p) => [p, { stored: !!s.keys[p], env: !!process.env[ENV_KEYS[p]] }]),
     ) as Record<ProviderId, { stored: boolean; env: boolean }>,
-    suggestions: MODEL_SUGGESTIONS,
+    defaults: DEFAULT_MODEL,
   };
 }
 

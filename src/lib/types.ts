@@ -155,5 +155,5 @@ export interface AiSettings {
   generation: ModelChoice;
   fast: ModelChoice;
   keys: Record<ProviderId, { stored: boolean; env: boolean }>;
-  suggestions: Record<ProviderId, string[]>;
+  defaults: Record<ProviderId, string>;
 }

@@ -35,6 +35,14 @@ const [orSt, orModels] = await j(admin, "POST", "/admin/settings/ai/models", { p
 console.log("openrouter models:", orSt, Array.isArray(orModels) ? orModels.length : JSON.stringify(orModels));
 ok(Array.isArray(orModels) || orSt === 502, "openrouter models returns array (or 502 without network)");
 ok((await j(student, "POST", "/admin/settings/ai/validate", { provider: "google" }))[0] === 403, "students cannot validate keys");
+{
+  // Saving a single provider key must work (regression: zod v4 z.record(enum) required ALL providers → 400)
+  const [s1, a1] = await j(admin, "PUT", "/admin/settings/ai", { keys: { openrouter: "sk-or-e2e-bogus" } });
+  ok(s1 === 200 && a1.keys.openrouter.stored === true, "admin can save a single provider key");
+  const [s2, a2] = await j(admin, "PUT", "/admin/settings/ai", { keys: { openrouter: null } });
+  ok(s2 === 200 && a2.keys.openrouter.stored === false, "admin can remove a single provider key");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { keys: { nope: "x" } }))[0] === 400, "unknown provider key is rejected");
+}
 const [, readers] = await j(student, "GET", "/readers");
 const lesson = readers[0].lessons[0];
 ok(readers[0].lastStudiedLessonId === null, "/readers: lastStudiedLessonId is null before studying");

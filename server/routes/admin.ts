@@ -296,7 +296,7 @@ export const admin = new Hono<AppEnv>()
       .object({
         generation: modelChoice.optional(),
         fast: modelChoice.optional(),
-        keys: z.record(providerEnum, z.string().nullable()).optional(),
+        keys: z.partialRecord(providerEnum, z.string().nullable()).optional(),
       })
       .parse(await c.req.json());
     await updateAiSettings(body);

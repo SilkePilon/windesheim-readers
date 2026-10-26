@@ -49,7 +49,10 @@ interface Room {
   /** Every mc/tf question of the chosen lessons; `questions` is picked from it. */
   pool: Q[];
   questions: Q[];
+  /** Effective settings: `settings.count` is `wantedCount` capped by the questions available. */
   settings: BattleSettings;
+  /** The host's last explicit count; restored when a difficulty with more questions comes back. */
+  wantedCount: number;
   players: Map<string, Player>;
   hostSockets: Set<WSContext>;
   state: "lobby" | "countdown" | "question" | "reveal" | "ended";
@@ -120,6 +123,7 @@ function roomState(r: Room) {
     settings: r.settings,
     /** Questions in the pool at the current difficulty: the most `count` can be. */
     available: matching(r.pool, r.settings.difficulty).length,
+    wantedCount: r.wantedCount,
     players: ranking(r),
   };
 }
@@ -295,6 +299,7 @@ export function battleConnection(user: SessionUser) {
           questions: shuffle(qs).slice(0, msg.count),
           // Never more than there are.
           settings: { ...DEFAULT_BATTLE_SETTINGS, count: Math.min(msg.count, qs.length) },
+          wantedCount: msg.count,
           players: new Map(),
           hostSockets: new Set([ws]),
           state: "lobby",
@@ -334,17 +339,20 @@ export function battleConnection(user: SessionUser) {
 
       if (msg.t === "start" && isHost && r.state === "lobby") return startCountdown(r);
 
-      // Lobby only, host only. A new count or difficulty re-picks the questions; the count
-      // is clamped to what the pool holds at that difficulty (so it can be under COUNT_MIN).
+      // Lobby only, host only. A new count or difficulty re-picks the questions. The count
+      // is the host's wanted count capped by what the pool holds at that difficulty (so it
+      // can be under COUNT_MIN), and goes back up when a fuller difficulty is picked.
       if (msg.t === "settings") {
         if (!isHost || r.state !== "lobby") return;
         const next: BattleSettings = { ...r.settings, ...msg.settings };
-        if (next.count !== r.settings.count || next.difficulty !== r.settings.difficulty) {
+        const wanted = msg.settings.count ?? r.wantedCount;
+        if (msg.settings.count !== undefined || next.difficulty !== r.settings.difficulty) {
           const pool = matching(r.pool, next.difficulty);
           if (pool.length < 3) return send(ws, { t: "error", error: "NOT_ENOUGH_QUESTIONS" });
-          next.count = Math.min(next.count, pool.length);
+          next.count = Math.min(wanted, pool.length);
           r.questions = shuffle(pool).slice(0, next.count);
         }
+        r.wantedCount = wanted;
         r.settings = next;
         return broadcast(r, roomState(r));
       }

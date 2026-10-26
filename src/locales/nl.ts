@@ -284,6 +284,7 @@ const nl = {
       fewer: "Minder",
       more: "Meer",
       available: "Max. {{n}} beschikbaar",
+      backTo: "terug naar {{n}} als er meer zijn",
       availableFew_one: "Er is maar {{count}} vraag bij deze moeilijkheid",
       availableFew_other: "Er zijn maar {{count}} vragen bij deze moeilijkheid",
       difficulty: "Moeilijkheid",

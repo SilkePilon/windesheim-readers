@@ -238,6 +238,15 @@ console.log("ws errors:", errs);
     h.send({ t: "settings", settings: { difficulty: "hard" } });
     await Bun.sleep(200);
     ok(lastError(h) === "NOT_ENOUGH_QUESTIONS" && lastRoom(h).settings.difficulty === "easy", "settings: too few hard questions → NOT_ENOUGH_QUESTIONS, settings kept");
+    h.send({ t: "settings", settings: { difficulty: "mixed" } });
+    await Bun.sleep(150);
+    {
+      // The client drops its notice on the next room state: one must follow the error.
+      const errAt = h.msgs.findLastIndex((m) => m.t === "error");
+      ok(h.msgs.slice(errAt + 1).some((m) => m.t === "room" && m.settings.difficulty === "mixed"), "settings: a successful change after an error sends a fresh room state");
+    }
+    h.send({ t: "settings", settings: { difficulty: "easy" } });
+    await Bun.sleep(150);
     h.send({ t: "settings", settings: { questionSeconds: 15 } });
     await Bun.sleep(150);
     ok(lastError(h) === "BAD_MESSAGE" && lastRoom(h).settings.questionSeconds === 10, "settings: invalid values are rejected");
@@ -314,8 +323,28 @@ console.log("ws errors:", errs);
   h.send({ t: "settings", settings: { count: 20 } });
   await Bun.sleep(200);
   const r2 = h.msgs.filter((m) => m.t === "room").pop();
-  ok(r2.settings.count === 3 && r2.total === 3 && !h.msgs.some((m) => m.t === "error"), "count: asking for more than available is clamped");
-  ok((await (async () => { h.send({ t: "create", lessonIds: [readers[0].lessons[0].id], count: 3 }); await Bun.sleep(200); return h.msgs.filter((m) => m.t === "error").pop()?.error; })()) === "BAD_MESSAGE", "count: create below 5 is rejected");
+  ok(r2.settings.count === 3 && r2.total === 3 && r2.wantedCount === 20 && !h.msgs.some((m) => m.t === "error"), "count: asking for more than available is clamped (wanted 20 kept)");
+  h.send({ t: "settings", settings: { difficulty: "mixed" } });
+  await Bun.sleep(200);
+  const r3 = h.msgs.filter((m) => m.t === "room").pop();
+  ok(r3.settings.count === 4 && r3.total === 4, "count: back to mixed goes up to the available 4");
   h.s.close(); a.s.close();
+}
+// The wanted count comes back when the difficulty does (all lessons: 20 mixed, 15 easy).
+{
+  const h = ws(admin);
+  await h.ready;
+  h.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 20, hostPlays: false });
+  await Bun.sleep(300);
+  const counts: string[] = [];
+  for (const difficulty of ["easy", "mixed"]) {
+    h.send({ t: "settings", settings: { difficulty } });
+    await Bun.sleep(150);
+    const r = h.msgs.filter((m) => m.t === "room").pop();
+    counts.push(`${r.settings.count}/${r.total}/${r.wantedCount}`);
+  }
+  ok(counts.join() === "15/15/20,20/20/20", `count: easy caps 20 → 15, mixed restores 20 (${counts.join()})`);
+  ok((await (async () => { h.send({ t: "create", lessonIds: [readers[0].lessons[0].id], count: 3 }); await Bun.sleep(200); return h.msgs.filter((m) => m.t === "error").pop()?.error; })()) === "BAD_MESSAGE", "count: create below 5 is rejected");
+  h.s.close();
 }
 process.exit(0);

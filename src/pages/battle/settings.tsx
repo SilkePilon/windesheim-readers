@@ -83,12 +83,15 @@ function Toggle({ id, label, hint, checked, onChange }: { id: string; label: str
 export function SettingsCard({
   settings,
   available,
+  wantedCount,
   onChange,
   notice,
 }: {
   settings: BattleSettings;
   /** Pool questions at the current difficulty (the server clamps `count` to it). */
   available: number;
+  /** The host's chosen count; above `settings.count` when the difficulty caps it. */
+  wantedCount: number;
   onChange: (patch: Partial<BattleSettings>) => void;
   notice?: ReactNode;
 }) {
@@ -101,12 +104,15 @@ export function SettingsCard({
     if (next !== settings.count) onChange({ count: next });
   };
   // Capped by the pool (not by COUNT_MAX): say why + stops here.
-  const hint =
-    available < COUNT_MIN
-      ? t("battle.settings.availableFew", { count: available })
-      : available < COUNT_MAX && settings.count >= available
-        ? t("battle.settings.available", { n: available })
-        : null;
+  const capped = available < COUNT_MAX && settings.count >= available;
+  const hint = !capped
+    ? null
+    : [
+        available < COUNT_MIN ? t("battle.settings.availableFew", { count: available }) : t("battle.settings.available", { n: available }),
+        wantedCount > settings.count ? t("battle.settings.backTo", { n: wantedCount }) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
   return (
     <section aria-labelledby={`${id}-title`} className="mt-6 rounded-[20px] bg-card p-4 shadow-[0_5px_0_var(--chunky)] md:p-5">
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-heading text-lg font-semibold">

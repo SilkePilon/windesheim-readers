@@ -22,6 +22,8 @@ export interface RoomMsg {
   settings: BattleSettings;
   /** Pool questions at the current difficulty: the most `settings.count` can be. */
   available: number;
+  /** The host's last chosen count; `settings.count` is this capped by `available`. */
+  wantedCount: number;
   players: RankEntry[];
 }
 export interface QuestionMsg {
@@ -109,6 +111,8 @@ export function useBattleSocket() {
       const msg = JSON.parse(ev.data as string);
       switch (msg.t) {
         case "room":
+          // A fresh room state means the last request went through: drop an old notice.
+          setError(null);
           setRoom(msg);
           break;
         case "countdown":

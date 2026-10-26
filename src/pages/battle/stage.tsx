@@ -141,7 +141,7 @@ export function Lobby({
         {room.players.length === 0 && <li className="text-sm font-bold text-muted-foreground">{t("battle.lobby")}</li>}
       </ul>
 
-      {isHost && <SettingsCard settings={room.settings} available={room.available} onChange={onSettings} notice={settingsNotice} />}
+      {isHost && <SettingsCard settings={room.settings} available={room.available} wantedCount={room.wantedCount} onChange={onSettings} notice={settingsNotice} />}
 
       {isHost ? (
         <BottomAction>

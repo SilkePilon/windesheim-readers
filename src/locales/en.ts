@@ -286,6 +286,7 @@ const en: Messages = {
       fewer: "Fewer",
       more: "More",
       available: "Max. {{n}} available",
+      backTo: "back to {{n}} when more are available",
       availableFew_one: "Only {{count}} question at this difficulty",
       availableFew_other: "Only {{count}} questions at this difficulty",
       difficulty: "Difficulty",

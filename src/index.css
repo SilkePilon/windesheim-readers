@@ -47,17 +47,18 @@
 
 /* Markdown */
 .prose-lite h1, .prose-lite h2, .prose-lite h3 { @apply font-heading font-semibold mt-6 mb-2; }
-.prose-lite h1 { @apply text-xl; }
-.prose-lite h2 { @apply text-lg; }
-.prose-lite h3 { @apply text-base; }
+.prose-lite h1 { @apply text-2xl; }
+.prose-lite h2 { @apply text-xl; }
+.prose-lite h3 { @apply text-lg; }
 .prose-lite p { @apply my-3 leading-relaxed; }
-.prose-lite ul { @apply my-3 list-disc pl-5 space-y-1; }
-.prose-lite ol { @apply my-3 list-decimal pl-5 space-y-1; }
+.prose-lite ul { @apply my-3 list-disc pl-5 space-y-1 marker:text-primary; }
+.prose-lite ol { @apply my-3 list-decimal pl-5 space-y-1 marker:font-heading marker:font-semibold marker:text-primary; }
 .prose-lite strong { @apply font-extrabold text-primary; }
 .prose-lite table { @apply my-4 w-full text-sm border-collapse; }
-.prose-lite th, .prose-lite td { @apply border px-2 py-1 text-left; }
-.prose-lite code { @apply rounded bg-muted px-1 py-0.5 text-sm; }
-.prose-lite blockquote { @apply border-l-4 border-primary/40 pl-3 italic text-muted-foreground; }
+.prose-lite th, .prose-lite td { @apply border-2 border-accent px-2.5 py-1.5 text-left dark:border-secondary; }
+.prose-lite th { @apply bg-accent font-heading font-semibold dark:bg-secondary; }
+.prose-lite code { @apply rounded-md bg-accent px-1.5 py-0.5 text-sm dark:bg-secondary; }
+.prose-lite blockquote { @apply my-4 rounded-r-2xl border-l-4 border-primary bg-accent py-2 pr-3 pl-4 text-muted-foreground dark:bg-secondary; }
 .prose-lite > :first-child { @apply mt-0; }
 
 @theme inline {

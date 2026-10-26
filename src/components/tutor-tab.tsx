@@ -33,18 +33,18 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
       <div className="flex-1 space-y-4 pb-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center py-6 text-center">
-            <div className="mb-3 rounded-2xl bg-primary/10 p-3 text-primary">
+            <div className="mb-3 grid size-14 place-items-center rounded-[18px] bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]">
               <Bot className="size-7" />
             </div>
-            <h3 className="font-semibold">{t("tutor.title")}</h3>
+            <h2 className="font-heading text-lg font-semibold">{t("tutor.title")}</h2>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">{t("tutor.intro", { code })}</p>
-            <div className="mt-5 grid w-full gap-2 sm:grid-cols-2">
+            <div className="mt-6 grid w-full gap-3 sm:grid-cols-2">
               {(t("tutor.suggestions", { returnObjects: true }) as string[]).map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="rounded-xl border bg-card px-4 py-3 text-left text-sm transition-colors hover:border-primary/50"
+                  className="rounded-[18px] bg-card px-4 py-3 text-left text-sm font-bold shadow-[0_4px_0_var(--chunky)] transition-[translate,box-shadow] duration-100 outline-none hover:brightness-[1.03] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[4px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0 motion-reduce:active:shadow-[0_4px_0_var(--chunky)]"
                 >
                   {s}
                 </button>
@@ -56,8 +56,10 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
           <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
             <div
               className={cn(
-                "max-w-[88%] rounded-2xl px-4 py-2.5",
-                m.role === "user" ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border bg-card",
+                "max-w-[88%] min-w-0 rounded-[20px] px-4 py-2.5",
+                m.role === "user"
+                  ? "rounded-br-[6px] bg-primary text-primary-foreground shadow-[0_3px_0_var(--primary-shade)]"
+                  : "rounded-bl-[6px] bg-card shadow-[0_3px_0_var(--chunky)]",
               )}
             >
               {m.parts.map((p, i) =>
@@ -83,7 +85,8 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
         <div ref={bottomRef} />
       </div>
 
-      <div className="sticky bottom-20 rounded-2xl border bg-background/95 p-2 shadow-sm backdrop-blur md:bottom-4">
+      {/* Sits above the floating dock on mobile (16px inset + 60px dock + 5px shadow + gap). */}
+      <div className="sticky bottom-[calc(92px+env(safe-area-inset-bottom))] z-20 rounded-[22px] bg-card p-2 shadow-[0_5px_0_var(--chunky)] md:bottom-6">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -92,7 +95,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
           className="flex items-end gap-2"
         >
           {messages.length > 0 && (
-            <Button type="button" variant="ghost" size="icon" onClick={() => setMessages([])} title={t("tutor.clear")} disabled={busy}>
+            <Button type="button" variant="ghost" size="icon-lg" className="rounded-[12px]" onClick={() => setMessages([])} title={t("tutor.clear")} aria-label={t("tutor.clear")} disabled={busy}>
               <Eraser />
             </Button>
           )}
@@ -110,11 +113,11 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
             className="max-h-32 min-h-10 flex-1 resize-none border-0 bg-transparent text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           {busy ? (
-            <Button type="button" size="icon" variant="secondary" onClick={() => stop()}>
+            <Button type="button" size="icon-lg" variant="chunky-surface" className="rounded-[12px] bg-accent [--press:3px] dark:bg-secondary" onClick={() => stop()} aria-label={t("tutor.stop")}>
               <Square />
             </Button>
           ) : (
-            <Button type="submit" size="icon" disabled={!input.trim()}>
+            <Button type="submit" size="icon-lg" variant="chunky" className="rounded-[12px] [--press:3px]" disabled={!input.trim()} aria-label={t("tutor.send")}>
               <Send />
             </Button>
           )}

@@ -6,6 +6,7 @@ import { PageSpinner } from "@/components/page";
 import LoginPage from "@/pages/login";
 import HomePage from "@/pages/home";
 import LessonPage from "@/pages/lesson";
+import LessonStudyPage from "@/pages/lesson-study";
 import ReviewPage from "@/pages/review";
 import LeaderboardPage from "@/pages/leaderboard";
 import ProfilePage from "@/pages/profile";
@@ -39,7 +40,10 @@ export function App() {
             <Outlet />
           </RequireAuth>
         }
-      />
+      >
+        <Route path="lesson/:id/cards" element={<LessonStudyPage mode="cards" />} />
+        <Route path="lesson/:id/quiz" element={<LessonStudyPage mode="quiz" />} />
+      </Route>
       <Route
         element={
           <RequireAuth>

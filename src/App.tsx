@@ -1,11 +1,10 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useMe } from "@/lib/queries";
 import { AppLayout } from "@/components/app-layout";
 import { PageSpinner } from "@/components/page";
 import LoginPage from "@/pages/login";
 import HomePage from "@/pages/home";
-import LearnPage from "@/pages/learn";
 import LessonPage from "@/pages/lesson";
 import ReviewPage from "@/pages/review";
 import LeaderboardPage from "@/pages/leaderboard";
@@ -31,6 +30,16 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Full-screen study mode (cards, quiz, review session, battle play) renders here,
+          outside AppLayout, so there is no dock or rail. Pages wrap themselves in
+          <StudyShell>. Routes are added with their tasks. */}
+      <Route
+        element={
+          <RequireAuth>
+            <Outlet />
+          </RequireAuth>
+        }
+      />
       <Route
         element={
           <RequireAuth>
@@ -39,7 +48,7 @@ export function App() {
         }
       >
         <Route index element={<HomePage />} />
-        <Route path="learn" element={<LearnPage />} />
+        <Route path="learn" element={<Navigate to="/" replace />} />
         <Route path="lesson/:id" element={<LessonPage />} />
         <Route path="review" element={<ReviewPage />} />
         <Route path="battle" element={<BattlePage />} />

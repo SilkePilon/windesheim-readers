@@ -29,6 +29,7 @@ const nl = {
     copied: "Gekopieerd",
   },
   nav: {
+    path: "Pad",
     home: "Home",
     learn: "Leren",
     review: "Herhalen",

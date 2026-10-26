@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { useNavigate } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -23,6 +26,14 @@ export default function ProfilePage() {
   const { data: me } = useMe();
   const invalidate = useInvalidateProgress();
   const [nickname, setNickname] = useState("");
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  const signOut = async () => {
+    await authClient.signOut();
+    qc.clear();
+    navigate("/login");
+  };
 
   useEffect(() => {
     if (me) setNickname(me.user.nickname ?? "");
@@ -140,6 +151,10 @@ export default function ProfilePage() {
           </FieldGroup>
         </CardContent>
       </Card>
+
+      <Button variant="outline" className="mt-4 w-full" size="lg" onClick={signOut}>
+        <LogOut /> {t("nav.signOut")}
+      </Button>
     </Page>
   );
 }

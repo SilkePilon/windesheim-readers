@@ -31,6 +31,7 @@ const en: Messages = {
     copied: "Copied",
   },
   nav: {
+    path: "Path",
     home: "Home",
     learn: "Learn",
     review: "Review",

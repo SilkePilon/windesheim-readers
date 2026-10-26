@@ -139,7 +139,7 @@ export default function LessonPage() {
     <Page>
       <div className="mb-4 flex items-start gap-2">
         <Button variant="ghost" size="icon" asChild className="-ml-2 shrink-0">
-          <Link to="/learn">
+          <Link to="/">
             <ChevronLeft />
           </Link>
         </Button>

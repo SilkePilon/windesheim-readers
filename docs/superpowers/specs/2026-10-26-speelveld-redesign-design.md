@@ -476,3 +476,34 @@ email best practices.
 - **Logic:** a pure helper `completeEmail(input: string, override?: "staff" | "student"):
   { email: string; localPart: string; domain: string; auto: boolean }` in
   `shared/email.ts`, unit-tested.
+
+### PWA + install drawer (owner request)
+- **Service worker** with `vite-plugin-pwa` (Workbox `generateSW`, `registerType: "autoUpdate"`).
+  - Precache the built app shell: html, js, css, fonts, and `public/brand` assets.
+  - `navigateFallback: "/index.html"` with `navigateFallbackDenylist: [/^\/api\//]`.
+  - **No caching of `/api/*`** (NetworkOnly), so data is never stale and auth isn't cached.
+  - Keep the existing `public/manifest.webmanifest` and its icons; let the plugin use it, or
+    move it into the plugin config. There must be exactly one manifest link in the built
+    `index.html`.
+  - Add `apple-mobile-web-app-status-bar-style` and `apple-mobile-web-app-title`.
+  - Dev (`vite` dev server) has the service worker disabled.
+- **Install drawer** (shadcn `Drawer`, Speelveld chunky style, mobile < md only):
+  - **Shown on the home page after login**, about 1.5s after mount, only when **not already
+    installed** (`display-mode: standalone` / `navigator.standalone`) and **not dismissed in
+    the last 14 days** (safe storage helper).
+  - **Android/Chromium:** capture `beforeinstallprompt` early (module level, before React
+    mounts) and keep the event. The drawer shows the app icon (`/brand/app-icon.svg`), the
+    title "Installeer Windesheim Readers", the body "Open je reader in één tik vanaf je
+    beginscherm.", a chunky **Installeren** button that calls `prompt()`, and a ghost
+    **Niet nu** button.
+  - **iOS Safari** (no install API): the same drawer, but with two illustrated steps
+    instead of the button.
+    1. Tik op **Deel**, with the share icon.
+    2. Kies **Zet op beginscherm**.
+    
+    It has a single **Begrepen** button. Only Safari is targeted; iOS Chrome and Firefox
+    can't install, so they get no drawer.
+  - **Browsers that support neither** see no drawer.
+  - **Profile settings:** an "App installeren" row that opens the drawer whenever install
+    is possible and the app isn't installed. The row is hidden otherwise.
+  - All copy in nl + en. `appinstalled` → hide the drawer and remember it.

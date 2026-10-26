@@ -640,6 +640,46 @@ expect(en.html).toContain("15 minutes");
 - [ ] **Step 5:** Run `bun scripts/email-preview.ts`, then screenshot `/tmp/email-preview-nl.html` at 390 and 600, light and dark. Expected: the logo shows, the chunky card and button look right, the long fallback link wraps, and dark mode is readable. **Do not send real email** in this task.
 - [ ] **Step 6:** Commit `feat: redesigned magic-link email`.
 
+### Task 16: PWA + mobile install drawer (owner addendum; before the final review)
+
+**Files:**
+- Modify: `vite.config.ts`, `index.html`, `src/main.tsx`, `src/pages/home.tsx`, `src/pages/profile.tsx`, locales
+- Create: `src/lib/install.ts`, `src/components/install-drawer.tsx`, `tests/install.test.ts`
+- `bun add -d vite-plugin-pwa`
+
+**Interfaces:**
+- `src/lib/install.ts`:
+  - `captureInstallPrompt(): void`, called once in `main.tsx` before render
+  - `installPlatform(env: { ua: string; standalone: boolean; hasPrompt: boolean }): "installed" | "prompt" | "ios-safari" | "unsupported"` (pure)
+  - `shouldShowInstall(p: { platform; dismissedAt: number | null; now: number; isMobile: boolean }): boolean` (pure; 14 days = 1_209_600_000 ms)
+  - `useInstall(): { platform; promptInstall(): Promise<"accepted" | "dismissed" | "unavailable">; dismiss(): void }`
+- `<InstallDrawer open onOpenChange />`
+
+- [ ] **Step 1: Write failing tests**
+
+```ts
+expect(installPlatform({ ua: "Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile", standalone: false, hasPrompt: true })).toBe("prompt");
+expect(installPlatform({ ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1", standalone: false, hasPrompt: false })).toBe("ios-safari");
+expect(installPlatform({ ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1", standalone: false, hasPrompt: false })).toBe("unsupported");
+expect(installPlatform({ ua: "anything", standalone: true, hasPrompt: true })).toBe("installed");
+expect(installPlatform({ ua: "Mozilla/5.0 (X11; Linux x86_64) Firefox/131", standalone: false, hasPrompt: false })).toBe("unsupported");
+const now = 2_000_000_000_000;
+expect(shouldShowInstall({ platform: "prompt", dismissedAt: null, now, isMobile: true })).toBe(true);
+expect(shouldShowInstall({ platform: "prompt", dismissedAt: now - 13 * 86_400_000, now, isMobile: true })).toBe(false);
+expect(shouldShowInstall({ platform: "prompt", dismissedAt: now - 15 * 86_400_000, now, isMobile: true })).toBe(true);
+expect(shouldShowInstall({ platform: "ios-safari", dismissedAt: null, now, isMobile: false })).toBe(false);
+expect(shouldShowInstall({ platform: "installed", dismissedAt: null, now, isMobile: true })).toBe(false);
+```
+
+- [ ] **Step 2:** Run `bun test tests/install.test.ts`. Expected: FAIL.
+- [ ] **Step 3:** Implement per the spec addendum "PWA + install drawer".
+- [ ] **Step 4:** Run `bun test`, `bun run typecheck`, `bun run build`, `bun run test:e2e`. Expected: PASS. Then check that `dist/sw.js` exists, that `dist/index.html` has exactly one manifest link, and that the generated precache list contains no `/api` entries.
+- [ ] **Step 5:** Browser checks. The service worker needs a secure context, and `localhost` counts.
+  - Serve the build with a throwaway static server on a free port (not 3000) that proxies `/api` to the dev API on :3100.
+  - In Playwright, confirm the service worker registers and that the app shell loads offline while API calls fail gracefully.
+  - Screenshot the drawer at 390, light and dark, for both variants. Emulate them with an iPhone UA and a dispatched synthetic `beforeinstallprompt` event.
+- [ ] **Step 6:** Commit `feat: PWA service worker and mobile install drawer`.
+
 ### Task 14: Full verification pass and demo redeploy
 
 **Files:** fixes only, wherever the pass finds problems.

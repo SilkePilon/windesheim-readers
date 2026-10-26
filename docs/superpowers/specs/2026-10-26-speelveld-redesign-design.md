@@ -454,3 +454,25 @@ email best practices.
 - **Preview:** a script `scripts/email-preview.ts` writes `/tmp/email-preview-{nl,en}.html`
   (with `cid:logo` swapped for a data URI) so it can be screenshot-checked at 390 and 600px
   in light and dark.
+
+### Smart login email field (owner request)
+- The user types only the part before `@`, and the domain is completed automatically:
+  - `/^s\d+$/i` (a student number like `s1` or `s1234567`) → `@student.windesheim.nl`;
+  - anything else without an `@` (for example `silke.pilon`) → `@windesheim.nl`;
+  - input that contains `@` is used as typed (trimmed and lowercased), so a full pasted
+    address still works.
+- **The suffix is shown inline** in the field, in muted text right after the typed part.
+  Tapping or clicking the suffix toggles between the two allowed domains. That's the
+  manual override when the guess is wrong; the toggle sticks until the user types `@`
+  or clears the field.
+- **Speed:**
+  - `type="text"` with `inputMode="email"`, `autoComplete="username"`, `autoCapitalize="none"`,
+    `spellCheck={false}` and `autoFocus`;
+  - Enter submits;
+  - the last successfully used full email is remembered in localStorage and prefilled
+    (only the local part shows, with its domain as the suffix).
+- **Validation:** existing domain rules on the server are unchanged. The client shows
+  the domain error if a typed full address uses another domain.
+- **Logic:** a pure helper `completeEmail(input: string, override?: "staff" | "student"):
+  { email: string; localPart: string; domain: string; auto: boolean }` in
+  `shared/email.ts`, unit-tested.

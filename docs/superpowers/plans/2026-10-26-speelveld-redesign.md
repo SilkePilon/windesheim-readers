@@ -490,6 +490,18 @@ expect(retryAction({ status: "error", error: "x" }, [{ id: "a", status: "ready" 
   - a settings card: nickname, leaderboard toggle, language, theme and sign out.
 - Login: the stacked-cards logo (two rotated chunky rectangles, the front one reading "1.2A"), name, tagline, email field and a `chunky` `xl` button. The sent and error states sit in the same card.
 
+- **Smart login email (owner addendum, spec "Smart login email field"):** create `shared/email.ts` with `completeEmail(input, override?)` and `tests/email-complete.test.ts`. Tests:
+  - `completeEmail("s1").email === "s1@student.windesheim.nl"`
+  - `completeEmail("S1234567 ").email === "s1234567@student.windesheim.nl"`
+  - `completeEmail("silke.pilon").email === "silke.pilon@windesheim.nl"`
+  - `completeEmail("silke.pilon", "student").email === "silke.pilon@student.windesheim.nl"`
+  - `completeEmail("s1234567", "staff").email === "s1234567@windesheim.nl"`
+  - `completeEmail("a@b.nl").email === "a@b.nl"`, with `auto === false`
+  - `completeEmail("").email === ""`
+  
+  The login field renders the inline muted suffix (tap to toggle), remembers the last email in localStorage, and Enter submits.
+- **Language bug (from Task 7):** the UI language must follow the saved user locale (`Me.user.locale`) once logged in, falling back to the browser language only when logged out. Fix it where i18n initialises (`src/lib/i18n.ts` / `main.tsx` / `useMe`).
+- **Sign-out:** Task 6 added a temporary sign-out button on the profile page. Make it part of the settings card.
 - [ ] **Step 1:** Implement.
 - [ ] **Step 2:** Run `bun run typecheck && bun run build`. Expected: PASS.
 - [ ] **Step 3:** Screenshots at 390 and 1280, light and dark. Expected: matches `student-pages.html`. Long nicknames (24 characters) are truncated with an ellipsis in list rows, not overflowing.

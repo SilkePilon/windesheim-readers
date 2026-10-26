@@ -43,6 +43,7 @@ export function useModels(provider: ProviderId, apiKey?: string) {
     queryFn: () => fetchModels(provider, apiKey, false),
     staleTime: 10 * 60_000,
     retry: false,
+    refetchOnWindowFocus: false,
   });
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
@@ -91,7 +92,11 @@ export function ModelCombobox({
   const filtered = useMemo(() => {
     const q = term.toLowerCase();
     if (!models) return [];
-    return q ? models.filter((m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)) : models;
+    if (!q) return models;
+    // An exact id match goes first, so Enter picks it rather than a longer id it prefixes.
+    return models
+      .filter((m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(b.id === term) - Number(a.id === term));
   }, [models, term]);
   const offerCustom = term !== "" && !models?.some((m) => m.id === term);
 
@@ -113,7 +118,14 @@ export function ModelCombobox({
         <PopoverAnchor asChild>
           <div className="flex gap-2">
             <PopoverTrigger asChild>
-              <Button id={id} variant="flat" role="combobox" aria-expanded={open} className="h-9 min-w-0 flex-1 justify-between gap-2 px-3 font-semibold">
+              <Button
+                id={id}
+                variant="flat"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                className="h-9 min-w-0 flex-1 justify-between gap-2 px-3 font-semibold"
+              >
                 <span className="flex min-w-0 items-baseline gap-2">
                   {value ? (
                     selected && selected.name !== selected.id ? (
@@ -146,8 +158,8 @@ export function ModelCombobox({
         </PopoverAnchor>
         <PopoverContent align="start" className="w-(--radix-popover-trigger-width) max-w-[calc(100vw-2rem)] p-0">
           <Command shouldFilter={false}>
-            <CommandInput value={search} onValueChange={setSearch} placeholder={t("admin.ai.searchModel")} />
-            <CommandList>
+            <CommandInput value={search} onValueChange={setSearch} placeholder={t("admin.ai.searchModel")} aria-label={t("admin.ai.searchModel")} />
+            <CommandList label={t("admin.ai.model")}>
               {isFetching && !models ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                   <Spinner /> {t("admin.ai.loadingModels")}
@@ -162,7 +174,14 @@ export function ModelCombobox({
               {filtered.length > 0 && (
                 <CommandGroup>
                   {filtered.map((m) => (
-                    <CommandItem key={m.id} value={m.id} data-checked={m.id === value} onSelect={() => pick(m.id)} className="items-start">
+                    <CommandItem
+                      key={m.id}
+                      value={m.id}
+                      data-checked={m.id === value}
+                      aria-current={m.id === value || undefined}
+                      onSelect={() => pick(m.id)}
+                      className="items-start"
+                    >
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <span className={cn("truncate font-semibold", m.deprecated && "text-muted-foreground")}>{m.name}</span>
@@ -173,6 +192,7 @@ export function ModelCombobox({
                           )}
                         </span>
                         <span className="truncate font-mono text-xs text-muted-foreground">{m.id}</span>
+                        {m.id === value && <span className="sr-only">{t("admin.ai.selected")}</span>}
                       </span>
                       {m.contextWindow ? (
                         <span className="shrink-0 pt-0.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums">

@@ -461,6 +461,7 @@ const en: Messages = {
       noModels: "No models found.",
       modelsError: "Couldn't load the model list: {{error}}",
       customModel: "Use '{{id}}'",
+      selected: "selected",
       deprecated: "deprecated",
       noStructured: "This model doesn't report structured-output support; content generation may fail.",
       saveInvalidTitle: "Save an invalid key?",

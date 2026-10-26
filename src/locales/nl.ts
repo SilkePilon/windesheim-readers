@@ -459,6 +459,7 @@ const nl = {
       noModels: "Geen modellen gevonden.",
       modelsError: "Modellijst niet geladen: {{error}}",
       customModel: "Gebruik '{{id}}'",
+      selected: "geselecteerd",
       deprecated: "verouderd",
       noStructured: "Dit model meldt geen ondersteuning voor gestructureerde output; contentgeneratie kan mislukken.",
       saveInvalidTitle: "Ongeldige sleutel opslaan?",

@@ -48,6 +48,14 @@ type Keys = Partial<Record<ProviderId, string>>;
 type TestResult = { ok: boolean; reply?: string; ms?: number; error?: string };
 
 const SETTINGS_KEY = ["admin", "ai"];
+/** Validate query for a provider: the typed key if given, else the saved/.env key. */
+const validateQuery = (provider: ProviderId, apiKey?: string) => ({
+  queryKey: ["admin", "ai", "validate", provider, apiKey ? keyFingerprint(apiKey) : "saved"],
+  queryFn: () => api.post<KeyValidation>("/admin/settings/ai/validate", { provider, apiKey }),
+  staleTime: 5 * 60_000,
+  retry: false,
+  refetchOnWindowFocus: false,
+});
 const sameChoice = (a: ModelChoice, b: ModelChoice) => a.provider === b.provider && a.model === b.model;
 
 function RoleCard({
@@ -197,17 +205,7 @@ export default function AdminSettingsPage() {
     queries: PROVIDERS.map((p) => {
       const k = checkedKey(p.id);
       const saved = data?.keys[p.id];
-      return {
-        queryKey: ["admin", "ai", "validate", p.id, k ? keyFingerprint(k) : "saved"],
-        queryFn: () =>
-          api.post<KeyValidation>("/admin/settings/ai/validate", {
-            provider: p.id,
-            apiKey: k,
-          }),
-        enabled: !!k || !!saved?.stored || !!saved?.env,
-        staleTime: 5 * 60_000,
-        retry: false,
-      };
+      return { ...validateQuery(p.id, k), enabled: !!k || !!saved?.stored || !!saved?.env };
     }),
   });
 
@@ -236,8 +234,9 @@ export default function AdminSettingsPage() {
     const res = await api.put<AiSettings>("/admin/settings/ai", body);
     qc.setQueryData(SETTINGS_KEY, res);
     // Saved keys changed: re-check them and reload model lists that used the saved key.
-    await qc.invalidateQueries({
-      predicate: (q) => q.queryKey[0] === "admin" && q.queryKey[1] === "ai" && q.queryKey.length > 2,
+    // Queries for typed keys are left alone (the typed keys are cleared after a save).
+    void qc.invalidateQueries({
+      predicate: (q) => q.queryKey[0] === "admin" && q.queryKey[1] === "ai" && q.queryKey[4] === "saved",
     });
   };
 
@@ -246,18 +245,25 @@ export default function AdminSettingsPage() {
   const save = async (force = false) => {
     const keys: Partial<Record<ProviderId, string>> = {};
     for (const p of PROVIDERS) if (key(p.id)) keys[p.id] = key(p.id);
-    // Keys whose last validation (of exactly this value) said invalid need a confirmation.
-    const invalid = PROVIDERS.filter((p) => {
-      if (!keys[p.id] || checkedKey(p.id) !== keys[p.id]) return false;
-      const v = validationFor(p.id).data;
-      return v && !v.ok && v.invalid;
-    }).map((p) => p.id);
-    if (invalid.length && !force) {
-      setConfirmInvalid(invalid);
-      return;
-    }
     setSaving(true);
     try {
+      if (!force) {
+        // Every typed key gets a settled validation first, also when Save is clicked
+        // inside the debounce or while a check is in flight (fetchQuery reuses those).
+        // Keys the provider rejected need a confirmation; network errors don't block.
+        const results = await Promise.all(
+          PROVIDERS.filter((p) => keys[p.id]).map(async (p) => {
+            const v = await qc.fetchQuery(validateQuery(p.id, keys[p.id])).catch(() => null);
+            return v && !v.ok && v.invalid ? p.id : null;
+          }),
+        );
+        const invalid = results.filter((p): p is ProviderId => p !== null);
+        if (invalid.length) {
+          setChecked(typed);
+          setConfirmInvalid(invalid);
+          return;
+        }
+      }
       await put({
         generation: current("generation"),
         fast: current("fast"),
@@ -369,6 +375,7 @@ export default function AdminSettingsPage() {
                       spellCheck={false}
                       placeholder={saved.stored ? "••••••••••••" : t("admin.ai.keyPlaceholder")}
                       value={typed[p.id] ?? ""}
+                      disabled={saving}
                       onChange={(e) => setTyped((s) => ({ ...s, [p.id]: e.target.value }))}
                       className="font-mono placeholder:font-sans"
                     />

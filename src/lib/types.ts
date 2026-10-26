@@ -169,3 +169,15 @@ export interface AiSettings {
   keys: Record<ProviderId, { stored: boolean; env: boolean }>;
   defaults: Record<ProviderId, string>;
 }
+/** One entry of a provider's live model list (`POST /admin/settings/ai/models`). */
+export interface ModelInfo {
+  id: string;
+  name: string;
+  contextWindow?: number;
+  maxOutput?: number;
+  /** epoch ms */
+  created?: number;
+  deprecated?: boolean;
+  structuredOutput?: boolean;
+}
+export type KeyValidation = { ok: true; modelCount: number } | { ok: false; invalid: boolean; error: string };

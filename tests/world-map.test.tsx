@@ -88,6 +88,23 @@ describe("WorldMap node layer", () => {
     expect(html).toContain("Ga verder");
   });
 
+  test("the bubble box stays inside its exclusion zone at 320 and 390px", () => {
+    const bubble = buttons.find((b) => !("data-state" in b.attrs))!;
+    const style = unescape(bubble.attrs.style);
+    const calc = (prop: string) => Number(new RegExp(`(?:^|;)${prop}:calc\\((-?[\\d.]+) \\* var\\(--u\\)\\)`).exec(style)![1]);
+    const cur = layout.nodes.find((n) => n.id === "b")!;
+    // The zone in world units (compose.ts): 96x34, 60 to the inner side of the node.
+    const zone = { x: cur.x > 195 ? cur.x - 152 : cur.x + 60, y: cur.y - 17, w: 96, h: 34 };
+    for (const width of [320, 390, 520]) {
+      const u = width / 390; // px per world unit
+      const box = { x: (cur.x + calc("left")) * u, y: (cur.y + calc("top")) * u, w: calc("width") * u, h: calc("height") * u };
+      expect(box.x).toBeGreaterThanOrEqual(zone.x * u - 1e-6);
+      expect(box.y).toBeGreaterThanOrEqual(zone.y * u - 1e-6);
+      expect(box.x + box.w).toBeLessThanOrEqual((zone.x + zone.w) * u + 1e-6);
+      expect(box.y + box.h).toBeLessThanOrEqual((zone.y + zone.h) * u + 1e-6);
+    }
+  });
+
   test("the art container is aria-hidden and holds the svg layers", () => {
     const world = html.indexOf('<div class="world');
     expect(world).toBeGreaterThan(0);

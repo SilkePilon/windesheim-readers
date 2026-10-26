@@ -650,7 +650,6 @@ export const haven: WorldBiome = {
   ground: ["#F4E7C6", "#D9EEF3"],
   patch: "#FFF8E6",
   bannerBg: ["#2F8FE0", "#1F6BB0"],
-  banner: "world.biome.haven",
   density: 0.4,
   flora: [
     { weight: 3, radius: 14, render: (x, y, _r, s) => duneGrass(x, y, 0.9 * s) },

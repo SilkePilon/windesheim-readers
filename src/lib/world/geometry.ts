@@ -82,11 +82,6 @@ export function intersects(zone: Zone, rect: Rect): boolean {
   }
 }
 
-export function pointInZones(x: number, y: number, zones: readonly Zone[]): boolean {
-  const p = { x, y, w: 0, h: 0 };
-  return zones.some((z) => intersects(z, p));
-}
-
 /** Vertical extent of a zone, for bucketing. */
 function zoneYRange(z: Zone): [number, number] {
   switch (z.kind) {

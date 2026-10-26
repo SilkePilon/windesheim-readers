@@ -1,7 +1,7 @@
 # Lesson world ("Bouw je wereld"): procedurally composed path background
 
 Date: 2026-10-27
-Status: draft, awaiting owner approval
+Status: approved and implemented (2026-10-27)
 
 ## Intent
 

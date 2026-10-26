@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { BookOpen, ChevronRight, Flame, Upload } from "lucide-react";
@@ -7,13 +7,16 @@ import { PageSpinner } from "@/components/page";
 import { Chip } from "@/components/game/chip";
 import { QuestCard } from "@/components/game/quest-card";
 import { InstallNudge } from "@/components/install-drawer";
-import { WorldMap } from "@/components/world/world-map";
+import { WORLD_WIDTH, worldHeight } from "@/lib/world/compose";
 import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
 import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
 import { DAILY_XP_GOAL } from "@shared/game";
 import { pathNodes } from "@shared/path";
 import { storageGet, storageSet } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+
+const loadWorldMap = () => import("@/components/world/world-map");
+const WorldMap = lazy(loadWorldMap);
 
 const READER_KEY = "wr.home.reader";
 
@@ -62,11 +65,13 @@ export default function HomePage() {
             ) : (
               <h1 className="hidden font-heading text-2xl font-semibold tracking-tight lg:block">{reader.title}</h1>
             )}
-            <WorldMap
-              seed={reader.id}
-              groups={pathNodes(reader.lessons, reader.lastStudiedLessonId)}
-              onOpen={(id) => navigate(`/lesson/${id}`)}
-            />
+            <Suspense fallback={<WorldMapSkeleton lessons={reader.lessons.length} />}>
+              <WorldMap
+                seed={reader.id}
+                groups={pathNodes(reader.lessons, reader.lastStudiedLessonId)}
+                onOpen={(id) => navigate(`/lesson/${id}`)}
+              />
+            </Suspense>
           </>
         )}
       </div>
@@ -201,6 +206,18 @@ function BoardRow({ e }: { e: LeaderboardEntry }) {
       <span className="w-6 font-heading text-muted-foreground tabular-nums">{e.rank ? `${e.rank}.` : "–"}</span>
       <span className="min-w-0 flex-1 leading-tight break-words hyphens-auto">{e.me ? t("home.you") : e.name}</span>
       <span className="font-heading tabular-nums">{e.xp}</span>
+    </div>
+  );
+}
+
+/** Stand-in while the world chunk loads: the same box (the world's height depends only on the lesson count). */
+function WorldMapSkeleton({ lessons }: { lessons: number }) {
+  return (
+    <div className="-mx-4 mt-2 md:mx-0" aria-hidden>
+      <div
+        className="mx-auto w-full max-w-[520px] animate-pulse rounded-t-[28px] bg-muted md:rounded-[28px]"
+        style={{ aspectRatio: `${WORLD_WIDTH} / ${worldHeight(lessons)}` }}
+      />
     </div>
   );
 }

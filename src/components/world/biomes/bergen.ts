@@ -586,7 +586,6 @@ export const bergen: WorldBiome = {
   ground: ["#CFEBC6", "#E6EEF5"],
   patch: "#F4FAFF",
   bannerBg: ["#4D7FE0", "#3560B8"],
-  banner: "world.biome.bergen",
   density: 0.5,
   flora: [
     { weight: 3, radius: 20, render: (x, y, r, s) => fir(x, y, 0.7 * s, r() < 0.4) },

@@ -585,7 +585,6 @@ export const campus: WorldBiome = {
   ground: ["#3B2F70", "#2A2158"],
   patch: "#4A3D85",
   bannerBg: ["#6B3CF6", "#4A22C4"],
-  banner: "world.biome.campus",
   night: true,
   density: 0.4,
   flora: [

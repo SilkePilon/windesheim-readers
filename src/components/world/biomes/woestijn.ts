@@ -593,7 +593,6 @@ export const woestijn: WorldBiome = {
   ground: ["#F8DFAE", "#F5CD98"],
   patch: "#FFF1D6",
   bannerBg: ["#E0701A", "#B35410"],
-  banner: "world.biome.woestijn",
   density: 0.35,
   flora: [
     { weight: 1.5, radius: 15, render: (x, y, _r, s) => cactus(x, y, 0.8 * s) },

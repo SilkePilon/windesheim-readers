@@ -666,7 +666,6 @@ export const stad: WorldBiome = {
   ground: ["#E2DDF0", "#D9D3EC"],
   patch: "#F4F1FF",
   bannerBg: ["#7A5AF0", "#5534D1"],
-  banner: "world.biome.stad",
   density: 0.35,
   flora: [
     { weight: 2, radius: 19, render: (x, y, _r, s) => planeTree(x, y, 0.72 * s) },

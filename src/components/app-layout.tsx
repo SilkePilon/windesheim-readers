@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { DesktopRail } from "@/components/shell/desktop-rail";
@@ -12,9 +12,21 @@ import { useNavItems } from "@/components/shell/nav-items";
  * Used as a layout route (renders the `Outlet`), or by a page that picks its own shell
  * per state (battle) with `children`.
  */
+/** After first paint, fetch the world chunk so the home page doesn't wait for it (it stays out of the main bundle). */
+function preloadWorld() {
+  const load = () => void import("@/components/world/world-map").catch(() => {});
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(load, { timeout: 4000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = setTimeout(load, 1500);
+  return () => clearTimeout(id);
+}
+
 export function AppLayout({ children }: { children?: ReactNode }) {
   const items = useNavItems();
   const { pathname } = useLocation();
+  useEffect(preloadWorld, []);
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
   return (

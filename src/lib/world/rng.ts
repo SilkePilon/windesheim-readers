@@ -24,10 +24,6 @@ export function mulberry32(seed: number): Rng {
 /** RNG seeded from a string. */
 export const rngFor = (s: string): Rng => mulberry32(hashSeed(s));
 
-export function pick<T>(rng: Rng, arr: readonly T[]): T {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
 export function range(rng: Rng, a: number, b: number): number {
   return a + rng() * (b - a);
 }

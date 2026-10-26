@@ -179,12 +179,18 @@ function pieceSlots(nd: WorldNode): Slot[] {
   ];
 }
 
+/** World height for `n` lessons (it depends on nothing else, so a loading box can reserve it). */
+export const worldHeight = (n: number) => (n ? LAST_NODE_Y + 210 + GAP * (n - 1) : 360);
+
+/** The "Ga verder" bubble box relative to its node, in world units (`inner` = which side the node is on). */
+export const bubbleBox = (nodeX: number) => ({ dx: nodeX > MID ? -152 : 60, dy: -17, w: 96, h: 34 });
+
 export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>): WorldLayout {
   const { seed } = input;
   const weeks = [...new Set(input.lessons.map((l) => l.week))].sort((a, b) => a - b);
   const ordered = weeks.flatMap((w) => input.lessons.filter((l) => l.week === w));
   const n = ordered.length;
-  const H = n ? LAST_NODE_Y + 210 + GAP * (n - 1) : 360;
+  const H = worldHeight(n);
 
   const nodes: WorldNode[] = ordered.map((l, i) => ({
     id: l.id,
@@ -224,15 +230,10 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     index.add({ kind: "circle", tag: "node", cx: nd.x, cy: nd.y, r: nd.r + NODE_MARGIN });
     index.add({ kind: "rect", tag: "levelbar", x: nd.x - 30, y: nd.y + nd.r + 12, w: 60, h: 10 });
   }
-  if (current)
-    index.add({
-      kind: "rect",
-      tag: "bubble",
-      x: current.x > MID ? current.x - 152 : current.x + 60,
-      y: current.y - 17,
-      w: 96,
-      h: 34,
-    });
+  if (current) {
+    const b = bubbleBox(current.x);
+    index.add({ kind: "rect", tag: "bubble", x: current.x + b.dx, y: current.y + b.dy, w: b.w, h: b.h });
+  }
   for (const z of road.zones) index.add(z);
   if (finale) index.add({ kind: "rect", tag: "finale", x: finale.x + FINALE_ZONE.x, y: finale.y + FINALE_ZONE.y, w: FINALE_ZONE.w, h: FINALE_ZONE.h });
   for (const b of banners) index.add({ kind: "rect", tag: "banner", x: MID - 95, y: b.y - 20, w: 190, h: 40 });

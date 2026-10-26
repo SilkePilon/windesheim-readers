@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { PathGroup, PathNode } from "@shared/path";
 import { LevelBar } from "@/components/game/level-bar";
-import { composeWorld, WORLD_WIDTH } from "@/lib/world/compose";
+import { bubbleBox, composeWorld, WORLD_WIDTH } from "@/lib/world/compose";
 import { cn } from "@/lib/utils";
 import { REGISTRY } from "./registry";
 import { renderWorldSvg } from "./render";
@@ -53,7 +53,11 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
       label: (b) => `${t("common.week", { n: b.week })} · ${t(`world.biome.${b.biome}`)}`,
       finaleLabel: (done) => t(done ? "world.finale.done" : "world.finale.closed"),
     });
-    performance.measure("world:build", { start: t0 });
+    try {
+      performance.measure("world:build", { start: t0 });
+    } catch {
+      // User Timing is diagnostics only.
+    }
     return { layout, svg };
     // `t` changes with the language, which is in the deps.
   }, [seed, signature, i18n.language]);
@@ -94,7 +98,11 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
     <div className="-mx-4 mt-2 md:mx-0">
       <div
         className="relative mx-auto w-full max-w-[520px] overflow-hidden rounded-t-[28px] md:rounded-[28px]"
-        style={{ aspectRatio: `${WORLD_WIDTH} / ${H}` }}
+        style={{
+          aspectRatio: `${WORLD_WIDTH} / ${H}`,
+          containerType: "inline-size",
+          "--u": `calc(100cqw / ${WORLD_WIDTH})`,
+        } as CSSProperties}
       >
         <div ref={artRef} className="absolute inset-0" aria-hidden dangerouslySetInnerHTML={{ __html: svg }} />
         {[...groups].reverse().map((g) => (
@@ -103,7 +111,6 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
               const p = pos.get(n.id);
               if (!p) return null;
               const current = n.state === "current";
-              const inner = p.x < WORLD_WIDTH / 2 ? "right" : "left";
               return (
                 <div
                   key={n.id}
@@ -137,10 +144,15 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
                       tabIndex={-1}
                       aria-hidden
                       onClick={() => onOpen(n.id)}
-                      className={cn(
-                        "absolute top-0 -translate-y-1/2 rounded-[10px] bg-foreground px-2.5 py-1.5 text-xs font-extrabold whitespace-nowrap text-background shadow-[0_3px_0_rgb(0_0_0/0.2)]",
-                        inner === "right" ? "left-[60px]" : "right-[60px]",
-                      )}
+                      // Sized in world units (--u) so it always fills exactly its exclusion zone.
+                      className="absolute top-0 grid place-items-center rounded-[10px] bg-foreground font-extrabold whitespace-nowrap text-background shadow-[0_3px_0_rgb(0_0_0/0.2)]"
+                      style={{
+                        left: `calc(${bubbleBox(p.x).dx} * var(--u))`,
+                        top: `calc(${bubbleBox(p.x).dy} * var(--u))`,
+                        width: `calc(${bubbleBox(p.x).w} * var(--u))`,
+                        height: `calc(${bubbleBox(p.x).h} * var(--u))`,
+                        fontSize: "max(12px, calc(12 * var(--u)))",
+                      }}
                     >
                       {t("home.continue")}
                     </button>
@@ -157,3 +169,5 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
     </div>
   );
 }
+
+export default WorldMap;

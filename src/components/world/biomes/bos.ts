@@ -475,7 +475,6 @@ export const bos: WorldBiome = {
   ground: ["#BFEBD6", "#CBEFD9"],
   patch: "#E6FBF0",
   bannerBg: ["#12A884", "#0E7F62"],
-  banner: "world.biome.bos",
   density: 0.6,
   flora: [
     { weight: 4, radius: 19, render: (x, y, _r, s) => pine(x, y, 0.7 * s) },

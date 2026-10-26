@@ -653,7 +653,6 @@ export const jungle: WorldBiome = {
   ground: ["#A6DDB0", "#B9E6B5"],
   patch: "#D8F5D6",
   bannerBg: ["#0E8F5A", "#0A6B43"],
-  banner: "world.biome.jungle",
   density: 0.7,
   flora: [
     { weight: 2, radius: 24, render: (x, y, _r, s) => palm(x, y, 0.7 * s) },

@@ -121,7 +121,6 @@ describe("registry", () => {
       expect(b.flora.length).toBeGreaterThan(0);
       expect(b.ground).toHaveLength(2);
       expect(b.pieces.length).toBeGreaterThan(0);
-      expect(b.banner).toBe(`world.biome.${id}`);
     }
   });
 

@@ -52,10 +52,10 @@ const windmillPiece = definePiece({
   biome: "dorp",
   w: 110,
   h: 96,
-  below: 14,
+  below: 17,
   render: (c, X) => {
-    // The sails sweep a circle (r ≈ 36): keep the whole sweep inside the footprint.
-    const wx = fit(c, X(-26), 36, 36, 55);
+    // The sails sweep a circle (r ≈ 37.5 at the blade corners): keep the whole sweep inside the footprint.
+    const wx = fit(c, X(-26), 38, 38, 55);
     if (c.stage === 0) {
       const base = `<ellipse cx="${wx}" cy="${c.y - 4}" rx="16" ry="5.5" fill="#CFC3A8"/><ellipse cx="${wx}" cy="${c.y - 6}" rx="12" ry="3.6" fill="#E9D6AE"/>`;
       return base + plot(X(22), c.y, 1) + seedlings(X(-24), c.y + 10, 4, 8);
@@ -538,7 +538,6 @@ export const dorp: WorldBiome = {
   ground: ["#E3F2C4", "#F1F0CC"],
   patch: "#FFFBEA",
   bannerBg: ["#FF8A1F", "#D68300"],
-  banner: "world.biome.dorp",
   density: 0.45,
   flora: [
     { weight: 1.5, radius: 19, render: (x, y, _r, s) => blossom(x, y, 0.72 * s) },

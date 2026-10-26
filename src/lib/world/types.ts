@@ -29,6 +29,4 @@ export type Biome = {
   pieces: SetPiece[];
   /** Filler density, 0–1 (default 1): the share of Poisson points that get flora. */
   density?: number;
-  /** i18n key */
-  banner: string;
 };

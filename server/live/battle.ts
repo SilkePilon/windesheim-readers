@@ -61,7 +61,8 @@ setInterval(() => {
 
 function closeRoom(r: Room) {
   clearTimeout(r.timer);
-  rooms.delete(r.code);
+  // A later timer must not delete a newer room that reused the code.
+  if (rooms.get(r.code) === r) rooms.delete(r.code);
 }
 
 const send = (ws: WSContext, msg: unknown) => {

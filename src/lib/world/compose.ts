@@ -12,7 +12,12 @@ const NODE_MARGIN = 46;
 /** Road stroke 40 → half width 20, plus 18 each side, plus 1px for the polyline approximation. */
 const ROAD_HALF = 20 + 18 + 1;
 const ROAD_STEPS = 24;
-const PIECE_OFFSET = 92;
+/** Centre x of the outer column (left side; mirrored about MID for right-hand nodes). */
+const OUTER_CX = 35;
+/** Centre x of the far inner column, across the road at mid-gap (left-node case). */
+const INNER_FAR_CX = 335;
+/** Vertical distance from a node to the centre of a mid-gap slot. */
+const MID_GAP_DY = 100;
 const X_MIN = -20;
 const X_MAX = 410;
 const BAND = 160;
@@ -31,7 +36,8 @@ export type WorldOp = {
   bbox: Rect;
   /** Index into `segments`. */
   segment: number;
-  /** Set pieces only. */
+  /** Set pieces only: the direction the piece faces (towards the road); mirror the art by it. */
+  side?: 1 | -1;
   pieceId?: string;
   stage?: Stage;
   lessonId?: string;
@@ -98,6 +104,63 @@ function buildRoad(nodes: WorldNode[], H: number): { d: string; zones: Zone[] } 
   return { d, zones };
 }
 
+type Slot = { side: 1 | -1; place: (fb: Rect) => Point };
+
+/**
+ * Candidate anchors for a lesson's set piece, in preference order. `fb` is the footprint's
+ * bounding box relative to the anchor; each slot returns the anchor that puts it in place.
+ * Nodes alternate sides and the road leaves/arrives on the inner side (towards MID), so:
+ *  1. outer side, level with the node (narrow pieces only);
+ *  2. above the node, outer side (away from where the road leaves);
+ *  3. below the node, outer side (away from where the road arrives);
+ *  4. across the road at mid-gap (far inner column), above then below.
+ * The "Ga verder" bubble stays on the inner side, level with the node, so 1–3 never meet it.
+ */
+function pieceSlots(nd: WorldNode): Slot[] {
+  const inner: 1 | -1 = nd.x < MID ? 1 : -1;
+  const outer = -inner as 1 | -1;
+  const R = nd.r + NODE_MARGIN;
+  const mirror = (x: number) => (inner === 1 ? x : WORLD_WIDTH - x);
+  /** Anchor x so the bbox is centred on `cx`, clamped into the horizontal bounds. */
+  const centreX = (fb: Rect, cx: number) => {
+    let ax = cx - (fb.x + fb.w / 2);
+    if (ax + fb.x < X_MIN) ax = X_MIN - fb.x;
+    if (ax + fb.x + fb.w > X_MAX) ax = X_MAX - fb.x - fb.w;
+    return ax;
+  };
+  /** Vertical clearance needed so a bbox whose nearest edge is `gap` px from the node misses its circle. */
+  const clearance = (ax: number, fb: Rect) => {
+    const gap = inner === 1 ? nd.x - (ax + fb.x + fb.w) : ax + fb.x - nd.x;
+    return gap >= R ? 0 : Math.ceil(Math.sqrt(R * R - gap * gap)) + 1;
+  };
+  return [
+    {
+      side: inner,
+      place: (fb) => {
+        const edge = nd.x + outer * (R + 1);
+        const ax = inner === 1 ? edge - (fb.x + fb.w) : edge - fb.x;
+        return { x: ax, y: nd.y - (fb.y + fb.h / 2) };
+      },
+    },
+    {
+      side: inner,
+      place: (fb) => {
+        const ax = centreX(fb, mirror(OUTER_CX));
+        return { x: ax, y: nd.y - clearance(ax, fb) - (fb.y + fb.h) };
+      },
+    },
+    {
+      side: inner,
+      place: (fb) => {
+        const ax = centreX(fb, mirror(OUTER_CX));
+        return { x: ax, y: nd.y + clearance(ax, fb) - fb.y };
+      },
+    },
+    { side: outer, place: (fb) => ({ x: centreX(fb, mirror(INNER_FAR_CX)), y: nd.y - MID_GAP_DY - (fb.y + fb.h / 2) }) },
+    { side: outer, place: (fb) => ({ x: centreX(fb, mirror(INNER_FAR_CX)), y: nd.y + MID_GAP_DY - (fb.y + fb.h / 2) }) },
+  ];
+}
+
 export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>): WorldLayout {
   const { seed } = input;
   const weeks = [...new Set(input.lessons.map((l) => l.week))].sort((a, b) => a - b);
@@ -155,36 +218,39 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
 
   const ops: WorldOp[] = [];
 
-  // Set pieces: one per lesson, beside the node on the open side of the road.
+  // Set pieces: one per lesson. Try the candidate slots in order; take the first that fits.
   let prevPiece: string | null = null;
   for (const nd of nodes) {
     const segment = segIndexOfWeek.get(nd.week)!;
     const seg = segments[segment];
     const rng = rngFor(`${seed}:${seg.salt}:${nd.id}`);
-    const side: 1 | -1 = nd.x < MID ? 1 : -1;
-    const ax = nd.x + side * PIECE_OFFSET;
-    const ay = nd.y;
     const candidates = shuffle(rng, registry[seg.biome].pieces).filter((p) => p.id !== prevPiece);
+    const slots = pieceSlots(nd);
     prevPiece = null;
-    for (const p of candidates) {
-      const rects = p.footprint(side).map((r) => ({ x: r.x + ax, y: r.y + ay, w: r.w, h: r.h }));
-      if (!rects.length) continue;
-      if (rects.some((r) => r.x < X_MIN || r.x + r.w > X_MAX || index.hits(r))) continue;
-      for (const r of rects) index.add({ kind: "rect", tag: "piece", ...r });
-      const stage = stageFor(nd.state);
-      ops.push({
-        y: ay,
-        kind: "piece",
-        svg: p.render({ x: ax, y: ay, side, stage, current: nd.state === "current", rng }),
-        anchor: { x: ax, y: ay },
-        bbox: bboxOf(rects),
-        segment,
-        pieceId: p.id,
-        stage,
-        lessonId: nd.id,
-      });
-      prevPiece = p.id;
-      break;
+    search: for (const p of candidates) {
+      for (const slot of slots) {
+        const rel = p.footprint(slot.side);
+        if (!rel.length) continue search;
+        const { x: ax, y: ay } = slot.place(bboxOf(rel));
+        const rects = rel.map((r) => ({ x: r.x + ax, y: r.y + ay, w: r.w, h: r.h }));
+        if (rects.some((r) => r.x < X_MIN || r.x + r.w > X_MAX || index.hits(r))) continue;
+        for (const r of rects) index.add({ kind: "rect", tag: "piece", ...r });
+        const stage = stageFor(nd.state);
+        ops.push({
+          y: ay,
+          kind: "piece",
+          svg: p.render({ x: ax, y: ay, side: slot.side, stage, current: nd.state === "current", rng }),
+          anchor: { x: ax, y: ay },
+          bbox: bboxOf(rects),
+          segment,
+          side: slot.side,
+          pieceId: p.id,
+          stage,
+          lessonId: nd.id,
+        });
+        prevPiece = p.id;
+        break search;
+      }
     }
   }
 

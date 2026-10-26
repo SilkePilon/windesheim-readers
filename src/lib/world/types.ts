@@ -11,7 +11,11 @@ export type PieceCtx = { x: number; y: number; side: 1 | -1; stage: Stage; curre
 export type SetPiece = {
   id: string;
   biome: BiomeId;
-  /** Footprint rects relative to the anchor (baseline point beside the node). */
+  /**
+   * Footprint rects relative to the anchor (the piece's baseline point), for a piece facing
+   * `side` (the direction towards the road; mirror the art by it). Keep the footprint within
+   * 110×110: the engine tries several slots around the node, and larger pieces rarely fit.
+   */
   footprint: (side: 1 | -1) => Rect[];
   render: (ctx: PieceCtx) => string;
 };

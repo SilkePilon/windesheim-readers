@@ -32,6 +32,17 @@ const makeRegistry = (piecesPerBiome: number): Record<BiomeId, Biome> =>
   ) as unknown as Record<BiomeId, Biome>;
 
 const reg = makeRegistry(1);
+
+/** 110×100 pieces, slightly off-centre and mirrored by side (the size guidance's upper end). */
+const bigPiece = (biome: BiomeId, n: number): SetPiece => ({
+  id: `${biome}-big-${n}`,
+  biome,
+  footprint: (side) => [{ x: side === 1 ? -60 : -50, y: -90, w: 110, h: 100 }],
+  render: (c) => `<g data-p="${biome}-big-${n}" data-side="${c.side}"/>`,
+});
+const regBig = Object.fromEntries(
+  Object.entries(makeRegistry(0)).map(([id, b]) => [id, { ...b, pieces: [0, 1, 2].map((i) => bigPiece(id as BiomeId, i)) }]),
+) as unknown as Record<BiomeId, Biome>;
 const reg3 = makeRegistry(3);
 
 function randomReader(t: number): WorldInput {
@@ -201,6 +212,38 @@ describe("composeWorld", () => {
   test("hard exclusion holds over 200 random readers", () => {
     for (let t = 0; t < 200; t++) expect(exclusionViolations(composeWorld(randomReader(t), t % 2 ? reg : reg3))).toEqual([]);
   }, 30000);
+
+  test("most lessons (and the current one) get a 110×100 piece", () => {
+    let lessons = 0;
+    let placed = 0;
+    let currents = 0;
+    let currentPlaced = 0;
+    for (let t = 0; t < 200; t++) {
+      const w = composeWorld(randomReader(t), regBig);
+      expect(exclusionViolations(w)).toEqual([]);
+      const withPiece = new Set(w.ops.filter((o) => o.kind === "piece").map((o) => o.lessonId));
+      lessons += w.nodes.length;
+      placed += withPiece.size;
+      const cur = w.nodes.find((n) => n.state === "current");
+      if (cur) {
+        currents++;
+        if (withPiece.has(cur.id)) currentPlaced++;
+      }
+    }
+    console.log(`pieces: ${placed}/${lessons} lessons, current: ${currentPlaced}/${currents}`);
+    expect(placed / lessons).toBeGreaterThanOrEqual(0.9);
+    expect(currentPlaced / currents).toBeGreaterThanOrEqual(0.9);
+  }, 30000);
+
+  test("piece ops record the side they face, and render with it", () => {
+    const w = composeWorld(sample, regBig);
+    const pieces = w.ops.filter((o) => o.kind === "piece");
+    expect(pieces.length).toBeGreaterThan(0);
+    for (const p of pieces) {
+      expect(p.side === 1 || p.side === -1).toBe(true);
+      expect(p.svg).toContain(`data-side="${p.side}"`);
+    }
+  });
 
   test("no consecutive repeats when a biome has >= 2 pieces", () => {
     for (let t = 0; t < 50; t++) {

@@ -118,6 +118,10 @@ const en: Messages = {
       explain: "Explain a concept for level {{level}}",
       read: "Read the summary for level {{level}}",
       max: "You've mastered this lesson!",
+      cardsAll: "Learn the remaining {{n}} cards",
+      quizNoLevel: "Get a higher quiz score",
+      explainNoLevel: "Explain a concept",
+      readNoLevel: "Read the summary",
     },
     startNext: "Next step: {{name}}",
     activities: {

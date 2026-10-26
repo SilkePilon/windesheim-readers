@@ -116,6 +116,10 @@ const nl = {
       explain: "Leg een begrip uit voor niveau {{level}}",
       read: "Lees de samenvatting voor niveau {{level}}",
       max: "Je beheerst deze les!",
+      cardsAll: "Leer de resterende {{n}} kaarten",
+      quizNoLevel: "Haal een hogere quizscore",
+      explainNoLevel: "Leg een begrip uit",
+      readNoLevel: "Lees de samenvatting",
     },
     startNext: "Volgende stap: {{name}}",
     activities: {

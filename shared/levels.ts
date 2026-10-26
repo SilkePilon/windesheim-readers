@@ -28,3 +28,35 @@ export function nextStep(p: {
   }
   return best;
 }
+
+export type NextStepHint =
+  | { key: "max" }
+  | { key: "cards"; n: number; level: number }
+  | { key: "cardsAll"; n: number }
+  | { key: "quiz" | "explain" | "read"; level: number }
+  | { key: "quizNoLevel" | "explainNoLevel" | "readNoLevel" };
+
+/**
+ * The line under the lesson level bar. It only names a level the step can actually
+ * reach (`lessonLevel(mastery + gain)`); otherwise it uses level-less wording.
+ */
+export function nextStepHint(p: {
+  mastery: number;
+  flashcardCount: number;
+  cardsLeft: number;
+  step: NextStep;
+}): NextStepHint | null {
+  const level = lessonLevel(p.mastery);
+  if (level >= 5) return { key: "max" };
+  const step = p.step;
+  if (!step) return null;
+  const reaches = lessonLevel(p.mastery + step.gain) > level;
+  if (step.kind === "cards") {
+    if (!reaches) return { key: "cardsAll", n: p.cardsLeft };
+    // A fully learned card is worth 1/count of the cards component.
+    const deficit = (level + 1) / 5 - p.mastery;
+    const needed = Math.ceil((deficit / MASTERY_WEIGHTS.cards) * p.flashcardCount - 1e-9);
+    return { key: "cards", n: Math.max(1, Math.min(p.cardsLeft, needed)), level: level + 1 };
+  }
+  return reaches ? { key: step.kind, level: level + 1 } : { key: `${step.kind}NoLevel` };
+}

@@ -30,8 +30,8 @@ import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress, useLesson } from "@/lib/queries";
 import type { LessonDetail, XpResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { MASTERY_WEIGHTS, XP } from "@shared/game";
-import { lessonLevel, nextStep } from "@shared/levels";
+import { XP } from "@shared/game";
+import { lessonLevel, nextStep, nextStepHint } from "@shared/levels";
 
 const VIEWS = ["read", "explain", "open", "tutor"] as const;
 type View = (typeof VIEWS)[number];
@@ -68,15 +68,8 @@ function useNextStep(lesson: LessonDetail) {
     cardsLeft,
   });
 
-  let hint: string | undefined;
-  if (level >= 5) hint = t("lesson.next.max");
-  else if (step?.kind === "cards") {
-    // Cards needed to reach the next level (a fully learned card is worth 1/count of
-    // the cards component), capped at the cards that are left.
-    const deficit = (level + 1) / 5 - p.mastery;
-    const needed = Math.ceil((deficit / MASTERY_WEIGHTS.cards) * lesson.flashcardCount - 1e-9);
-    hint = t("lesson.next.cards", { n: Math.max(1, Math.min(cardsLeft, needed)), level: level + 1 });
-  } else if (step) hint = t(`lesson.next.${step.kind}`, { level: level + 1 });
+  const h = nextStepHint({ mastery: p.mastery, flashcardCount: lesson.flashcardCount, cardsLeft, step });
+  const hint = h ? t(`lesson.next.${h.key}`, { n: "n" in h ? h.n : undefined, level: "level" in h ? h.level : undefined }) : undefined;
 
   return { level, step, cardsLeft, hint };
 }
@@ -141,6 +134,10 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
   };
   const highlighted = step?.kind ?? null;
   const hot = activities.find((a) => a.id === highlighted);
+  // On desktop the recommended tile becomes the "next step" button, so the grid shows
+  // the rest; with an odd count the last tile spans both columns instead of sitting alone.
+  const desktopTiles = activities.filter((a) => a.id !== highlighted);
+  const wideOnDesktop = desktopTiles.length % 2 === 1 ? desktopTiles.at(-1)?.id : undefined;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-8">
@@ -191,7 +188,7 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
                 status={a.status}
                 highlighted={a.id === highlighted}
                 onClick={() => open(a.id)}
-                className={cn(a.id === highlighted && "md:hidden")}
+                className={cn(a.id === highlighted && "md:hidden", a.id === wideOnDesktop && "md:col-span-2")}
               />
             ))}
           </div>

@@ -90,26 +90,44 @@ function liftLights(svg: string, lights: string[] | null, tf = "") {
 /** Scale by `s` about (x, y): smaller pieces at tight screen-edge slots. */
 const scaleAbout = (x: number, y: number, s: number) => `matrix(${s} 0 0 ${s} ${r1(x * (1 - s))} ${r1(y * (1 - s))})`;
 
-/** Evening grade: a multiply wash, deep blue-violet, darker towards the top (the night ahead). */
+/**
+ * Evening grade: a wash, deep blue-violet, darker towards the top (the night ahead). Drawn in
+ * its own layer, which multiplies (world.css) over the art.
+ */
 const dusk = (id: string, x: number, w: number, h: number) =>
   `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${h}" x2="0" y2="0"><stop offset="0" stop-color="${DUSK[0]}" stop-opacity="${DUSK[2]}"/><stop offset="1" stop-color="${DUSK[1]}" stop-opacity="${DUSK[3]}"/></linearGradient>` +
-  `<rect class="wl-dusk" x="${x}" width="${w}" height="${h}" fill="url(#${id})" style="mix-blend-mode:multiply"/>`;
+  `<rect x="${x}" width="${w}" height="${h}" fill="url(#${id})"/>`;
 const DUSK = ["#5246D0", "#2E2496", 0.42, 0.56] as const;
 
+/** One week segment's art: its own SVG over rows top…bottom of the world (overflow visible). */
+type SegLayer = { top: number; bottom: number; body: string };
+
 /**
- * Layers: the art, then the light halos (`screen`, so lamps and windows glow over the
- * evening grade), then text (banners) so it stays crisp whatever grade the art gets.
+ * Layers. The art: ground and road (this SVG sizes the box), one SVG per week segment (an
+ * animating piece only repaints its own segment, not the whole world), grain, and the
+ * evening grade (`multiply`). Then the light halos (`screen`, so lamps and windows glow over
+ * the evening grade), then text (banners) so it stays crisp whatever grade the art gets.
  */
-const layers = (W: number, H: number, cls: string, art: string, lights: string, top: string) => {
-  const open = (c: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" height="100%" class="${c}" aria-hidden="true" focusable="false">`;
+function layers(W: number, H: number, cls: string, art: { base: string; segs?: SegLayer[]; over?: string; dusk: string }, lights: string, top: string) {
+  const open = (c: string, vb = `0 0 ${W} ${H}`, style = "") =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" width="100%" height="100%" class="${c}"${style} aria-hidden="true" focusable="false">`;
+  const pct = (v: number) => `${((v / H) * 100).toFixed(3)}%`;
+  const segs = (art.segs ?? [])
+    .map((s) => {
+      const [y, h] = [r1(s.top), r1(s.bottom - s.top)];
+      return `${open("world-seg", `0 ${y} ${W} ${h}`, ` preserveAspectRatio="none" style="top:${pct(y)};height:${pct(h)}"`)}${s.body}</svg>`;
+    })
+    .join("");
   return (
-    `<div class="world${cls}" style="aspect-ratio:${W}/${H}">` +
-    `${open("world-svg")}${art}</svg>` +
+    `<div class="world${cls}" style="aspect-ratio:${W}/${H}"><div class="world-art">` +
+    `${open("world-svg")}${art.base}</svg>${segs}` +
+    (art.over ? `${open("world-over")}${art.over}</svg>` : "") +
+    `${open("world-dusk wl-dusk")}${art.dusk}</svg></div>` +
     `${open("world-lights")}<defs>${LIGHT_DEFS}</defs>${lights}</svg>` +
     (top ? `${open("world-top")}${top}</svg>` : "") +
     `</div>`
   );
-};
+}
 
 function road(d: string, splitY: number, H: number, p: string) {
   if (!d) return "";
@@ -146,8 +164,9 @@ function groundGradient(layout: WorldLayout, id: string) {
 }
 
 /**
- * The whole world as one SVG string: defs, ground, piece patches, road, one `<g>` per week
- * segment (ops in y order; fog runs muted), dusk overlay (dark mode), banners, grain.
+ * The whole world as one HTML string of stacked SVG layers: defs, ground, piece patches, road;
+ * one SVG per week segment (ops in y order; fog runs muted); grain; dusk (dark mode); lights;
+ * banners.
  * Pure and deterministic. Lesson codes are not drawn here (the nodes are HTML buttons).
  */
 export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): string {
@@ -164,7 +183,7 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
   for (const op of layout.ops) bySeg[op.segment]?.push(op);
 
   let patches = "";
-  let segs = "";
+  const segs: SegLayer[] = [];
   const lights: string[] = [];
   layout.segments.forEach((s, k) => {
     const ops = bySeg[k];
@@ -177,7 +196,7 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
     });
     // The finale gate tops the last segment (never fogged: it is the goal in the distance).
     if (layout.finale && k === layout.segments.length - 1) over += liftLights(finaleGate(layout.finale.x, layout.finale.y, layout.finale.done), lights);
-    segs += `<g class="wseg" data-seg="${k}" data-biome="${s.biome}">${segmentBody(ops, muted, lights)}${over}</g>`;
+    segs.push({ top: s.top, bottom: s.bottom, body: `<g class="wseg" data-seg="${k}" data-biome="${s.biome}">${segmentBody(ops, muted, lights)}${over}</g>` });
   });
 
   // Unexplored ground fades towards a pale haze above the fog line.
@@ -192,15 +211,18 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
   const f = layout.finale;
   const sign = f ? finaleSign(f.x, f.y, f.done, (opts.finaleLabel ?? ((done) => (done ? "Diploma!" : "Finish")))(f.done)) : "";
 
-  const art =
+  const base =
     `<defs>${SHARED_DEFS}${groundGradient(layout, `${p}-ground`)}</defs>` +
     `<rect x="-20" width="${W + 40}" height="${H}" fill="url(#${p}-ground)"/>` +
     haze +
     patches +
-    road(layout.road.d, layout.road.splitY, H, p) +
-    segs +
-    `<rect x="-20" width="${W + 40}" height="${H}" fill="url(#wk-grainp)" opacity=".9"/>` +
-    dusk(`${p}-dusk`, -20, W + 40, H);
+    road(layout.road.d, layout.road.splitY, H, p);
+  const art = {
+    base,
+    segs,
+    over: `<rect x="-20" width="${W + 40}" height="${H}" fill="url(#wk-grainp)" opacity=".9"/>`,
+    dusk: dusk(`${p}-dusk`, -20, W + 40, H),
+  };
   return layers(W, H, opts.dark ? " wl-dark" : "", art, lights.join(""), banners + sign);
 }
 
@@ -222,14 +244,14 @@ export function renderPieceTile(piece: SetPiece, stage: Stage, side: 1 | -1, opt
   const by = Math.min(...fp.map((r) => r.y));
   const bbox = { x: bx, y: by, w: Math.max(...fp.map((r) => r.x + r.w)) - bx, h: Math.max(...fp.map((r) => r.y + r.h)) - by };
   const roadX = side === 1 ? W - 8 : 8;
-  const art =
+  const base =
     `<defs>${SHARED_DEFS}</defs>` +
     `<rect width="${W}" height="${H}" fill="${biome.ground[0]}"/>` +
     patch(bbox, piece.biome) +
     `<path d="M${roadX} -10 V${H + 10}" stroke="#EADBB8" stroke-width="22" stroke-linecap="round"/>` +
     (stage === 0 ? `${MUTE_OPEN}${svg}</g>${fogOver(bbox, side, 0)}` : svg) +
-    (stage === 1 ? sparkles(bbox) : "") +
-    dusk(`wt-dusk`, 0, W, H);
+    (stage === 1 ? sparkles(bbox) : "");
+  const art = { base, dusk: dusk(`wt-dusk`, 0, W, H) };
   const outline =
     fp.map((r) => `<rect x="${r1(r.x)}" y="${r1(r.y)}" width="${r.w}" height="${r.h}" fill="none" stroke="#FF5C8A" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>`).join("") +
     `<circle cx="${ax}" cy="${ay}" r="2.5" fill="#FF5C8A"/>`;

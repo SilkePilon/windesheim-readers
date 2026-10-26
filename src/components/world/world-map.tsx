@@ -35,6 +35,8 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
   // Only ids, weeks and states shape the world; titles and levels don't.
   const signature = nodes.map((n) => `${n.id}:${n.week}:${n.state}`).join("|");
   const { layout, svg } = useMemo(() => {
+    // User Timing marks (DevTools Performance panel): build = compose + render, painted = first frame.
+    const t0 = performance.now();
     const layout = composeWorld(
       {
         seed,
@@ -51,11 +53,18 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
       label: (b) => `${t("common.week", { n: b.week })} · ${t(`world.biome.${b.biome}`)}`,
       finaleLabel: (done) => t(done ? "world.finale.done" : "world.finale.closed"),
     });
+    performance.measure("world:build", { start: t0 });
     return { layout, svg };
     // `t` changes with the language, which is in the deps.
   }, [seed, signature, i18n.language]);
 
   const pos = new Map(layout.nodes.map((n) => [n.id, n]));
+
+  useEffect(() => {
+    // Two frames after the art is in the DOM, it has been painted once.
+    let id = requestAnimationFrame(() => (id = requestAnimationFrame(() => performance.mark("world:painted"))));
+    return () => cancelAnimationFrame(id);
+  }, [svg]);
 
   // Animations only run in segments that are on screen.
   useEffect(() => {

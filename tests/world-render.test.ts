@@ -33,6 +33,9 @@ describe("renderWorldSvg", () => {
       clean(svg);
       expect(svg.startsWith('<div class="world')).toBe(true);
       expect(svg).toContain('class="world-lights"');
+      // One svg per week segment, so an animation repaints only its own segment.
+      expect(svg.split('class="world-seg"').length - 1).toBe(w.segments.length);
+      expect(svg.split('<g class="wseg"').length - 1).toBe(w.segments.length);
       for (const b of BIOMES) expect(svg).toContain(`data-biome="${b}"`);
     }
   });

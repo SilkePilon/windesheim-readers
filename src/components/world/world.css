@@ -62,11 +62,18 @@
   .world * { animation: none !important; }
 }
 
-/* Layers: art, light halos (screen), text. The art svg sizes the box. */
+/* Layers (render.ts): the art (ground + road svg, which sizes the box; one svg per week segment,
+   so an animation only repaints its own segment; grain; dusk), light halos (screen), text. */
 .world { position: relative; height: 100%; }
+.world-art { position: relative; height: 100%; }
+.world-art > svg,
 .world > svg { display: block; width: 100%; height: 100%; }
-.world > svg + svg { position: absolute; inset: 0; pointer-events: none; }
+.world-art > svg + svg,
+.world > svg { position: absolute; inset: 0; pointer-events: none; }
+/* Segment svgs: top and height inline (their rows of the world); pieces may overhang. */
+.world-art > .world-seg { bottom: auto; overflow: visible; }
 .world > .world-lights { mix-blend-mode: screen; }
+.world-art > .world-dusk { mix-blend-mode: multiply; }
 
 /* Evening grade in dark mode (or forced with .wl-dark): the dusk wash, lit windows and lamp halos.
    Campus halos (.wl-always) glow in both themes. */
@@ -75,17 +82,17 @@
 .world .wl-light { display: none; }
 .world .wl-light.wl-always,
 .dark .world .wl-on,
-.dark .world .wl-dusk,
 .dark .world .wl-light,
 .world.wl-dark .wl-on,
-.world.wl-dark .wl-dusk,
 .world.wl-dark .wl-light { display: inline; }
+.dark .world .wl-dusk,
+.world.wl-dark .wl-dusk { display: block; }
 .dark .world .wl-off,
 .world.wl-dark .wl-off { display: none; }
 /* The wash (render.ts DUSK) shifts everything blue; saturate keeps colours vivid instead of
    murky, a soft vignette frames it. One filter on the whole art layer, never per prop. */
-.dark .world > .world-svg,
-.world.wl-dark > .world-svg { filter: saturate(1.3); }
+.dark .world > .world-art,
+.world.wl-dark > .world-art { filter: saturate(1.3); }
 .dark .world::after,
 .world.wl-dark::after {
   content: "";

@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
+import { setLocale } from "./i18n";
 import type { Leaderboard, LessonDetail, Me, ReaderWithLessons } from "./types";
 
 export const qk = {
@@ -22,6 +24,15 @@ export function useMe() {
     },
     staleTime: 30_000,
   });
+}
+
+/** Once logged in, the UI follows the saved user locale instead of the browser. */
+export function useSavedLocale() {
+  const { data: me } = useMe();
+  const locale = me?.user.locale;
+  useEffect(() => {
+    if (locale) setLocale(locale);
+  }, [locale]);
 }
 
 export function useReaders() {

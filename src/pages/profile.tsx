@@ -1,33 +1,79 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { LogOut, Monitor, Moon, Sun } from "lucide-react";
+import {
+  Bird,
+  Brain,
+  Check,
+  Flame,
+  GraduationCap,
+  Layers,
+  LogOut,
+  Moon,
+  Sprout,
+  Star,
+  Swords,
+  Target,
+  Trophy,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Page, PageHeader, PageSpinner } from "@/components/page";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Page, PageSpinner } from "@/components/page";
+import { PlayerAvatar } from "@/components/game/player-avatar";
 import { api } from "@/lib/api";
 import { setLocale } from "@/lib/i18n";
 import { useInvalidateProgress, useMe } from "@/lib/queries";
 import { BADGES, levelTitle, type BadgeId } from "@shared/game";
 import { cn } from "@/lib/utils";
 
+// Earned badge tiles: a lucide icon on a Speelveld colour (white icon, like the activity
+// tiles; gold uses its dark foreground).
+const BADGE_STYLE: Record<BadgeId, { icon: LucideIcon; tile: string }> = {
+  first_steps: { icon: Sprout, tile: "bg-success text-white shadow-[0_4px_0_var(--success-shade)]" },
+  streak_3: { icon: Flame, tile: "bg-warning text-white shadow-[0_4px_0_var(--warning-shade)]" },
+  streak_7: { icon: Zap, tile: "bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]" },
+  streak_30: { icon: Trophy, tile: "bg-danger text-white shadow-[0_4px_0_var(--danger-shade)]" },
+  perfect_quiz: { icon: Target, tile: "bg-info text-white shadow-[0_4px_0_var(--info-shade)]" },
+  cards_100: { icon: Layers, tile: "bg-success text-white shadow-[0_4px_0_var(--success-shade)]" },
+  cards_500: { icon: Brain, tile: "bg-primary text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]" },
+  explain_master: { icon: GraduationCap, tile: "bg-info text-white shadow-[0_4px_0_var(--info-shade)]" },
+  lesson_master: { icon: Star, tile: "bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]" },
+  battle_winner: { icon: Swords, tile: "bg-danger text-white shadow-[0_4px_0_var(--danger-shade)]" },
+  night_owl: { icon: Moon, tile: "bg-primary text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]" },
+  early_bird: { icon: Bird, tile: "bg-warning text-white shadow-[0_4px_0_var(--warning-shade)]" },
+};
+
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
-  const { theme, setTheme } = useTheme();
   const { data: me } = useMe();
   const invalidate = useInvalidateProgress();
-  const [nickname, setNickname] = useState("");
   const qc = useQueryClient();
   const navigate = useNavigate();
+
+  if (!me) return <PageSpinner />;
+  const s = me.stats;
+  const earnedAt = new Map(me.badges.map((b) => [b.id, b.earnedAt]));
+  const ids = Object.keys(BADGES) as BadgeId[];
+  const num = (n: number) => n.toLocaleString(i18n.language);
+
+  const patch = async (body: Record<string, unknown>) => {
+    try {
+      await api.patch("/me", body);
+      invalidate();
+      toast.success(t("common.saved"));
+    } catch {
+      toast.error(t("common.error"));
+    }
+  };
 
   const signOut = async () => {
     await authClient.signOut();
@@ -35,126 +81,196 @@ export default function ProfilePage() {
     navigate("/login");
   };
 
-  useEffect(() => {
-    if (me) setNickname(me.user.nickname ?? "");
-  }, [me]);
-
-  if (!me) return <PageSpinner />;
-  const s = me.stats;
-  const earned = new Set(me.badges.map((b) => b.id));
-
-  const patch = async (body: Record<string, unknown>) => {
-    await api.patch("/me", body);
-    invalidate();
-    toast.success(t("common.saved"));
-  };
-
   return (
-    <Page>
-      <PageHeader title={t("profile.title")} description={me.user.email} />
+    <Page className="max-w-xl lg:max-w-4xl">
+      <header className="flex items-center gap-3">
+        <PlayerAvatar
+          name={me.user.displayName}
+          two
+          className="size-[58px] bg-primary text-[22px] text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]"
+        />
+        <div className="min-w-0">
+          <h1 className="truncate font-heading text-[22px] leading-tight font-semibold">{me.user.displayName}</h1>
+          <p className="text-[13px] font-bold text-muted-foreground">
+            {t("common.level", { n: s.level })}: {levelTitle(s.level)}
+          </p>
+        </div>
+      </header>
 
-      <Card className="mb-4">
-        <CardContent>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <div className="text-2xl font-semibold">{t("common.level", { n: s.level })}</div>
-              <div className="text-sm text-muted-foreground">{levelTitle(s.level)}</div>
-            </div>
-            <div className="text-sm text-muted-foreground tabular-nums">
-              {s.intoLevel} / {s.levelSize} XP
-            </div>
-          </div>
-          <Progress value={s.progress * 100} className="h-3" />
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            {[
-              [t("profile.totalXp"), s.xp],
-              [t("home.streak"), s.streak],
-              [t("profile.longestStreak"), s.longestStreak],
-            ].map(([label, v]) => (
-              <div key={label} className="rounded-lg bg-muted p-2">
-                <div className="text-lg font-semibold tabular-nums">{v}</div>
-                <div className="text-xs text-muted-foreground">{label}</div>
-              </div>
+      <div className="mt-4 grid grid-cols-3 gap-2.5">
+        <StatTile value={num(s.xp)} label={t("profile.totalXp")} />
+        <StatTile value={num(s.streak)} label={t("home.streak")} valueClass="text-warning-shade dark:text-warning" />
+        <StatTile value={num(s.longestStreak)} label={t("profile.longest")} />
+      </div>
+
+      {/* Desktop: badges and settings side by side. */}
+      <div className="lg:mt-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
+        <section>
+          <h2 className="mt-6 font-heading text-base font-semibold">
+            {t("profile.badges")}{" "}
+            <span className="text-[13px] text-muted-foreground">{t("profile.badgeCount", { n: earnedAt.size, total: ids.length })}</span>
+          </h2>
+          <div className="mt-2.5 grid grid-cols-4 gap-2.5">
+            {ids.map((id) => (
+              <BadgeTile key={id} id={id} earnedAt={earnedAt.get(id)} />
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </section>
 
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>{t("profile.badges")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-          {(Object.keys(BADGES) as BadgeId[]).map((id) => (
-            <div
-              key={id}
-              title={t(`badges.${id}.desc`)}
-              className={cn("flex flex-col items-center gap-1 rounded-xl border p-3 text-center", !earned.has(id) && "opacity-35 grayscale")}
+        <Card className="mt-6 gap-0 py-1 lg:mt-[58px]">
+          <NicknameRow current={me.user.nickname ?? ""} placeholder={me.user.name} onSave={(v) => patch({ nickname: v || null })} />
+          <SettingRow label={t("profile.showOnLeaderboard")} htmlFor="lb">
+            <Switch id="lb" size="lg" checked={me.user.showOnLeaderboard} onCheckedChange={(v) => patch({ showOnLeaderboard: v })} />
+          </SettingRow>
+          <SettingRow label={t("profile.language")}>
+            <Select
+              value={i18n.language}
+              onValueChange={(v) => {
+                if (v !== "nl" && v !== "en") return;
+                setLocale(v);
+                void patch({ locale: v });
+              }}
             >
-              <span className="text-3xl">{BADGES[id].icon}</span>
-              <span className="text-xs leading-tight font-semibold">{t(`badges.${id}.name`)}</span>
-              <span className="text-[10px] leading-tight text-muted-foreground">{earned.has(id) ? t(`badges.${id}.desc`) : t("profile.lockedBadge")}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="nick">{t("profile.nickname")}</FieldLabel>
-              <div className="flex gap-2">
-                <Input id="nick" value={nickname} maxLength={24} onChange={(e) => setNickname(e.target.value)} placeholder={me.user.name} />
-                <Button variant="outline" onClick={() => patch({ nickname: nickname.trim() || null })} disabled={nickname === (me.user.nickname ?? "")}>
-                  {t("common.save")}
-                </Button>
-              </div>
-              <FieldDescription>{t("profile.nicknameHint")}</FieldDescription>
-            </Field>
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldLabel htmlFor="lb">{t("profile.showOnLeaderboard")}</FieldLabel>
-              </FieldContent>
-              <Switch id="lb" checked={me.user.showOnLeaderboard} onCheckedChange={(v) => patch({ showOnLeaderboard: v })} />
-            </Field>
-            <Field>
-              <FieldLabel>{t("profile.language")}</FieldLabel>
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                value={i18n.language}
-                onValueChange={(v) => {
-                  if (v !== "nl" && v !== "en") return;
-                  setLocale(v);
-                  void patch({ locale: v });
-                }}
-              >
-                <ToggleGroupItem value="nl">Nederlands</ToggleGroupItem>
-                <ToggleGroupItem value="en">English</ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-            <Field>
-              <FieldLabel>{t("profile.theme")}</FieldLabel>
-              <ToggleGroup type="single" variant="outline" value={theme} onValueChange={(v) => v && setTheme(v)}>
-                <ToggleGroupItem value="light">
-                  <Sun /> {t("profile.themes.light")}
-                </ToggleGroupItem>
-                <ToggleGroupItem value="dark">
-                  <Moon /> {t("profile.themes.dark")}
-                </ToggleGroupItem>
-                <ToggleGroupItem value="system">
-                  <Monitor /> {t("profile.themes.system")}
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
-
-      <Button variant="outline" className="mt-4 w-full" size="lg" onClick={signOut}>
-        <LogOut /> {t("nav.signOut")}
-      </Button>
+              <SelectTrigger aria-label={t("profile.language")} className={SELECT}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="nl">Nederlands</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+          <ThemeRow />
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex min-h-12 items-center gap-3 border-t-2 border-background px-4 py-3 text-left text-sm font-bold text-danger outline-none hover:bg-danger/5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+          >
+            <LogOut className="size-4 shrink-0" />
+            <span className="shrink-0">{t("nav.signOut")}</span>
+            <span className="ml-auto min-w-0 truncate text-xs font-semibold text-muted-foreground">{me.user.email}</span>
+          </button>
+        </Card>
+      </div>
     </Page>
+  );
+}
+
+const SELECT =
+  "-mr-2 h-9 border-0 bg-transparent font-bold text-muted-foreground shadow-none hover:text-foreground dark:bg-transparent dark:hover:bg-transparent";
+
+function StatTile({ value, label, valueClass }: { value: string; label: string; valueClass?: string }) {
+  return (
+    <Card className="items-center gap-0.5 rounded-[20px] px-2 py-3 text-center">
+      <span className={cn("font-heading text-[22px] leading-tight font-semibold tabular-nums", valueClass)}>{value}</span>
+      <span className="text-[11px] leading-tight font-bold text-muted-foreground">{label}</span>
+    </Card>
+  );
+}
+
+function BadgeTile({ id, earnedAt }: { id: BadgeId; earnedAt?: string }) {
+  const { t, i18n } = useTranslation();
+  const { icon: Icon, tile } = BADGE_STYLE[id];
+  const name = t(`badges.${id}.name`);
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label={name}
+        className={cn(
+          "grid aspect-square place-items-center rounded-[18px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "transition-[translate,box-shadow] duration-100 active:translate-y-1 active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0",
+          earnedAt ? tile : "bg-track text-muted-foreground/60 shadow-[0_4px_0_var(--chunky)]",
+        )}
+      >
+        <Icon className="size-[26px]" strokeWidth={2.4} />
+      </PopoverTrigger>
+      <PopoverContent collisionPadding={12} className="w-60 gap-1 rounded-[16px] p-3.5 shadow-[0_5px_0_var(--chunky)] ring-0">
+        <p className="font-heading text-base font-semibold">{name}</p>
+        <p className="text-sm font-semibold">{t(`badges.${id}.desc`)}</p>
+        <p className={cn("text-xs font-bold", earnedAt ? "text-success-shade dark:text-success" : "text-muted-foreground")}>
+          {earnedAt
+            ? t("profile.earnedOn", {
+                date: new Date(earnedAt).toLocaleDateString(i18n.language, {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
+              })
+            : t("profile.lockedBadge")}
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SettingRow({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-1.5 text-sm font-bold [&+&]:border-t-2 [&+&]:border-background">
+      <label htmlFor={htmlFor} className="min-w-0">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function NicknameRow({ current, placeholder, onSave }: { current: string; placeholder: string; onSave: (v: string) => Promise<void> }) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState(current);
+  useEffect(() => setValue(current), [current]);
+  const dirty = value.trim() !== current;
+  const save = () => {
+    if (dirty) void onSave(value.trim());
+  };
+  return (
+    <SettingRow label={t("profile.nickname")} htmlFor="nick">
+      <form
+        className="flex min-w-0 flex-1 items-center justify-end gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <input
+          id="nick"
+          value={value}
+          maxLength={24}
+          placeholder={placeholder}
+          title={t("profile.nicknameHint")}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-9 w-full max-w-56 min-w-0 rounded-[10px] bg-transparent px-2 text-right font-bold text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:bg-background focus:text-foreground"
+        />
+        {dirty && (
+          <Button
+            type="submit"
+            variant="chunky-success"
+            size="icon"
+            className="size-8 shrink-0 rounded-[10px] [--press:3px]"
+            aria-label={t("common.save")}
+          >
+            <Check strokeWidth={3} />
+          </Button>
+        )}
+      </form>
+    </SettingRow>
+  );
+}
+
+function ThemeRow() {
+  const { t } = useTranslation();
+  const { theme, setTheme } = useTheme();
+  return (
+    <SettingRow label={t("profile.theme")}>
+      <Select value={theme ?? "system"} onValueChange={setTheme}>
+        <SelectTrigger aria-label={t("profile.theme")} className={SELECT}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value="light">{t("profile.themes.light")}</SelectItem>
+          <SelectItem value="dark">{t("profile.themes.dark")}</SelectItem>
+          <SelectItem value="system">{t("profile.themes.system")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </SettingRow>
   );
 }

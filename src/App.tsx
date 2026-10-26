@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
-import { useMe } from "@/lib/queries";
+import { useMe, useSavedLocale } from "@/lib/queries";
 import { AppLayout } from "@/components/app-layout";
 import { PageSpinner } from "@/components/page";
 import LoginPage from "@/pages/login";
@@ -28,6 +28,7 @@ function RequireAuth({ children, admin }: { children: ReactNode; admin?: boolean
 }
 
 export function App() {
+  useSavedLocale();
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

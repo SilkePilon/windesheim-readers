@@ -382,3 +382,75 @@ Flashcards, quiz, review and battle play run full screen:
   
   This is checked with a real key once the owner provides one, and with a bogus key for
   the failure paths.
+
+## Addendum (2026-10-26, owner requests during the build)
+
+### Brand assets
+The owner supplied logos. They are committed in `public/brand/`:
+- `logo.svg`: colour, four chunky tiles with battle shapes;
+- `logo-mono-{navy,purple,white}.svg`;
+- `app-icon.svg` and `app-icon-purple.svg`;
+- `favicon.svg`/`favicon.ico`;
+- rasterized `logo-email.png` (192px), `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`;
+- `manifest.webmanifest`.
+
+They replace the yellow "wr" tile and the stacked-cards login logo.
+
+| Where | Asset |
+|---|---|
+| Rail and dock logo | `logo.svg` |
+| Login | `logo.svg`, large |
+| Battle stage | `logo-mono-white.svg` |
+| Admin header (optional) | `logo-mono-navy.svg` (light) and `logo-mono-white.svg` (dark) |
+| Email | `logo-email.png` |
+
+### Magic-link email redesign
+The owner asked for a much better-looking email in the new theme, with the logo, following
+email best practices.
+
+- **Built with React Email** (`@react-email/components`, rendered server-side with
+  `@react-email/render`). This gives table-based, inline-styled, client-tested markup.
+  Send both `html` and a `text` (plain-text) part.
+- **Logo as an inline CID attachment.** The PNG goes through Resend's `attachments` with a
+  `contentId`, and is referenced as `cid:logo`.
+  - Remote images aren't an option, because the app is tailnet-only and Gmail's image
+    proxy can't reach it.
+  - SVG in email is unreliable.
+  - It gets alt text "Windesheim Readers".
+- **Layout:**
+  - a single column, max 600px;
+  - a lilac page background `#F1ECFF`;
+  - a white card (`#FFFFFF`; near-white is acceptable) with radius 24px and a "chunky"
+    bottom border `6px solid #D9CEFF`. Use a border, not a box-shadow, because shadows
+    aren't supported in email;
+  - the logo (64px) centred at the top of the card;
+  - a Fredoka-style heading. The font stack is
+    `'Fredoka','Nunito','Segoe UI',Roboto,Helvetica,Arial,sans-serif`. Web fonts are
+    optional, so no CDN is required;
+  - a short body;
+  - a **bulletproof chunky button**: `#6B3CF6` background, white text, 16px/600,
+    padding 14px 28px, radius 14px, `border-bottom: 4px solid #4A22C4`, with Outlook MSO
+    padding handled (React Email `Button`), and a tap target of at least 44px;
+  - below the button, the raw link as fallback text, break-all, muted;
+  - a footer: "Werkt maar één keer en verloopt na 15 minuten" plus "Niet aangevraagd? Negeer
+    deze e-mail; er gebeurt niets.", and the app name.
+- **Preheader:** "Je inloglink voor Windesheim Readers, 15 minuten geldig" (en: "Your
+  sign-in link for Windesheim Readers, valid for 15 minutes").
+- **Subject:**
+  - nl "Je inloglink voor Windesheim Readers"
+  - en "Your Windesheim Readers sign-in link"
+- **Language:** use the stored `user.locale` for an existing user with that email,
+  otherwise `nl`. Only one language per email; the old bilingual text is removed.
+- **Dark mode:**
+  - `<meta name="color-scheme" content="light dark">` and `supported-color-schemes`;
+  - a `@media (prefers-color-scheme: dark)` block for the clients that honour it (Apple
+    Mail): page `#1B1536`, card `#2A2152`, text `#F1ECFF`, card border `#110C24`;
+  - avoid pure `#FFFFFF` and `#000000` for text, so forced inversion stays readable;
+  - the logo PNG has a transparent background and works on both.
+- **No tracking pixels and no click tracking.** Disable it in Resend if it's on.
+- **Dev fallback stays:** without `RESEND_API_KEY`, log the link to the console. The e2e
+  and dev scripts depend on the `[magic-link] <email>\n  <url>` log format, and it must not
+  change.
+- **Preview:** a script `scripts/email-preview.ts` writes `/tmp/email-preview-{nl,en}.html`
+  (with `cid:logo` swapped for a data URI) so it can be screenshot-checked at 390 and 600px
+  in light and dark.

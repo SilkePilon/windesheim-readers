@@ -592,6 +592,42 @@ expect(retryAction({ status: "error", error: "x" }, [{ id: "a", status: "ready" 
 - [ ] **Step 4:** Screenshot at 1280 and 390. Expected: matches `admin-pages.html` (AI settings).
 - [ ] **Step 5:** Commit `feat: AI settings with live model lists and key validation`.
 
+### Task 15: Magic-link email redesign (owner addendum; run after Task 10)
+
+**Files:**
+- Create: `server/emails/magic-link.tsx`, `scripts/email-preview.ts`, `tests/email.test.ts`
+- Modify: `server/lib/email.ts`, `server/auth.ts` (pass the locale), `tsconfig.json` (if the server needs `.tsx`; `jsx: react-jsx` is already set for src)
+- `bun add @react-email/components @react-email/render`
+
+**Interfaces:**
+- `renderMagicLinkEmail({ url, locale }: { url: string; locale: "nl" | "en" }): Promise<{ subject: string; html: string; text: string }>`
+- `sendMagicLinkEmail(to: string, url: string)` keeps its signature. It resolves the locale itself: it looks up `user.locale` by email and falls back to `"nl"`. It attaches `public/brand/logo-email.png` as `{ filename: "logo.png", content: <base64>, contentId: "logo" }`.
+- The dev fallback log format `\n[magic-link] ${to}\n  ${url}\n` stays byte-identical.
+
+- [ ] **Step 1: Write failing tests**
+
+```ts
+const nl = await renderMagicLinkEmail({ url: "https://x.test/verify?token=abc&cb=%2F", locale: "nl" });
+expect(nl.subject).toBe("Je inloglink voor Windesheim Readers");
+expect(nl.html).toContain('src="cid:logo"');
+expect(nl.html).toContain('href="https://x.test/verify?token=abc&amp;cb=%2F"');
+expect(nl.html).toContain("15 minuten");
+expect(nl.html).toContain('name="color-scheme"');
+expect(nl.html.toLowerCase()).toContain("#6b3cf6");
+expect(nl.html.toLowerCase()).toContain("border-bottom:4px solid #4a22c4");
+expect(nl.text).toContain("https://x.test/verify?token=abc&cb=%2F");
+expect(nl.html).not.toContain("Sign in"); // single language
+const en = await renderMagicLinkEmail({ url: "https://x.test/v", locale: "en" });
+expect(en.subject).toBe("Your Windesheim Readers sign-in link");
+expect(en.html).toContain("15 minutes");
+```
+
+- [ ] **Step 2:** Run `bun test tests/email.test.ts`. Expected: FAIL.
+- [ ] **Step 3:** Implement the template to match the spec addendum "Magic-link email redesign", then the sender, then the preview script.
+- [ ] **Step 4:** Run `bun test`, `bun run typecheck`, `bun run build`, `bun run test:e2e`. The e2e depends on the unchanged log format. Expected: PASS.
+- [ ] **Step 5:** Run `bun scripts/email-preview.ts`, then screenshot `/tmp/email-preview-nl.html` at 390 and 600, light and dark. Expected: the logo shows, the chunky card and button look right, the long fallback link wraps, and dark mode is readable. **Do not send real email** in this task.
+- [ ] **Step 6:** Commit `feat: redesigned magic-link email`.
+
 ### Task 14: Full verification pass and demo redeploy
 
 **Files:** fixes only, wherever the pass finds problems.

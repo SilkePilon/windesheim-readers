@@ -45,6 +45,9 @@ export function App() {
         <Route path="lesson/:id/cards" element={<LessonStudyPage mode="cards" />} />
         <Route path="lesson/:id/quiz" element={<LessonStudyPage mode="quiz" />} />
         <Route path="review" element={<ReviewPage />} />
+        {/* Battle picks its shell itself: AppLayout to join or host, StudyShell once in a room. */}
+        <Route path="battle" element={<BattlePage />} />
+        <Route path="battle/:code" element={<BattlePage />} />
       </Route>
       <Route
         element={
@@ -56,8 +59,6 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="learn" element={<Navigate to="/" replace />} />
         <Route path="lesson/:id" element={<LessonPage />} />
-        <Route path="battle" element={<BattlePage />} />
-        <Route path="battle/:code" element={<BattlePage />} />
         <Route path="leaderboard" element={<LeaderboardPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route

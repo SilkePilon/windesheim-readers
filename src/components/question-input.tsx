@@ -6,14 +6,6 @@ import { Input } from "@/components/ui/input";
 import type { PublicQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// Battle (`big`) keeps Kahoot-style colours for the picked option.
-const BIG_COLORS = [
-  "data-[sel=true]:border-danger data-[sel=true]:[--shade:var(--danger-shade)]",
-  "data-[sel=true]:border-info data-[sel=true]:[--shade:var(--info-shade)]",
-  "data-[sel=true]:border-gold data-[sel=true]:[--shade:var(--gold-shade)]",
-  "data-[sel=true]:border-success data-[sel=true]:[--shade:var(--success-shade)]",
-];
-
 export interface Reveal {
   correct: boolean;
   correctAnswer: unknown;
@@ -29,7 +21,6 @@ function OptionButton({
   state,
   disabled,
   onClick,
-  colorClass,
   big,
 }: {
   marker?: ReactNode;
@@ -38,7 +29,6 @@ function OptionButton({
   state?: OptionState;
   disabled?: boolean;
   onClick: () => void;
-  colorClass?: string;
   big?: boolean;
 }) {
   return (
@@ -56,7 +46,6 @@ function OptionButton({
         "disabled:opacity-100 disabled:shadow-[0_4px_0_var(--shade)]",
         big ? "min-h-16 py-4" : "min-h-14 py-3",
         selected && !state && "border-primary [--shade:var(--primary-shade)]",
-        colorClass,
         state === "correct" &&
           "border-success bg-[color-mix(in_oklab,var(--success)_14%,var(--card))] [--shade:var(--success-shade)] dark:bg-[color-mix(in_oklab,var(--success)_24%,var(--card))]",
         state === "wrong" &&
@@ -87,7 +76,6 @@ export function QuestionInput({
   reveal,
   disabled,
   onSubmit,
-  big,
 }: {
   question: PublicQuestion;
   value: unknown;
@@ -95,7 +83,6 @@ export function QuestionInput({
   reveal?: Reveal | null;
   disabled?: boolean;
   onSubmit?: () => void;
-  big?: boolean;
 }) {
   const { t } = useTranslation();
   const locked = disabled || !!reveal;
@@ -113,8 +100,6 @@ export function QuestionInput({
               state={isCorrect ? "correct" : isWrongPick ? "wrong" : null}
               disabled={locked}
               onClick={() => onChange(i)}
-              colorClass={big ? BIG_COLORS[i] : undefined}
-              big={big}
             >
               {opt}
             </OptionButton>
@@ -172,10 +157,6 @@ export function QuestionInput({
             reveal && !reveal.correct && "border-danger shadow-[0_4px_0_var(--danger-shade)]",
           )}
         />
-        {/* The quiz shows this in its feedback sheet; battle has no sheet. */}
-        {big && reveal && !reveal.correct && (
-          <p className="text-sm text-muted-foreground">{t("quiz.correctAnswerWas", { answer: String(reveal.correctAnswer) })}</p>
-        )}
       </div>
     );
   }

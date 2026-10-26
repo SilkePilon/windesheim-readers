@@ -213,3 +213,17 @@
   --success-foreground: #0d2a27;
   --warning: #ff9f2e;
 }
+
+/* Battle stage: its own deep grape (#2A1C6B) in both themes. Always paired with `.dark`
+   (declared after it, so these win) to get the dark tokens, with surfaces re-tinted for
+   the deeper background. */
+.stage {
+  color-scheme: dark;
+  --background: #2a1c6b;
+  --foreground: #ffffff;
+  --card: color-mix(in oklab, #ffffff 10%, #2a1c6b);
+  --card-foreground: #ffffff;
+  --muted-foreground: rgb(255 255 255 / 0.72);
+  --track: rgb(255 255 255 / 0.15);
+  --chunky: #110c24;
+}

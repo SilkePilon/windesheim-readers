@@ -8,7 +8,8 @@
  * - `(x, y)` is the baseline point (where the thing touches the ground), `s` the scale.
  *
  * Animation classes (CSS in world.css): sails, smoke, bob, flag, spark, fog, water, sway,
- * flicker, beam, float, graze, blink, ring, drift, jet. Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
+ * flicker, beam, float, graze, blink, ring, drift, jet, slide (to and fro along the rotated x axis:
+ * gondolas, sledges), train (one-way run, for things that vanish behind an occluder at both ends). Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
  * hides in dark mode. Shared defs referenced here (`wk-glow`) live in render.ts.
  */
 import type { Rng } from "@/lib/world/rng";
@@ -704,23 +705,37 @@ export function duck(x: number, y: number, s = 1, f: 1 | -1 = 1, alive = false, 
   return facing(x, y, f, s, rings + (alive ? anim(0, 0, "float", body, delay) : body));
 }
 
-/** Black-and-white Dutch cow facing right (mirror with `f`); `alive` lets it graze. */
-export function cow(x: number, y: number, s = 1, f: 1 | -1 = 1, alive = false, delay = 0) {
+/**
+ * Cow facing right (mirror with `f`); `alive` lets it graze. Black-and-white Dutch by default;
+ * `alp` makes it a brown Swiss Braunvieh with horns and a bell.
+ */
+export function cow(x: number, y: number, s = 1, f: 1 | -1 = 1, alive = false, delay = 0, alp = false) {
+  const P = alp
+    ? { body: "#A57250", shade: "#82573B", hi: "#C99B76", far: "#82573B", near: "#A57250", head: "#9A6A48", muzzle: "#EADBC6", nose: "#5E3B26" }
+    : { body: "#FAF7FF", shade: "#DCD6F0", hi: "#fff", far: "#D9D3EC", near: "#FAF7FF", head: "#FAF7FF", muzzle: "#F4A7B9", nose: "#B5566F" };
   const leg = (lx: number, c: string) => `<rect x="${lx}" y="-9" width="2.6" height="9" rx="1" fill="${c}"/><rect x="${lx}" y="-1.6" width="2.6" height="1.6" fill="#3A3266"/>`;
+  const bell = alp
+    ? `<path d="M1.6 -1.4 Q3.4 3 6.4 3.4" stroke="#C8385A" stroke-width="1.3" fill="none"/><path d="M3.2 3.4 Q3.2 1.4 5 1.4 Q6.8 1.4 6.8 3.4 L7.4 6.6 H2.6Z" fill="${C.yellow}"/><path d="M5.4 1.6 Q6.8 1.6 6.8 3.4 L7.4 6.6 H5.6Z" fill="${C.orangeD}"/><circle cx="5" cy="6.9" r=".8" fill="${C.orangeD}"/>`
+    : "";
   const head =
-    `<path d="M-1 -3 Q0 -7 4 -6.5 L9 -5 Q12 -4 12 0 Q12 4 8.5 4.5 L3 4 Q-1 2 -1 -3Z" fill="#FAF7FF"/><path d="M1 -6.6 Q5 -7 6 -4 Q4 -1 0.5 -2 Z" fill="#2B2442"/>` +
-    `<ellipse cx="10" cy="2.6" rx="3.4" ry="2.6" fill="#F4A7B9"/><circle cx="9.4" cy="2.6" r=".6" fill="#B5566F"/><circle cx="11.2" cy="2.4" r=".6" fill="#B5566F"/><circle cx="6.4" cy="-2.6" r=".9" fill="${C.ink}"/>` +
-    `<path d="M2 -6.4 Q2.6 -9.6 4.6 -9.8" stroke="${C.creamD}" stroke-width="1.4" fill="none" stroke-linecap="round"/><ellipse cx="0" cy="-4.4" rx="2.6" ry="1.3" fill="#2B2442" transform="rotate(-20 0 -4.4)"/>`;
+    `<path d="M-1 -3 Q0 -7 4 -6.5 L9 -5 Q12 -4 12 0 Q12 4 8.5 4.5 L3 4 Q-1 2 -1 -3Z" fill="${P.head}"/>` +
+    (alp ? `<path d="M3 -4.6 Q8 -4.4 10.4 -2" stroke="${P.hi}" stroke-width="1.1" fill="none" stroke-linecap="round"/>` : `<path d="M1 -6.6 Q5 -7 6 -4 Q4 -1 0.5 -2 Z" fill="#2B2442"/>`) +
+    `<ellipse cx="10" cy="2.6" rx="3.4" ry="2.6" fill="${P.muzzle}"/><circle cx="9.4" cy="2.6" r=".6" fill="${P.nose}"/><circle cx="11.2" cy="2.4" r=".6" fill="${P.nose}"/><circle cx="6.4" cy="-2.6" r=".9" fill="${C.ink}"/>` +
+    `<path d="M2 -6.4 Q2.6 -9.6 4.6 -9.8" stroke="${C.creamD}" stroke-width="1.4" fill="none" stroke-linecap="round"/><ellipse cx="0" cy="-4.4" rx="2.6" ry="1.3" fill="${alp ? P.shade : "#2B2442"}" transform="rotate(-20 0 -4.4)"/>` +
+    bell;
+  const patches = alp
+    ? `<path d="M-11 -18.6 Q0 -21.4 10 -18.4 Q0 -19.6 -11 -16.4Z" fill="${P.hi}" opacity=".7"/>`
+    : `<path d="M-9 -20 Q-4 -20 -3 -16 Q-5 -11 -10 -12.5 Q-13 -14 -12.5 -17.5Z" fill="#2B2442"/><path d="M2 -20 L7 -20 Q9 -16 6 -13 Q2 -12 1 -16Z" fill="#2B2442"/>`;
   return facing(
     x,
     y,
     f,
     s,
-    `<ellipse cx="2" cy="1" rx="15" ry="3" fill="${C.shadow}" opacity=".16"/>${leg(-11, "#D9D3EC")}${leg(5, "#D9D3EC")}` +
-      `<path d="M-13 -15 Q-13 -20 -8 -20 L7 -20 Q12 -20 12 -15 L12 -11 Q12 -7 7 -7 L-8 -7 Q-13 -7 -13 -11Z" fill="#FAF7FF"/><path d="M-13 -11 Q-13 -7 -8 -7 L7 -7 Q12 -7 12 -11 Q4 -8.5 -13 -11Z" fill="#DCD6F0"/>` +
-      `<path d="M-9 -20 Q-4 -20 -3 -16 Q-5 -11 -10 -12.5 Q-13 -14 -12.5 -17.5Z" fill="#2B2442"/><path d="M2 -20 L7 -20 Q9 -16 6 -13 Q2 -12 1 -16Z" fill="#2B2442"/><ellipse cx="-4" cy="-8" rx="3" ry="2" fill="#F4A7B9"/>` +
-      `<path d="M-13 -17 Q-16 -14 -15 -8" stroke="#FAF7FF" stroke-width="1.2" fill="none"/><circle cx="-15" cy="-7.5" r="1.4" fill="#2B2442"/>${leg(-8, "#FAF7FF")}${leg(8, "#FAF7FF")}` +
-      `<path d="M-11 -19.4 Q0 -21 9 -19.4" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
+    `<ellipse cx="2" cy="1" rx="15" ry="3" fill="${C.shadow}" opacity=".16"/>${leg(-11, P.far)}${leg(5, P.far)}` +
+      `<path d="M-13 -15 Q-13 -20 -8 -20 L7 -20 Q12 -20 12 -15 L12 -11 Q12 -7 7 -7 L-8 -7 Q-13 -7 -13 -11Z" fill="${P.body}"/><path d="M-13 -11 Q-13 -7 -8 -7 L7 -7 Q12 -7 12 -11 Q4 -8.5 -13 -11Z" fill="${P.shade}"/>` +
+      `${patches}<ellipse cx="-4" cy="-8" rx="3" ry="2" fill="#F4A7B9"/>` +
+      `<path d="M-13 -17 Q-16 -14 -15 -8" stroke="${P.body}" stroke-width="1.2" fill="none"/><circle cx="-15" cy="-7.5" r="1.4" fill="#2B2442"/>${leg(-8, P.near)}${leg(8, P.near)}` +
+      `<path d="M-11 -19.4 Q0 -21 9 -19.4" stroke="${P.hi}" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
       (alive ? anim(10, -15, "graze", head, delay) : `<g transform="translate(10 -15)">${head}</g>`),
   );
 }

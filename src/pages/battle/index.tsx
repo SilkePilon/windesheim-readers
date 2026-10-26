@@ -11,6 +11,7 @@ import { useBattleSocket } from "./use-battle-socket";
 import { Setup } from "./setup";
 import { Lobby, Play, Results, StartCountdown } from "./stage";
 import { CloseConfirm } from "./close-confirm";
+import { battleErrorCopy } from "./error-copy";
 
 /**
  * Live quiz battle. Joining and hosting happen in the normal app shell; once you're in
@@ -19,7 +20,7 @@ import { CloseConfirm } from "./close-confirm";
  * while the socket (and this component) stays mounted.
  */
 export default function BattlePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { code: codeParam } = useParams();
   const navigate = useNavigate();
   const { data: me } = useMe();
@@ -57,9 +58,13 @@ export default function BattlePage() {
     }
   }, [b.room, codeParam, navigate]);
 
-  // Out of the room (left, removed, ended): a next battle starts without an old pick.
+  // Out of the room (left, removed, ended): a next battle starts without an old pick or
+  // a confirm dialog that was open when the room went away.
   useEffect(() => {
-    if (!b.room) setAnswer(null);
+    if (!b.room) {
+      setAnswer(null);
+      setConfirming(false);
+    }
   }, [b.room]);
 
   // Removed or the host ended it: back to the join/host screen, which shows why.
@@ -84,10 +89,7 @@ export default function BattlePage() {
     navigate("/battle");
   };
 
-  const errorCopy = b.error
-    ? ((t(`battle.errors.${b.error}`, { returnObjects: true, defaultValue: null }) as { title: string; description?: string } | null) ??
-      (t("battle.errors.GENERIC", { returnObjects: true }) as { title: string; description?: string }))
-    : null;
+  const errorCopy = b.error ? battleErrorCopy(i18n, b.error) : null;
 
   if (!room) {
     return (
@@ -98,7 +100,15 @@ export default function BattlePage() {
             <Notice
               tone={b.error === "CLOSED" ? "info" : b.error === "KICKED" ? "warning" : "danger"}
               title={errorCopy.title}
-              description={errorCopy.description}
+              description={
+                errorCopy.detail ? (
+                  <>
+                    {errorCopy.description} <span className="text-xs opacity-70">({errorCopy.detail})</span>
+                  </>
+                ) : (
+                  errorCopy.description
+                )
+              }
               className="mb-5"
             />
           )}

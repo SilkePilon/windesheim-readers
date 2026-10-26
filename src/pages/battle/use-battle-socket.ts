@@ -162,6 +162,8 @@ export function useBattleSocket() {
   const leave = useCallback(
     (how: "leave" | "end" = "leave") => {
       const ws = wsRef.current;
+      // Without an open socket the server already treats us as gone (onClose drops lobby
+      // and countdown players); either way the local state resets below.
       if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: how }));
       disconnect();
       resetRoom();

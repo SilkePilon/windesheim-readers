@@ -234,7 +234,8 @@ const nl = {
     players_other: "{{count}} spelers",
     startGame: "Start!",
     waitingHost: "Wachten tot de host start…",
-    answered: "{{a}} van {{n}} spelers hebben geantwoord",
+    answered_one: "{{count}} van {{n}} spelers heeft geantwoord",
+    answered_other: "{{count}} van {{n}} spelers hebben geantwoord",
     youAnswered: "Antwoord ingediend!",
     nextQuestion: "Volgende vraag",
     showAnswer: "Toon antwoord",
@@ -278,6 +279,7 @@ const nl = {
     players: "{{n}} spelers",
   },
   profile: {
+    levelTitles: ["Nieuwkomer", "Stagiair", "Junior", "Medior", "Senior", "Procesexpert", "Architect", "Bedrijfskundige", "Meester", "Legende"],
     title: "Profiel",
     nickname: "Bijnaam",
     nicknameHint: "Wordt getoond op de ranglijst en in battles. Leeg = je voornaam.",

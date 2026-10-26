@@ -342,7 +342,7 @@ export function Play({
       <QuestionPrompt text={q.question.prompt} className="mt-5 text-[22px] leading-tight md:mt-8 md:text-[32px]" />
       {!reveal && (
         <p className="mt-2.5 text-[13px] font-bold text-muted-foreground md:text-[15px]" aria-live="polite">
-          {t("battle.answered", { a: answeredCount, n: playerCount })}
+          {t("battle.answered", { count: answeredCount, n: playerCount })}
         </p>
       )}
 
@@ -426,13 +426,19 @@ function Ranking({ ranking, meId, limit, xp }: { ranking: RankEntry[]; meId?: st
             )}
           </span>
           <PlayerAvatar name={p.name} className="size-[30px] text-[13px]" />
-          <span className="min-w-0 flex-1 truncate">{p.name}</span>
-          {p.streak >= 2 && (
-            <span className="inline-flex shrink-0 items-center gap-0.5 font-heading text-warning" aria-label={t("battle.streak", { n: p.streak })}>
-              <Flame className="size-4 fill-current" aria-hidden /> {p.streak}
-            </span>
-          )}
-          {xp?.[p.id] ? <span className="shrink-0 font-heading text-xs text-success">+{xp[p.id]} XP</span> : null}
+          <span className="min-w-0 flex-1">
+            <span className="block leading-tight break-words hyphens-auto">{p.name}</span>
+            {(p.streak >= 2 || !!xp?.[p.id]) && (
+              <span className="mt-0.5 flex flex-wrap items-center gap-x-2 font-heading text-xs font-semibold">
+                {p.streak >= 2 && (
+                  <span className="inline-flex items-center gap-0.5 text-warning" aria-label={t("battle.streak", { n: p.streak })}>
+                    <Flame className="size-3.5 fill-current" aria-hidden /> {p.streak}
+                  </span>
+                )}
+                {xp?.[p.id] ? <span className="text-success">+{xp[p.id]} XP</span> : null}
+              </span>
+            )}
+          </span>
           <span className="shrink-0 font-heading font-semibold text-gold tabular-nums">{points(p.score)}</span>
         </li>
       ))}

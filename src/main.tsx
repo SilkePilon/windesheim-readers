@@ -22,9 +22,14 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
+// next-themes renders an inline <script> meant for SSR; in this client-only app it never
+// runs, and React 19 logs "Encountered a script tag while rendering React component".
+// Marking it as a data block silences that; the pre-paint theme script lives in index.html.
+const THEME_SCRIPT_PROPS = { type: "application/json" } as const;
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange scriptProps={THEME_SCRIPT_PROPS}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <RouterProvider router={router} />

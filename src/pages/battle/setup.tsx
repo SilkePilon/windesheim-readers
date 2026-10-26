@@ -55,7 +55,7 @@ export function Setup({
               <InputOTPSlot
                 key={i}
                 index={i}
-                className="size-10 rounded-[12px] border-0 bg-white font-heading text-2xl font-semibold text-[#241a4a] shadow-[0_4px_0_var(--chunky)] first:rounded-[12px] first:border-l-0 last:rounded-[12px] data-[active=true]:ring-gold sm:size-12 dark:bg-white [&_.animate-caret-blink]:bg-[#241a4a]"
+                className="size-9 rounded-[12px] border-0 bg-white font-heading text-xl min-[360px]:size-10 min-[360px]:text-2xl font-semibold text-[#241a4a] shadow-[0_4px_0_var(--chunky)] first:rounded-[12px] first:border-l-0 last:rounded-[12px] data-[active=true]:ring-gold sm:size-12 dark:bg-white [&_.animate-caret-blink]:bg-[#241a4a]"
               />
             ))}
           </InputOTPGroup>

@@ -147,7 +147,7 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
             <ChevronLeft strokeWidth={2.5} />
           </Link>
         </Button>
-        <span className="min-w-0 truncate text-sm text-muted-foreground">{lesson.reader.title}</span>
+        <span className="min-w-0 text-sm leading-tight break-words text-muted-foreground">{lesson.reader.title}</span>
       </div>
 
       <div className="mt-5 grid gap-5 md:grid-cols-2 md:grid-rows-[auto_1fr] md:gap-x-8 md:gap-y-6">
@@ -238,7 +238,7 @@ function SubView({ lesson, view }: { lesson: LessonDetail; view: View }) {
           </Link>
         </Button>
         <div className="min-w-0">
-          <div className="truncate text-sm text-muted-foreground">
+          <div className="text-sm break-words text-muted-foreground">
             <span className="font-heading font-semibold text-primary">{lesson.code}</span> · {lesson.title}
           </div>
           <h1 className="font-heading text-2xl leading-tight font-semibold">{t(`lesson.activities.${view}`)}</h1>
@@ -323,11 +323,11 @@ function ReadView({ lesson }: { lesson: LessonDetail }) {
       )}
 
       {(lesson.prev || lesson.next) && (
-        <nav className="grid grid-cols-2 gap-3 pt-3">
+        <nav className="grid gap-3 pt-3 sm:grid-cols-2">
           {lesson.prev ? (
             <LessonLink to={lesson.prev} label={t("common.previous")} dir="prev" />
           ) : (
-            <span />
+            <span className="hidden sm:block" />
           )}
           {lesson.next && <LessonLink to={lesson.next} label={t("common.next")} dir="next" />}
         </nav>
@@ -349,14 +349,14 @@ function LessonLink({
     <Button
       asChild
       variant="chunky-surface"
-      className={cn("h-auto min-w-0 gap-2 rounded-[18px] px-3 py-3", dir === "next" ? "justify-end" : "justify-start")}
+      className={cn("h-full min-w-0 gap-2 rounded-[18px] px-3 py-3 whitespace-normal", dir === "next" ? "justify-end" : "justify-start")}
     >
       <Link to={`/lesson/${to.id}?view=read`}>
         {dir === "prev" && <ChevronLeft className="size-5" strokeWidth={2.5} />}
         <span className={cn("min-w-0", dir === "next" ? "text-right" : "text-left")}>
           <span className="block font-sans text-xs font-bold text-muted-foreground">{label}</span>
-          <span className="block truncate text-base text-primary">{to.code}</span>
-          <span className="block truncate font-sans text-xs font-bold">{to.title}</span>
+          <span className="block text-base text-primary">{to.code}</span>
+          <span className="block font-sans text-xs font-bold break-words hyphens-auto">{to.title}</span>
         </span>
         {dir === "next" && <ChevronRight className="size-5" strokeWidth={2.5} />}
       </Link>

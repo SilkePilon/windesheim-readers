@@ -35,7 +35,7 @@ export function Podium({ entries, className }: { entries: PodiumEntry[]; classNa
             {e && (
               <>
                 <PlayerAvatar name={e.avatarName ?? e.name} me={e.me} className={cn("mb-1.5", step.avatar)} />
-                <span className={cn("w-full truncate px-0.5 text-[13px] font-bold", e.me && "text-primary")}>{e.name}</span>
+                <span className={cn("w-full px-0.5 text-[13px] leading-tight font-bold break-words hyphens-auto", e.me && "text-primary")}>{e.name}</span>
                 <span className="font-heading text-xs font-semibold text-muted-foreground tabular-nums">{e.value}</span>
               </>
             )}

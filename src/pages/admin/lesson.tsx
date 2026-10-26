@@ -31,6 +31,10 @@ interface LessonFull {
   questions: QuestionRow[];
 }
 
+/** Same calm segmented look as the admin section tabs. */
+const TAB =
+  "h-auto rounded-[9px] px-3 py-1.5 text-[13px] font-bold text-muted-foreground data-active:bg-card data-active:text-foreground data-active:shadow-none data-active:ring-1 data-active:ring-border dark:data-active:border-transparent dark:data-active:bg-card";
+
 function answerText(q: QuestionRow) {
   const d = q.data;
   if (q.type === "mc") return d.options?.[d.answer as number];
@@ -119,7 +123,7 @@ export default function AdminLessonPage() {
               <ChevronLeft />
             </Link>
           </Button>
-          <h2 className="min-w-0 truncate font-heading text-xl font-semibold">
+          <h2 className="min-w-0 font-heading text-xl leading-tight font-semibold break-words">
             <span className="text-primary">{data.code}</span> {data.title}
           </h2>
         </div>
@@ -130,15 +134,15 @@ export default function AdminLessonPage() {
         </Button>
       </div>
       <Tabs defaultValue="summary">
-        <TabsList className="mb-2 max-w-full justify-start overflow-x-auto [&>*]:flex-none">
-          <TabsTrigger value="summary">{t("lesson.tabs.summary")}</TabsTrigger>
-          <TabsTrigger value="cards">
+        <TabsList className="mb-2 grid h-auto w-full group-data-horizontal/tabs:h-auto grid-cols-2 gap-1 rounded-xl bg-track p-[3px] sm:inline-flex sm:w-fit">
+          <TabsTrigger value="summary" className={TAB}>{t("lesson.tabs.summary")}</TabsTrigger>
+          <TabsTrigger value="cards" className={TAB}>
             {t("admin.flashcards")} ({data.flashcards.length})
           </TabsTrigger>
-          <TabsTrigger value="questions">
+          <TabsTrigger value="questions" className={TAB}>
             {t("admin.questions")} ({data.questions.length})
           </TabsTrigger>
-          <TabsTrigger value="terms">
+          <TabsTrigger value="terms" className={TAB}>
             {t("admin.terms")} ({data.terms.length})
           </TabsTrigger>
         </TabsList>

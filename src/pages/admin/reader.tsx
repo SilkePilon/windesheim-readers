@@ -168,6 +168,7 @@ function EditableCell({
       type="button"
       onClick={start}
       aria-label={`${label}: ${value || placeholder || ""}`}
+      title={value === "" ? undefined : String(value)}
       className={cn(
         "-mx-2 flex h-8 w-[calc(100%+1rem)] min-w-0 items-center rounded-md border border-transparent px-2 text-left outline-none hover:border-border hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
         invalid && "border-danger/60 bg-danger/5",
@@ -450,8 +451,8 @@ export default function AdminReaderPage() {
             </Link>
           </Button>
           <div className="min-w-0">
-            <h2 className="truncate font-heading text-xl font-semibold">{data.title}</h2>
-            <p className="truncate text-xs text-muted-foreground">
+            <h2 className="font-heading text-xl leading-tight font-semibold break-words">{data.title}</h2>
+            <p className="text-xs break-words text-muted-foreground">
               {[data.course, t("admin.pagesN", { n: data.pageCount })].filter(Boolean).join(" · ")}
             </p>
           </div>

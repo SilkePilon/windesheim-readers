@@ -46,7 +46,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </div>
         <nav
           aria-label={t("admin.title")}
-          className="order-3 grid w-full auto-cols-fr grid-flow-col gap-1 rounded-xl bg-track p-[3px] md:order-2 md:w-auto"
+          className="order-3 flex w-full gap-1 rounded-xl bg-track p-[3px] md:order-2 md:grid md:w-auto md:auto-cols-fr md:grid-flow-col"
         >
           {TABS.map((tab) => {
             const on = tab.key === active;
@@ -56,7 +56,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 to={tab.to}
                 aria-current={on ? "page" : undefined}
                 className={cn(
-                  "truncate rounded-[9px] px-1 py-1.5 text-center text-[13px] font-bold md:px-3 md:text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "flex-auto rounded-[9px] px-1 py-1.5 whitespace-nowrap text-center text-[13px] font-bold md:px-3 md:text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   on ? "bg-card text-foreground ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
                 )}
               >

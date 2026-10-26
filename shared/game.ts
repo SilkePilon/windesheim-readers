@@ -49,8 +49,13 @@ export const LEVEL_TITLES = [
   "Legende",
 ];
 
+/** Index into LEVEL_TITLES (and the translated `profile.levelTitles`) for a level. */
+export function levelTitleIndex(level: number) {
+  return Math.min(LEVEL_TITLES.length - 1, Math.max(0, Math.floor((level - 1) / 2)));
+}
+
 export function levelTitle(level: number) {
-  return LEVEL_TITLES[Math.min(LEVEL_TITLES.length - 1, Math.floor((level - 1) / 2))]!;
+  return LEVEL_TITLES[levelTitleIndex(level)]!;
 }
 
 export const BADGES = {

@@ -11,6 +11,14 @@
     <meta name="theme-color" content="#1b1536" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Windesheim Readers</title>
+    <script>
+      // Apply the saved theme before first paint (next-themes takes over once React mounts).
+      try {
+        var t = localStorage.getItem("theme");
+        if (t === "dark" || ((!t || t === "system") && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -32,7 +32,7 @@ import { PlayerAvatar } from "@/components/game/player-avatar";
 import { api } from "@/lib/api";
 import { setLocale } from "@/lib/i18n";
 import { useInvalidateProgress, useMe } from "@/lib/queries";
-import { BADGES, levelTitle, type BadgeId } from "@shared/game";
+import { BADGES, levelTitleIndex, type BadgeId } from "@shared/game";
 import { cn } from "@/lib/utils";
 
 // Earned badge tiles: a lucide icon on a Speelveld colour (white icon, like the activity
@@ -90,9 +90,9 @@ export default function ProfilePage() {
           className="size-[58px] bg-primary text-[22px] text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]"
         />
         <div className="min-w-0">
-          <h1 className="truncate font-heading text-[22px] leading-tight font-semibold">{me.user.displayName}</h1>
+          <h1 className="font-heading text-[22px] leading-tight font-semibold break-words hyphens-auto">{me.user.displayName}</h1>
           <p className="text-[13px] font-bold text-muted-foreground">
-            {t("common.level", { n: s.level })}: {levelTitle(s.level)}
+            {t("common.level", { n: s.level })}: {(t("profile.levelTitles", { returnObjects: true }) as string[])[levelTitleIndex(s.level)]}
           </p>
         </div>
       </header>
@@ -144,11 +144,11 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={signOut}
-            className="flex min-h-12 items-center gap-3 border-t-2 border-background px-4 py-3 text-left text-sm font-bold text-danger outline-none hover:bg-danger/5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+            className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-t-2 border-background px-4 py-3 text-left text-sm font-bold text-danger outline-none hover:bg-danger/5 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
           >
             <LogOut className="size-4 shrink-0" />
             <span className="shrink-0">{t("nav.signOut")}</span>
-            <span className="ml-auto min-w-0 truncate text-xs font-semibold text-muted-foreground">{me.user.email}</span>
+            <span className="ml-auto min-w-0 text-right text-xs font-semibold break-words text-muted-foreground">{me.user.email}</span>
           </button>
         </Card>
       </div>

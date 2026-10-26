@@ -86,7 +86,7 @@ export default function AdminUsersPage() {
                         <span className="hidden sm:inline">{t("admin.usersTable.envAdmin")}</span>
                       </Pill>
                     ) : (
-                      <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <label className="flex items-center gap-2 whitespace-nowrap">
                         <Switch
                           checked={admin}
                           disabled={isMe || saving === u.id}

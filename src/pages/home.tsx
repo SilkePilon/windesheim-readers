@@ -11,6 +11,7 @@ import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
 import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
 import { DAILY_XP_GOAL } from "@shared/game";
 import { pathNodes } from "@shared/path";
+import { storageGet, storageSet } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 const READER_KEY = "wr.home.reader";
@@ -20,21 +21,21 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { data: me } = useMe();
   const { data: readers, isLoading } = useReaders();
-  const [picked, setPicked] = useState(() => localStorage.getItem(READER_KEY));
+  const [picked, setPicked] = useState(() => storageGet(READER_KEY));
   if (!me || isLoading) return <PageSpinner />;
 
   const withLessons = (readers ?? []).filter((r) => r.lessons.length > 0);
   const reader =
     withLessons.find((r) => r.id === picked) ?? withLessons.find((r) => r.lastStudiedLessonId) ?? withLessons[0];
   const pick = (id: string) => {
-    localStorage.setItem(READER_KEY, id);
+    storageSet(READER_KEY, id);
     setPicked(id);
   };
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-10">
       <aside className="flex flex-col gap-4 lg:sticky lg:top-8 lg:col-start-2 lg:row-start-1">
-        <StatChips me={me} />
+        <HeaderChips me={me} />
         <DailyGoal todayXp={me.stats.todayXp} />
         <QuestCard quests={me.quests} />
         <WeekBoard className="hidden lg:flex" />
@@ -71,7 +72,7 @@ export default function HomePage() {
   );
 }
 
-function StatChips({ me }: { me: Me }) {
+function HeaderChips({ me }: { me: Me }) {
   const { t } = useTranslation();
   const s = me.stats;
   return (
@@ -195,7 +196,7 @@ function BoardRow({ e }: { e: LeaderboardEntry }) {
       )}
     >
       <span className="w-6 font-heading text-muted-foreground tabular-nums">{e.rank ? `${e.rank}.` : "–"}</span>
-      <span className="min-w-0 flex-1 truncate">{e.me ? t("home.you") : e.name}</span>
+      <span className="min-w-0 flex-1 leading-tight break-words hyphens-auto">{e.me ? t("home.you") : e.name}</span>
       <span className="font-heading tabular-nums">{e.xp}</span>
     </div>
   );

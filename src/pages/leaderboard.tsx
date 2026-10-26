@@ -100,7 +100,7 @@ function Row({ e, label, xp, hidden }: { e: LeaderboardEntry; label: string; xp:
     >
       <span className="w-6 shrink-0 font-heading font-semibold text-muted-foreground tabular-nums">{e.rank}</span>
       <PlayerAvatar name={e.name} className="size-[30px] text-[13px]" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 leading-tight break-words hyphens-auto">{label}</span>
       {hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={cn("shrink-0 font-heading font-semibold tabular-nums", e.me ? "text-primary" : "text-muted-foreground")}>
         {xp}

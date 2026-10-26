@@ -65,7 +65,7 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
               <Shuffle /> {t("explain.random")}
             </Button>
           </div>
-          <div className="-mx-1 flex max-h-56 flex-wrap gap-2 overflow-y-auto px-1 pt-0.5 pb-1.5">
+          <div className="-mx-1 flex max-h-72 flex-wrap gap-2 overflow-y-auto px-1 pt-0.5 pb-1.5">
             {concepts.map((c) => (
               <button
                 key={c}
@@ -73,7 +73,7 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
                 onClick={() => pick(c)}
                 aria-pressed={concept === c}
                 className={cn(
-                  "max-w-full truncate rounded-[14px] px-3 py-1.5 text-left text-sm font-bold transition-[translate,box-shadow] duration-100 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[3px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0",
+                  "max-w-full rounded-[14px] px-3 py-1.5 text-left break-words text-sm font-bold transition-[translate,box-shadow] duration-100 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[3px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0",
                   concept === c
                     ? "bg-primary text-primary-foreground shadow-[0_3px_0_var(--primary-shade)]"
                     : "bg-accent text-foreground shadow-[0_3px_0_var(--chunky)] dark:bg-secondary",

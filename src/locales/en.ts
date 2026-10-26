@@ -236,7 +236,8 @@ const en: Messages = {
     players_other: "{{count}} players",
     startGame: "Start!",
     waitingHost: "Waiting for the host to start…",
-    answered: "{{a}} of {{n}} players have answered",
+    answered_one: "{{count}} of {{n}} players has answered",
+    answered_other: "{{count}} of {{n}} players have answered",
     youAnswered: "Answer submitted!",
     nextQuestion: "Next question",
     showAnswer: "Show answer",
@@ -280,6 +281,7 @@ const en: Messages = {
     players: "{{n}} players",
   },
   profile: {
+    levelTitles: ["Newcomer", "Intern", "Junior", "Medior", "Senior", "Process expert", "Architect", "Business expert", "Master", "Legend"],
     title: "Profile",
     nickname: "Nickname",
     nicknameHint: "Shown on the leaderboard and in battles. Empty = your first name.",

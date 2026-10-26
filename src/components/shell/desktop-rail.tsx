@@ -24,7 +24,7 @@ export function DesktopRail({ items }: { items: NavItem[] }) {
         data-rail-cell
         className="grid size-11 place-items-center rounded-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <img src="/brand/logo.svg" alt="Windesheim Readers" className="size-11" />
+        <img src="/brand/logo.svg" alt={t("app.name")} className="size-11" />
       </Link>
       {items.map((item) => {
         const active = isNavActive(item.to, pathname);

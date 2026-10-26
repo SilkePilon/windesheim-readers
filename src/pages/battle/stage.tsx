@@ -144,6 +144,59 @@ export function Lobby({
   );
 }
 
+// ---------- start countdown ----------
+
+const RING_R = 88;
+const RING_C = 2 * Math.PI * RING_R;
+
+/** Big "get ready" countdown between Start and the first question: 10 → 1 on the stage. */
+export function StartCountdown({ endsAt, durationMs }: { endsAt: number; durationMs: number }) {
+  const { t } = useTranslation();
+  const reduce = useReducedMotion();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, []);
+  const left = Math.max(0, endsAt - now);
+  const secs = Math.max(1, Math.ceil(left / 1000));
+  const frac = Math.min(1, left / durationMs);
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 pb-10 text-center">
+      <div role="timer" aria-label={t("battle.startsIn", { count: secs })} className="relative grid size-60 place-items-center md:size-72">
+        {!reduce && (
+          <svg viewBox="0 0 200 200" aria-hidden className="absolute inset-0 size-full overflow-visible">
+            {/* Chunky: a dark offset ring under the track, like the buttons' solid shadow. */}
+            <circle cx="100" cy="106" r={RING_R + 10} fill="var(--chunky)" />
+            <circle cx="100" cy="100" r={RING_R} fill="var(--card)" stroke="color-mix(in oklab, #ffffff 18%, var(--background))" strokeWidth="20" />
+            <circle
+              cx="100"
+              cy="100"
+              r={RING_R}
+              fill="none"
+              stroke="var(--gold)"
+              strokeWidth="20"
+              strokeLinecap="round"
+              strokeDasharray={RING_C}
+              strokeDashoffset={RING_C * (1 - frac)}
+              transform="rotate(-90 100 100)"
+              className="transition-[stroke-dashoffset] duration-100 ease-linear"
+            />
+          </svg>
+        )}
+        <span
+          key={secs}
+          aria-hidden
+          className="relative animate-pop font-heading text-[112px] leading-none font-bold text-gold tabular-nums [text-shadow:0_6px_0_var(--chunky)] motion-reduce:animate-none md:text-[140px]"
+        >
+          {secs}
+        </span>
+      </div>
+      <p className="font-heading text-3xl font-semibold text-balance md:text-4xl">{t("battle.getReady")}</p>
+    </div>
+  );
+}
+
 // ---------- play ----------
 
 function Countdown({ endsAt, durationMs, stopped }: { endsAt: number; durationMs: number; stopped: boolean }) {

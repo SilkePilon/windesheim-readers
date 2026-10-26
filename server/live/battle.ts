@@ -9,9 +9,12 @@ import { recordQuestEvent } from "../lib/quests";
 import { displayName } from "../middleware";
 import type { SessionUser } from "../auth";
 import { XP } from "../../shared/game";
+import { env } from "../env";
 
 const QUESTION_MS = 20_000;
 const MAX_PLAYERS = 200;
+/** "Get ready" countdown before the first question. Tests may shorten it outside production. */
+const COUNTDOWN_MS = (!env.isProd && Number(process.env.BATTLE_COUNTDOWN_MS)) || 10_000;
 
 type Q = typeof schema.question.$inferSelect;
 
@@ -33,9 +36,10 @@ interface Room {
   questions: Q[];
   players: Map<string, Player>;
   hostSockets: Set<WSContext>;
-  state: "lobby" | "question" | "reveal" | "ended";
+  state: "lobby" | "countdown" | "question" | "reveal" | "ended";
   index: number;
   startedAt: number;
+  countdownEndsAt: number;
   timer?: ReturnType<typeof setTimeout>;
   lastActivity: number;
 }
@@ -101,7 +105,26 @@ function currentQuestionMsg(r: Room) {
     question: publicQuestion(q),
     endsAt: r.startedAt + QUESTION_MS,
     durationMs: QUESTION_MS,
+    // Lets clients correct for their own clock being off.
+    serverNow: Date.now(),
   };
+}
+
+function countdownMsg(r: Room) {
+  return { t: "countdown", endsAt: r.countdownEndsAt, durationMs: COUNTDOWN_MS, serverNow: Date.now() };
+}
+
+function startCountdown(r: Room) {
+  r.state = "countdown";
+  r.countdownEndsAt = Date.now() + COUNTDOWN_MS;
+  broadcast(r, countdownMsg(r));
+  broadcast(r, roomState(r));
+  clearTimeout(r.timer);
+  r.timer = setTimeout(() => {
+    if (r.state !== "countdown") return;
+    r.index = 0;
+    startQuestion(r);
+  }, COUNTDOWN_MS);
 }
 
 function answeredCount(r: Room) {
@@ -231,6 +254,7 @@ export function battleConnection(user: SessionUser) {
           state: "lobby",
           index: -1,
           startedAt: 0,
+          countdownEndsAt: 0,
           lastActivity: Date.now(),
         };
         rooms.set(r.code, r);
@@ -248,6 +272,7 @@ export function battleConnection(user: SessionUser) {
         if (r.hostId !== user.id || r.hostPlays) attachPlayer(r, ws);
         r.lastActivity = Date.now();
         broadcast(r, roomState(r));
+        if (r.state === "countdown") send(ws, countdownMsg(r));
         if (r.state === "question") send(ws, currentQuestionMsg(r));
         return;
       }
@@ -261,10 +286,7 @@ export function battleConnection(user: SessionUser) {
       r.lastActivity = Date.now();
       const isHost = r.hostId === user.id;
 
-      if (msg.t === "start" && isHost && r.state === "lobby") {
-        r.index = 0;
-        return startQuestion(r);
-      }
+      if (msg.t === "start" && isHost && r.state === "lobby") return startCountdown(r);
 
       // Host ends the battle for everyone. An aborted battle awards no XP.
       if (msg.t === "end" && isHost) {
@@ -336,7 +358,7 @@ export function battleConnection(user: SessionUser) {
       const p = r.players.get(user.id);
       p?.sockets.delete(ws);
       // In the lobby, leaving removes you; during a game your score stays.
-      if (p && p.sockets.size === 0 && r.state === "lobby" && user.id !== r.hostId) {
+      if (p && p.sockets.size === 0 && (r.state === "lobby" || r.state === "countdown") && user.id !== r.hostId) {
         r.players.delete(user.id);
         broadcast(r, roomState(r));
       }

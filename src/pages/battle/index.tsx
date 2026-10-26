@@ -9,7 +9,7 @@ import { StudyShell } from "@/components/shell/study-shell";
 import { useInvalidateProgress, useMe } from "@/lib/queries";
 import { useBattleSocket } from "./use-battle-socket";
 import { Setup } from "./setup";
-import { Lobby, Play, Results } from "./stage";
+import { Lobby, Play, Results, StartCountdown } from "./stage";
 import { CloseConfirm } from "./close-confirm";
 
 /**
@@ -125,7 +125,15 @@ export default function BattlePage() {
 
   let body;
   let progress: number | undefined;
-  if (room.state === "lobby") {
+  if (room.state === "countdown") {
+    body = b.countdown ? (
+      <StartCountdown endsAt={b.countdown.endsAt} durationMs={b.countdown.durationMs} />
+    ) : (
+      <div className="flex flex-1 items-center justify-center">
+        <Spinner className="size-7" />
+      </div>
+    );
+  } else if (room.state === "lobby") {
     body = (
       <Lobby
         room={room}

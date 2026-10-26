@@ -108,6 +108,14 @@ const code = host.msgs.find((m) => m.t === "room").code;
 p1.send({ t: "join", code }); p2.send({ t: "join", code });
 await Bun.sleep(300);
 host.send({ t: "start" });
+await Bun.sleep(100);
+ok(p1.msgs.some((m) => m.t === "countdown" && m.endsAt > m.serverNow) && !p1.msgs.some((m) => m.t === "question"), "start: countdown first, no question yet");
+await Bun.sleep(400); // BATTLE_COUNTDOWN_MS=300 in run.sh
+{
+  const kinds = p1.msgs.map((m) => m.t);
+  ok(kinds.indexOf("countdown") < kinds.indexOf("question"), "countdown arrives before the first question");
+  ok(typeof p1.msgs.find((m) => m.t === "question")?.serverNow === "number", "question carries serverNow");
+}
 for (let i = 0; i < 3; i++) {
   await Bun.sleep(300);
   const q = p1.msgs.filter((m) => m.t === "question").pop();
@@ -139,10 +147,14 @@ console.log("ws errors:", errs);
   await Bun.sleep(200);
   const after = h2.msgs.filter((m) => m.t === "room").pop();
   ok(after.players.length === 1 && !after.players.some((p: any) => p.id === bobId), "leave: the host's room state drops the player");
+  h2.send({ t: "start" });
+  await Bun.sleep(100);
   h2.send({ t: "end" });
   await Bun.sleep(200);
   ok(h2.msgs.some((m) => m.t === "closed" && m.reason === "host") && a.msgs.some((m) => m.t === "closed" && m.reason === "host"), "end: host and players get closed");
   ok(!b.msgs.some((m) => m.t === "closed"), "a player who left gets nothing more");
+  await Bun.sleep(400); // past the countdown: an ended room must not start a question
+  ok(!a.msgs.some((m) => m.t === "question"), "an ended battle never starts");
   a.send({ t: "join", code: code2 });
   await Bun.sleep(200);
   ok(a.msgs.filter((m) => m.t === "error").pop()?.error === "ROOM_NOT_FOUND", "an ended battle can't be rejoined");

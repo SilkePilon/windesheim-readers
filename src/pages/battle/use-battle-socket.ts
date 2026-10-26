@@ -15,7 +15,7 @@ export interface RoomMsg {
   code: string;
   title: string;
   hostId: string;
-  state: "lobby" | "question" | "reveal" | "ended";
+  state: "lobby" | "countdown" | "question" | "reveal" | "ended";
   index: number;
   total: number;
   players: RankEntry[];
@@ -25,6 +25,14 @@ export interface QuestionMsg {
   index: number;
   total: number;
   question: PublicQuestion;
+  /** On this device's clock (corrected with the server's `serverNow`). */
+  endsAt: number;
+  durationMs: number;
+}
+/** "Get ready" before the first question. */
+export interface CountdownMsg {
+  t: "countdown";
+  /** On this device's clock (corrected with the server's `serverNow`). */
   endsAt: number;
   durationMs: number;
 }
@@ -43,11 +51,16 @@ export interface EndMsg {
   xp: Record<string, number>;
 }
 
+/** Server timestamps → this device's clock, so a skewed local clock can't eat the timer. */
+const toLocal = (endsAt: number, serverNow: unknown) =>
+  typeof serverNow === "number" ? endsAt - (serverNow - Date.now()) : endsAt;
+
 export function useBattleSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<string[]>([]);
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomMsg | null>(null);
+  const [countdown, setCountdown] = useState<CountdownMsg | null>(null);
   const [question, setQuestion] = useState<QuestionMsg | null>(null);
   const [reveal, setReveal] = useState<RevealMsg | null>(null);
   const [end, setEnd] = useState<EndMsg | null>(null);
@@ -58,6 +71,7 @@ export function useBattleSocket() {
   /** Back to "not in a battle": every piece of room state goes, the error/notice stays. */
   const resetRoom = useCallback(() => {
     setRoom(null);
+    setCountdown(null);
     setQuestion(null);
     setReveal(null);
     setEnd(null);
@@ -91,8 +105,12 @@ export function useBattleSocket() {
         case "room":
           setRoom(msg);
           break;
+        case "countdown":
+          setCountdown({ t: "countdown", endsAt: toLocal(msg.endsAt, msg.serverNow), durationMs: msg.durationMs });
+          break;
         case "question":
-          setQuestion(msg);
+          setCountdown(null);
+          setQuestion({ ...msg, endsAt: toLocal(msg.endsAt, msg.serverNow) });
           setReveal(null);
           setProgress(null);
           break;
@@ -161,7 +179,7 @@ export function useBattleSocket() {
     [],
   );
 
-  return { connected, room, question, reveal, end, progress, answeredIndex, error, send, leave };
+  return { connected, room, countdown, question, reveal, end, progress, answeredIndex, error, send, leave };
 }
 
 export type BattleSocket = ReturnType<typeof useBattleSocket>;

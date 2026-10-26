@@ -82,23 +82,31 @@ function Toggle({ id, label, hint, checked, onChange }: { id: string; label: str
 /** Host-only lobby card: every change goes to the server, which broadcasts the new room state. */
 export function SettingsCard({
   settings,
-  total,
+  available,
   onChange,
   notice,
 }: {
   settings: BattleSettings;
-  /** Questions actually in the room (may be fewer than `settings.count`). */
-  total: number;
+  /** Pool questions at the current difficulty (the server clamps `count` to it). */
+  available: number;
   onChange: (patch: Partial<BattleSettings>) => void;
   notice?: ReactNode;
 }) {
   const { t } = useTranslation();
   const id = useId();
   const countLabelId = `${id}-count`;
+  const maxCount = Math.min(COUNT_MAX, available);
   const stepCount = (d: number) => {
-    const next = Math.min(COUNT_MAX, Math.max(COUNT_MIN, settings.count + d));
+    const next = Math.min(maxCount, Math.max(COUNT_MIN, settings.count + d));
     if (next !== settings.count) onChange({ count: next });
   };
+  // Capped by the pool (not by COUNT_MAX): say why + stops here.
+  const hint =
+    available < COUNT_MIN
+      ? t("battle.settings.availableFew", { count: available })
+      : available < COUNT_MAX && settings.count >= available
+        ? t("battle.settings.available", { n: available })
+        : null;
   return (
     <section aria-labelledby={`${id}-title`} className="mt-6 rounded-[20px] bg-card p-4 shadow-[0_5px_0_var(--chunky)] md:p-5">
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-heading text-lg font-semibold">
@@ -147,14 +155,12 @@ export function SettingsCard({
               size="icon-xl"
               className="bg-background"
               aria-label={t("battle.settings.more")}
-              disabled={settings.count >= COUNT_MAX}
+              disabled={settings.count >= maxCount}
               onClick={() => stepCount(1)}
             >
               <Plus strokeWidth={3} />
             </Button>
-            {total < settings.count && (
-              <span className="text-[13px] font-bold text-muted-foreground">{t("battle.settings.available", { n: total })}</span>
-            )}
+            {hint && <span className="min-w-0 text-[13px] leading-tight font-bold text-muted-foreground">{hint}</span>}
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useReaders } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { GOLD_BUTTON, StageLogo } from "./stage";
+import { COUNT_MAX, COUNT_MIN, DEFAULT_BATTLE_SETTINGS } from "@shared/battle";
 
 /** Join (a small dark stage card) and host setup, shown inside the normal app shell. */
 export function Setup({
@@ -25,7 +26,7 @@ export function Setup({
   const { data: readers } = useReaders();
   const [code, setCode] = useState(initialCode ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [count, setCount] = useState(10);
+  const [count, setCount] = useState<number>(DEFAULT_BATTLE_SETTINGS.count);
   const [hostPlays, setHostPlays] = useState(true);
 
   const toggle = (id: string) =>
@@ -106,8 +107,8 @@ export function Setup({
           <Input
             id="count"
             type="number"
-            min={3}
-            max={30}
+            min={COUNT_MIN}
+            max={COUNT_MAX}
             value={count}
             onChange={(e) => setCount(Number(e.target.value))}
             className="h-11 w-20 shrink-0 rounded-[12px] border-2 text-center font-heading text-lg md:text-lg"
@@ -125,7 +126,7 @@ export function Setup({
           size="xl"
           className="w-full"
           disabled={!selected.size}
-          onClick={() => onCreate([...selected], Number.isFinite(count) ? Math.min(30, Math.max(3, Math.round(count))) : 10, hostPlays)}
+          onClick={() => onCreate([...selected], Number.isFinite(count) ? Math.min(COUNT_MAX, Math.max(COUNT_MIN, Math.round(count))) : DEFAULT_BATTLE_SETTINGS.count, hostPlays)}
         >
           <Swords /> {t("battle.create")}
         </Button>

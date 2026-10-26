@@ -102,7 +102,7 @@ function ws(cookie: string) {
 }
 const host = ws(admin), p1 = ws(student), p2 = ws(bob);
 await Promise.all([host.ready, p1.ready, p2.ready]);
-host.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 3, hostPlays: false });
+host.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 5, hostPlays: false });
 await Bun.sleep(300);
 const code = host.msgs.find((m) => m.t === "room").code;
 p1.send({ t: "join", code }); p2.send({ t: "join", code });
@@ -116,7 +116,7 @@ await Bun.sleep(400); // BATTLE_COUNTDOWN_MS=300 in run.sh
   ok(kinds.indexOf("countdown") < kinds.indexOf("question"), "countdown arrives before the first question");
   ok(typeof p1.msgs.find((m) => m.t === "question")?.serverNow === "number", "question carries serverNow");
 }
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 5; i++) {
   await Bun.sleep(300);
   const q = p1.msgs.filter((m) => m.t === "question").pop();
   const answer = q.question.type === "mc" ? 0 : true;
@@ -136,7 +136,7 @@ console.log("ws errors:", errs);
 {
   const h2 = ws(admin), a = ws(student), b = ws(bob);
   await Promise.all([h2.ready, a.ready, b.ready]);
-  h2.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 3, hostPlays: false });
+  h2.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 5, hostPlays: false });
   await Bun.sleep(300);
   const code2 = h2.msgs.find((m) => m.t === "room").code;
   a.send({ t: "join", code: code2 }); b.send({ t: "join", code: code2 });
@@ -181,11 +181,18 @@ console.log("ws errors:", errs);
   const lastRoom = (c: { msgs: any[] }) => c.msgs.filter((m) => m.t === "room").pop();
   const lastError = (c: { msgs: any[] }) => c.msgs.filter((m) => m.t === "error").pop()?.error;
 
-  /** Host (not playing) + student (always right) + bob (always wrong), with the given settings. */
-  async function play(settings: Record<string, unknown>, checks?: (h: any, a: any) => Promise<void>) {
+  /**
+   * Host + student (a) + bob (b) play with the given settings. By default a is always right,
+   * b always wrong and the host doesn't play; `right(who, i, total)` overrides who is right.
+   */
+  async function play(
+    settings: Record<string, unknown>,
+    checks?: (h: any, a: any) => Promise<void>,
+    { right = (who: "a" | "b" | "h") => who === "a", hostPlays = false } = {},
+  ) {
     const h = ws(admin), a = ws(student), b = ws(bob);
     await Promise.all([h.ready, a.ready, b.ready]);
-    h.send({ t: "create", lessonIds, count: 3, hostPlays: false });
+    h.send({ t: "create", lessonIds, count: 5, hostPlays });
     await Bun.sleep(300);
     const code = lastRoom(h).code;
     a.send({ t: "join", code }); b.send({ t: "join", code });
@@ -203,8 +210,10 @@ console.log("ws errors:", errs);
     for (let i = 0; i < total; i++) {
       const q = a.msgs.filter((m) => m.t === "question").pop();
       ok(q?.index === i, `question ${i} arrived`);
-      a.send({ t: "answer", index: i, answer: correctFor[q.question.prompt] });
-      b.send({ t: "answer", index: i, answer: wrongFor(q) });
+      const pick = (who: "a" | "b" | "h") => (right(who, i, total) ? correctFor[q.question.prompt] : wrongFor(q));
+      a.send({ t: "answer", index: i, answer: pick("a") });
+      b.send({ t: "answer", index: i, answer: pick("b") });
+      if (hostPlays) h.send({ t: "answer", index: i, answer: pick("h") });
       await Bun.sleep(250);
       const rev = a.msgs.filter((m) => m.t === "reveal").pop();
       ok(rev?.index === i, `reveal ${i} arrived`);
@@ -222,7 +231,7 @@ console.log("ws errors:", errs);
   const A = await play({ questionSeconds: 10, points: "allDouble", difficulty: "easy" }, async (h, a) => {
     const seen = lastRoom(a);
     ok(seen.settings.questionSeconds === 10 && seen.settings.points === "allDouble" && seen.settings.difficulty === "easy", "settings: players see the host's change in room state");
-    ok(seen.total === 3, "settings: easy keeps the count (3)");
+    ok(seen.total === 5 && seen.available === 15, "settings: easy keeps the count (5 of 15 available)");
     a.send({ t: "settings", settings: { questionSeconds: 60, showScoreboard: false } });
     await Bun.sleep(200);
     ok(lastRoom(h).settings.questionSeconds === 10 && lastRoom(h).settings.showScoreboard === true, "settings: a non-host settings message is ignored");
@@ -232,9 +241,12 @@ console.log("ws errors:", errs);
     h.send({ t: "settings", settings: { questionSeconds: 15 } });
     await Bun.sleep(150);
     ok(lastError(h) === "BAD_MESSAGE" && lastRoom(h).settings.questionSeconds === 10, "settings: invalid values are rejected");
-    h.send({ t: "settings", settings: { count: 5 } });
+    h.send({ t: "settings", settings: { count: 6 } });
     await Bun.sleep(150);
-    ok(lastRoom(a).total === 5 && lastRoom(a).settings.count === 5, "settings: count re-picks the questions");
+    ok(lastRoom(a).total === 6 && lastRoom(a).settings.count === 6, "settings: count re-picks the questions");
+    h.send({ t: "settings", settings: { count: 4 } });
+    await Bun.sleep(150);
+    ok(lastError(h) === "BAD_MESSAGE" && lastRoom(h).settings.count === 6, "settings: count below 5 is rejected");
   });
   ok(A.rooms.every((r: any) => r.state === "lobby" || (r.settings.questionSeconds === 10 && r.settings.points === "allDouble")), "settings: a change after start is ignored");
   ok(A.results.every(({ q }) => easyPrompts.has(q.question.prompt)), "difficulty easy: only difficulty-1 questions");
@@ -250,11 +262,11 @@ console.log("ws errors:", errs);
     "allDouble: a correct answer scores twice the normal points",
   );
 
-  // B: last question double, no speed/streak bonus → base 500, 1000 on the last.
+  // B: last question double, no speed/streak bonus → base 500, 2× on the last.
   const B = await play({ points: "lastDouble", speedBonus: false, streakBonus: false, showScoreboard: false });
   ok(B.settings.showScoreboard === false, "settings: showScoreboard off is in room state");
-  ok(B.results.map(({ q }) => q.doubled).join() === "false,false,true", "lastDouble: only the last question is doubled");
-  ok(B.results.map(({ mine }) => mine.points).join() === "500,500,1000", "bonuses off: points = base (500), last doubled");
+  ok(B.results.map(({ q }) => q.doubled).join() === "false,false,false,false,true", "lastDouble: only the last question is doubled");
+  ok(B.results.map(({ mine }) => mine.points).join() === "500,500,500,500,1000", "bonuses off: points = base (500), last doubled");
 
   // C: defaults.
   const C = await play({});
@@ -270,5 +282,40 @@ console.log("ws errors:", errs);
     !!A.end && [A, B, C].every((x) => x.end.xp[studentId] === A.end.xp[studentId] && x.end.xp[bobId] === A.end.xp[bobId]) && A.end.xp[studentId] > A.end.xp[bobId],
     "XP is identical whatever the points mode or bonuses",
   );
+
+  // Upset: student wins the first question, bob only the doubled last one → bob tops the
+  // podium and gets the winner's XP and badge (placement follows the podium). Host plays, always wrong.
+  const badges = async (c: string) => (await j(c, "GET", "/me"))[1].badges.map((x: any) => x.id);
+  ok(!(await badges(bob)).includes("battle_winner"), "upset: bob has no winner badge yet");
+  const U = await play({ points: "lastDouble", speedBonus: false, streakBonus: false }, undefined, {
+    hostPlays: true,
+    right: (who, i, total) => (who === "a" && i === 0) || (who === "b" && i === total - 1),
+  });
+  const adminId = (await j(admin, "GET", "/me"))[1].user.id;
+  console.log("upset ranking:", JSON.stringify(U.end?.ranking.map((p: any) => [p.name, p.score])), JSON.stringify(U.end?.xp));
+  ok(U.end?.ranking[0].id === bobId && U.end.ranking[0].score === 1000 && U.end.ranking[1].id === studentId, "upset: bob (doubled last) tops the podium");
+  ok(U.end.xp[bobId] === 60 && U.end.xp[studentId] === 40 && U.end.xp[adminId] === 30, "upset: placement XP follows the podium");
+  ok((await badges(bob)).includes("battle_winner") && !(await badges(student)).includes("battle_winner"), "upset: the podium winner gets the badge");
+}
+
+// Count is clamped to what the pool holds at the difficulty (one lesson: 4 mc/tf, 3 easy).
+{
+  const h = ws(admin), a = ws(student);
+  await Promise.all([h.ready, a.ready]);
+  h.send({ t: "create", lessonIds: [readers[0].lessons[0].id], count: 10, hostPlays: false });
+  await Bun.sleep(300);
+  const r0 = h.msgs.filter((m) => m.t === "room").pop();
+  ok(r0.settings.count === 4 && r0.total === 4 && r0.available === 4, "count: create clamps to the available 4");
+  a.send({ t: "join", code: r0.code });
+  h.send({ t: "settings", settings: { difficulty: "easy" } });
+  await Bun.sleep(200);
+  const r1 = a.msgs.filter((m) => m.t === "room").pop();
+  ok(r1.settings.count === 3 && r1.total === 3 && r1.available === 3, "count: easy clamps to the available 3");
+  h.send({ t: "settings", settings: { count: 20 } });
+  await Bun.sleep(200);
+  const r2 = h.msgs.filter((m) => m.t === "room").pop();
+  ok(r2.settings.count === 3 && r2.total === 3 && !h.msgs.some((m) => m.t === "error"), "count: asking for more than available is clamped");
+  ok((await (async () => { h.send({ t: "create", lessonIds: [readers[0].lessons[0].id], count: 3 }); await Bun.sleep(200); return h.msgs.filter((m) => m.t === "error").pop()?.error; })()) === "BAD_MESSAGE", "count: create below 5 is rejected");
+  h.s.close(); a.s.close();
 }
 process.exit(0);

@@ -33,10 +33,7 @@ interface Player {
   id: string;
   name: string;
   score: number;
-  /**
-   * Score under the default rules (normal points, both bonuses), whatever the host set:
-   * XP, the winner badge and the stored attempt come from this so settings can't change them.
-   */
+  /** Score under the default rules (normal points, both bonuses): the stored attempt uses it, so it stays within maxScore. */
   baseScore: number;
   streak: number;
   sockets: Set<WSContext>;
@@ -97,12 +94,10 @@ function broadcast(r: Room, msg: unknown) {
   for (const p of r.players.values()) for (const ws of p.sockets) send(ws, msg);
 }
 
-/** `count` questions from the pool at the given difficulty, or null when fewer than 3 match. */
-function pickQuestions(pool: Q[], difficulty: BattleSettings["difficulty"], count: number): Q[] | null {
+/** Pool questions at the given difficulty. */
+function matching(pool: Q[], difficulty: BattleSettings["difficulty"]): Q[] {
   const level = DIFFICULTY_LEVEL[difficulty];
-  const matching = level === null ? pool : pool.filter((q) => q.difficulty === level);
-  if (matching.length < 3) return null;
-  return shuffle(matching).slice(0, count);
+  return level === null ? pool : pool.filter((q) => q.difficulty === level);
 }
 
 const questionMs = (r: Room) => r.settings.questionSeconds * 1000;
@@ -123,6 +118,8 @@ function roomState(r: Room) {
     index: r.index,
     total: r.questions.length,
     settings: r.settings,
+    /** Questions in the pool at the current difficulty: the most `count` can be. */
+    available: matching(r.pool, r.settings.difficulty).length,
     players: ranking(r),
   };
 }
@@ -199,13 +196,10 @@ function reveal(r: Room) {
 async function end(r: Room) {
   clearTimeout(r.timer);
   r.state = "ended";
+  // Placement XP and the winner badge follow the podium (everyone played the same settings).
   const rank = ranking(r);
-  // Progression ranks on the base score: the host's point/bonus settings never change XP.
-  const baseRank = [...r.players.values()]
-    .sort((a, b) => b.baseScore - a.baseScore)
-    .map((p, i) => ({ rank: i + 1, id: p.id, score: p.baseScore }));
   const xpById: Record<string, number> = {};
-  for (const p of baseRank) {
+  for (const p of rank) {
     if (r.players.size < 2 && p.score === 0) continue;
     const placeXp = r.players.size >= 2 ? (XP.battlePlace[p.rank - 1] ?? 0) : 0;
     const amount = placeXp + XP.battleParticipation;
@@ -215,7 +209,7 @@ async function end(r: Room) {
       .catch(() => {});
     await db
       .insert(schema.attempt)
-      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: p.score, maxScore: r.questions.length * 1000 })
+      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: r.players.get(p.id)?.baseScore ?? 0, maxScore: r.questions.length * 1000 })
       .catch(() => {});
     if (p.rank === 1 && r.players.size >= 3) await grantBadge(p.id, "battle_winner").catch(() => {});
   }
@@ -227,7 +221,7 @@ async function end(r: Room) {
 const createMsg = z.object({
   t: z.literal("create"),
   lessonIds: z.array(z.string()).min(1).max(30),
-  count: z.number().int().min(3).max(30).default(10),
+  count: z.number().int().min(COUNT_MIN).max(COUNT_MAX).default(DEFAULT_BATTLE_SETTINGS.count),
   hostPlays: z.boolean().default(true),
 });
 const settingsPatch = z
@@ -299,7 +293,8 @@ export function battleConnection(user: SessionUser) {
           lessonIds: allowed.map((l) => l.id),
           pool: qs,
           questions: shuffle(qs).slice(0, msg.count),
-          settings: { ...DEFAULT_BATTLE_SETTINGS, count: msg.count },
+          // Never more than there are.
+          settings: { ...DEFAULT_BATTLE_SETTINGS, count: Math.min(msg.count, qs.length) },
           players: new Map(),
           hostSockets: new Set([ws]),
           state: "lobby",
@@ -339,14 +334,16 @@ export function battleConnection(user: SessionUser) {
 
       if (msg.t === "start" && isHost && r.state === "lobby") return startCountdown(r);
 
-      // Lobby only, host only. A new count or difficulty re-picks the questions.
+      // Lobby only, host only. A new count or difficulty re-picks the questions; the count
+      // is clamped to what the pool holds at that difficulty (so it can be under COUNT_MIN).
       if (msg.t === "settings") {
         if (!isHost || r.state !== "lobby") return;
         const next: BattleSettings = { ...r.settings, ...msg.settings };
         if (next.count !== r.settings.count || next.difficulty !== r.settings.difficulty) {
-          const qs = pickQuestions(r.pool, next.difficulty, next.count);
-          if (!qs) return send(ws, { t: "error", error: "NOT_ENOUGH_QUESTIONS" });
-          r.questions = qs;
+          const pool = matching(r.pool, next.difficulty);
+          if (pool.length < 3) return send(ws, { t: "error", error: "NOT_ENOUGH_QUESTIONS" });
+          next.count = Math.min(next.count, pool.length);
+          r.questions = shuffle(pool).slice(0, next.count);
         }
         r.settings = next;
         return broadcast(r, roomState(r));

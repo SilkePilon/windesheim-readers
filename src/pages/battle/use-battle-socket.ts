@@ -20,6 +20,8 @@ export interface RoomMsg {
   index: number;
   total: number;
   settings: BattleSettings;
+  /** Pool questions at the current difficulty: the most `settings.count` can be. */
+  available: number;
   players: RankEntry[];
 }
 export interface QuestionMsg {

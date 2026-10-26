@@ -162,6 +162,10 @@ const en: Messages = {
     studyLesson: "Practise this lesson's cards",
     remaining: "{{n}} left",
     browse: "Browse all cards",
+    showAnswer: "Show answer",
+    swipeHint: "Swipe right if you knew it, left to try again",
+    keyHint: "Press 1–4 to rate, space to flip",
+    moreCards: "Another round",
   },
   quiz: {
     start: "Start quiz",
@@ -181,6 +185,13 @@ const en: Messages = {
     again: "New quiz",
     xpReduced: "You've practised this lesson a lot today: reduced XP. Try another lesson!",
     noQuestions: "No questions for this lesson yet.",
+    goodJob: "Nice! +{{n}} XP",
+    combo: "{{n}}x",
+    comboLabel: "{{n}} correct in a row",
+    scoreLabel: "Score",
+    xpLabel: "XP earned",
+    questsDone: "Quests completed",
+    backToLesson: "Back to the lesson",
     difficulty: ["", "Easy", "Medium", "Hard"],
   },
   explain: {
@@ -223,6 +234,7 @@ const en: Messages = {
   review: {
     title: "Review",
     subtitle: "Your daily review across all lessons",
+    backHome: "Back to your path",
   },
   battle: {
     title: "Quiz Battle",

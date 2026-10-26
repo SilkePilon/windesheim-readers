@@ -29,7 +29,7 @@ export function StudyShell({
   const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div className="flex min-h-dvh flex-col overflow-x-clip bg-background">
       <header className="sticky top-0 z-30 bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3">
           <Button variant="chunky-surface" size="icon-xl" aria-label={t("common.close")} onClick={onClose} className="[--press:3px]">

@@ -148,7 +148,7 @@ const nl = {
   cards: {
     tapToFlip: "Tik om om te draaien",
     again: "Opnieuw",
-    hard: "Moeilijk",
+    hard: "Lastig",
     good: "Goed",
     easy: "Makkelijk",
     newCard: "Nieuw",
@@ -160,6 +160,10 @@ const nl = {
     studyLesson: "Oefen kaarten van deze les",
     remaining: "{{n}} over",
     browse: "Alle kaarten bekijken",
+    showAnswer: "Toon antwoord",
+    swipeHint: "Swipe rechts als je het wist, links voor opnieuw",
+    keyHint: "Toets 1–4 om te beoordelen, spatie om te draaien",
+    moreCards: "Nog een ronde",
   },
   quiz: {
     start: "Start quiz",
@@ -179,6 +183,13 @@ const nl = {
     again: "Nieuwe quiz",
     xpReduced: "Je hebt deze les vandaag al vaak geoefend: minder XP. Probeer een andere les!",
     noQuestions: "Nog geen vragen voor deze les.",
+    goodJob: "Goed zo! +{{n}} XP",
+    combo: "{{n}}x",
+    comboLabel: "{{n}} goed op rij",
+    scoreLabel: "Score",
+    xpLabel: "XP verdiend",
+    questsDone: "Quests voltooid",
+    backToLesson: "Terug naar de les",
     difficulty: ["", "Makkelijk", "Gemiddeld", "Moeilijk"],
   },
   explain: {
@@ -221,6 +232,7 @@ const nl = {
   review: {
     title: "Herhalen",
     subtitle: "Je dagelijkse herhaling over alle lessen",
+    backHome: "Terug naar je pad",
   },
   battle: {
     title: "Quiz Battle",

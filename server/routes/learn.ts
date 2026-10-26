@@ -28,6 +28,13 @@ import { getModel } from "../ai/providers";
 
 const scheduler = fsrs({ enable_fuzz: true });
 
+/** Next-due interval (ms from `now`) per rating, from FSRS `repeat()` previews. */
+function previewIntervals(card: Card, now: Date) {
+  const rec = scheduler.repeat(card, now);
+  const ms = (g: Grade) => rec[g].card.due.getTime() - now.getTime();
+  return { again: ms(Rating.Again), hard: ms(Rating.Hard), good: ms(Rating.Good), easy: ms(Rating.Easy) };
+}
+
 interface QuizSession {
   userId: string;
   lessonId: string;
@@ -327,9 +334,7 @@ export const learn = new Hono<AppEnv>()
     );
     const preview = (id: string) => {
       const r = reviews.get(id);
-      const rec = scheduler.repeat(r ? toCard(r) : createEmptyCard(now), now);
-      const ms = (g: Grade) => rec[g].card.due.getTime() - now.getTime();
-      return { again: ms(Rating.Again), hard: ms(Rating.Hard), good: ms(Rating.Good), easy: ms(Rating.Easy) };
+      return previewIntervals(r ? toCard(r) : createEmptyCard(now), now);
     };
     return c.json(
       [...due, ...shuffle(fresh)].map((card) => ({
@@ -363,7 +368,8 @@ export const learn = new Hono<AppEnv>()
     const total = await totalReviews(u.id);
     for (const [n, b] of [[100, "cards_100"], [500, "cards_500"]] as const)
       if (total >= n && (await grantBadge(u.id, b))) res.newBadges.push(b);
-    return c.json({ ...res, due: next.due });
+    // `intervals`: fresh rating previews in case the card comes back in this session.
+    return c.json({ ...res, due: next.due, intervals: previewIntervals(next, now) });
   })
 
   // ----- quiz (auto-graded) -----

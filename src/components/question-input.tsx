@@ -1,15 +1,17 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PublicQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const LETTERS = ["A", "B", "C", "D", "E", "F"];
-const MC_COLORS = [
-  "data-[sel=true]:border-rose-500 data-[sel=true]:bg-rose-500/10",
-  "data-[sel=true]:border-sky-500 data-[sel=true]:bg-sky-500/10",
-  "data-[sel=true]:border-amber-500 data-[sel=true]:bg-amber-500/10",
-  "data-[sel=true]:border-emerald-500 data-[sel=true]:bg-emerald-500/10",
+// Battle (`big`) keeps Kahoot-style colours for the picked option.
+const BIG_COLORS = [
+  "data-[sel=true]:border-danger data-[sel=true]:[--shade:var(--danger-shade)]",
+  "data-[sel=true]:border-info data-[sel=true]:[--shade:var(--info-shade)]",
+  "data-[sel=true]:border-gold data-[sel=true]:[--shade:var(--gold-shade)]",
+  "data-[sel=true]:border-success data-[sel=true]:[--shade:var(--success-shade)]",
 ];
 
 export interface Reveal {
@@ -17,9 +19,12 @@ export interface Reveal {
   correctAnswer: unknown;
 }
 
+type OptionState = "correct" | "wrong" | null;
+
+/** A chunky-surface answer block. Text always wraps; it is never truncated. */
 function OptionButton({
-  label,
-  text,
+  marker,
+  children,
   selected,
   state,
   disabled,
@@ -27,44 +32,50 @@ function OptionButton({
   colorClass,
   big,
 }: {
-  label?: string;
-  text: string;
+  marker?: ReactNode;
+  children: ReactNode;
   selected: boolean;
-  state?: "correct" | "wrong" | null;
+  state?: OptionState;
   disabled?: boolean;
   onClick: () => void;
   colorClass?: string;
   big?: boolean;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="chunky-surface"
       disabled={disabled}
       onClick={onClick}
+      aria-pressed={selected}
       data-sel={selected && !state}
+      data-state={state ?? undefined}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl border-2 bg-card px-4 text-left text-[15px] font-medium transition-all active:scale-[0.99] disabled:cursor-default",
-        big ? "min-h-16 py-4" : "min-h-13 py-3",
-        !disabled && "hover:border-primary/40",
-        selected && !state && "border-primary bg-primary/5",
+        "h-auto w-full justify-start gap-3 rounded-[16px] border-2 border-transparent px-4 text-left font-sans text-[15px] leading-snug font-bold whitespace-normal [--press:4px] md:text-base",
+        // Locked after checking: keep full colour and the chunky shadow.
+        "disabled:opacity-100 disabled:shadow-[0_4px_0_var(--shade)]",
+        big ? "min-h-16 py-4" : "min-h-14 py-3",
+        selected && !state && "border-primary [--shade:var(--primary-shade)]",
         colorClass,
-        state === "correct" && "border-emerald-500 bg-emerald-500/10",
-        state === "wrong" && "animate-shake border-red-500 bg-red-500/10",
+        state === "correct" &&
+          "border-success bg-[color-mix(in_oklab,var(--success)_14%,var(--card))] [--shade:var(--success-shade)] dark:bg-[color-mix(in_oklab,var(--success)_24%,var(--card))]",
+        state === "wrong" &&
+          "animate-shake border-danger bg-[color-mix(in_oklab,var(--danger)_14%,var(--card))] [--shade:var(--danger-shade)] motion-reduce:animate-none dark:bg-[color-mix(in_oklab,var(--danger)_22%,var(--card))]",
       )}
     >
-      {label && (
+      {(marker || state) && (
         <span
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-bold",
-            state === "correct" && "bg-emerald-500 text-white",
-            state === "wrong" && "bg-red-500 text-white",
+            "flex size-7 shrink-0 items-center justify-center rounded-[9px] bg-accent font-heading text-sm font-semibold text-primary",
+            state === "correct" && "bg-success text-success-foreground",
+            state === "wrong" && "bg-danger text-danger-foreground",
           )}
         >
-          {state === "correct" ? <Check className="size-4" /> : state === "wrong" ? <X className="size-4" /> : label}
+          {state === "correct" ? <Check strokeWidth={3} /> : state === "wrong" ? <X strokeWidth={3} /> : marker}
         </span>
       )}
-      <span className="flex-1">{text}</span>
-    </button>
+      <span className="min-w-0 flex-1 break-words">{children}</span>
+    </Button>
   );
 }
 
@@ -91,22 +102,22 @@ export function QuestionInput({
 
   if (question.type === "mc") {
     return (
-      <div className="grid gap-2.5">
+      <div className="grid gap-3">
         {question.options.map((opt, i) => {
           const isCorrect = reveal && reveal.correctAnswer === i;
           const isWrongPick = reveal && value === i && !reveal.correct;
           return (
             <OptionButton
               key={i}
-              label={LETTERS[i]}
-              text={opt}
               selected={value === i}
               state={isCorrect ? "correct" : isWrongPick ? "wrong" : null}
               disabled={locked}
               onClick={() => onChange(i)}
-              colorClass={big ? MC_COLORS[i] : undefined}
+              colorClass={big ? BIG_COLORS[i] : undefined}
               big={big}
-            />
+            >
+              {opt}
+            </OptionButton>
           );
         })}
       </div>
@@ -122,13 +133,15 @@ export function QuestionInput({
           return (
             <OptionButton
               key={String(v)}
-              text={v ? `✓ ${t("quiz.true")}` : `✗ ${t("quiz.false")}`}
+              marker={v ? <Check strokeWidth={3} /> : <X strokeWidth={3} />}
               selected={value === v}
               state={isCorrect ? "correct" : isWrongPick ? "wrong" : null}
               disabled={locked}
               onClick={() => onChange(v)}
               big
-            />
+            >
+              {v ? t("quiz.true") : t("quiz.false")}
+            </OptionButton>
           );
         })}
       </div>
@@ -142,18 +155,25 @@ export function QuestionInput({
           autoFocus
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSubmit?.()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onSubmit?.();
+            }
+          }}
           disabled={locked}
           placeholder={t("quiz.fillPlaceholder")}
           autoCapitalize="off"
           autoCorrect="off"
           className={cn(
-            "h-12 text-base",
-            reveal?.correct && "border-emerald-500 bg-emerald-500/10",
-            reveal && !reveal.correct && "border-red-500 bg-red-500/10",
+            "h-14 rounded-[16px] border-2 border-transparent bg-card px-4 text-base font-bold shadow-[0_4px_0_var(--chunky)] focus-visible:border-primary md:text-base dark:bg-card",
+            "disabled:cursor-default disabled:opacity-100 dark:disabled:bg-card",
+            reveal?.correct && "border-success shadow-[0_4px_0_var(--success-shade)]",
+            reveal && !reveal.correct && "border-danger shadow-[0_4px_0_var(--danger-shade)]",
           )}
         />
-        {reveal && !reveal.correct && (
+        {/* The quiz shows this in its feedback sheet; battle has no sheet. */}
+        {big && reveal && !reveal.correct && (
           <p className="text-sm text-muted-foreground">{t("quiz.correctAnswerWas", { answer: String(reveal.correctAnswer) })}</p>
         )}
       </div>
@@ -167,31 +187,38 @@ export function QuestionInput({
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">{t("quiz.orderHint")}</p>
-        <ol className="space-y-2">
-          {picked.map((item, i) => (
-            <li key={item}>
-              <OptionButton
-                label={String(i + 1)}
-                text={item}
-                selected
-                state={correctOrder ? (correctOrder[i] === item ? "correct" : "wrong") : null}
-                disabled={locked}
-                onClick={() => onChange(picked.filter((p) => p !== item))}
-              />
-            </li>
-          ))}
-        </ol>
+        {picked.length > 0 && (
+          <ol className="space-y-3">
+            {picked.map((item, i) => (
+              <li key={item}>
+                <OptionButton
+                  marker={i + 1}
+                  selected={!correctOrder}
+                  state={correctOrder ? (correctOrder[i] === item ? "correct" : "wrong") : null}
+                  disabled={locked}
+                  onClick={() => onChange(picked.filter((p) => p !== item))}
+                >
+                  {item}
+                </OptionButton>
+              </li>
+            ))}
+          </ol>
+        )}
         {remaining.length > 0 && (
-          <div className="space-y-2 rounded-xl border-2 border-dashed p-2">
+          <div className="space-y-3 rounded-[20px] border-2 border-dashed border-input p-2.5 pb-3.5">
             {remaining.map((item) => (
-              <OptionButton key={item} text={item} selected={false} disabled={locked} onClick={() => onChange([...picked, item])} />
+              <OptionButton key={item} selected={false} disabled={locked} onClick={() => onChange([...picked, item])}>
+                {item}
+              </OptionButton>
             ))}
           </div>
         )}
         {correctOrder && !reveal?.correct && (
-          <ol className="list-decimal space-y-1 rounded-xl bg-muted p-3 pl-8 text-sm">
+          <ol className="list-decimal space-y-1 rounded-[16px] bg-card py-3 pr-3 pl-8 text-sm font-bold shadow-[0_4px_0_var(--chunky)] marker:font-heading marker:text-success-shade dark:marker:text-success">
             {correctOrder.map((s) => (
-              <li key={s}>{s}</li>
+              <li key={s} className="break-words">
+                {s}
+              </li>
             ))}
           </ol>
         )}
@@ -208,4 +235,12 @@ export function isAnswered(q: PublicQuestion, v: unknown) {
   if (q.type === "fill") return typeof v === "string" && v.trim().length > 0;
   if (q.type === "order") return Array.isArray(v) && v.length === q.items.length;
   return false;
+}
+
+/** The correct answer as display text, for the feedback sheet (null for order questions). */
+export function correctAnswerText(q: PublicQuestion, correctAnswer: unknown, t: (k: string) => string): string | null {
+  if (q.type === "mc" && typeof correctAnswer === "number") return q.options[correctAnswer] ?? null;
+  if (q.type === "tf" && typeof correctAnswer === "boolean") return correctAnswer ? t("quiz.true") : t("quiz.false");
+  if (q.type === "fill") return String(correctAnswer);
+  return null;
 }

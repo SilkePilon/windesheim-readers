@@ -1,13 +1,10 @@
+import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Page, PageHeader } from "@/components/page";
 import { FlashcardSession } from "@/components/flashcard-session";
 
+/** Full-screen daily review: due cards across all lessons. */
 export default function ReviewPage() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
-  return (
-    <Page>
-      <PageHeader title={t("review.title")} description={t("review.subtitle")} />
-      <FlashcardSession showLessonCode />
-    </Page>
-  );
+  return <FlashcardSession onClose={() => navigate("/")} doneLabel={t("review.backHome")} />;
 }

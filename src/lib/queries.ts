@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
-import type { LessonDetail, Me, ReaderWithLessons } from "./types";
+import type { Leaderboard, LessonDetail, Me, ReaderWithLessons } from "./types";
 
 export const qk = {
   me: ["me"] as const,
@@ -32,6 +32,10 @@ export function useLesson(id: string) {
   return useQuery({ queryKey: qk.lesson(id), queryFn: () => api.get<LessonDetail>(`/lessons/${id}`) });
 }
 
+export function useLeaderboard(period: "week" | "all") {
+  return useQuery({ queryKey: qk.leaderboard(period), queryFn: () => api.get<Leaderboard>(`/leaderboard?period=${period}`) });
+}
+
 /** Refresh everything that depends on XP / progress. */
 export function useInvalidateProgress() {
   const qc = useQueryClient();
@@ -39,5 +43,6 @@ export function useInvalidateProgress() {
     void qc.invalidateQueries({ queryKey: qk.me });
     void qc.invalidateQueries({ queryKey: qk.readers });
     void qc.invalidateQueries({ queryKey: ["lesson"] });
+    void qc.invalidateQueries({ queryKey: ["leaderboard"] });
   };
 }

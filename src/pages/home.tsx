@@ -1,165 +1,202 @@
-import { Link } from "react-router";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, BookOpen, Flame, Repeat, Swords, Target, Trophy, Upload } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Page, PageSpinner } from "@/components/page";
-import { MasteryRing } from "@/components/mastery-ring";
-import { useMe, useReaders } from "@/lib/queries";
-import { BADGES, DAILY_XP_GOAL, levelTitle } from "@shared/game";
+import { BookOpen, ChevronRight, Flame, Upload } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { PageSpinner } from "@/components/page";
+import { Chip } from "@/components/game/chip";
+import { LessonPath } from "@/components/game/lesson-path";
+import { QuestCard } from "@/components/game/quest-card";
+import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
+import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
+import { DAILY_XP_GOAL } from "@shared/game";
+import { pathNodes } from "@shared/path";
 import { cn } from "@/lib/utils";
+
+const READER_KEY = "wr.home.reader";
 
 export default function HomePage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { data: me } = useMe();
   const { data: readers, isLoading } = useReaders();
+  const [picked, setPicked] = useState(() => localStorage.getItem(READER_KEY));
   if (!me || isLoading) return <PageSpinner />;
 
-  const s = me.stats;
-  const lessons = (readers ?? []).flatMap((r) => r.lessons);
-  // Next lesson: first one (in reader order) that isn't mastered yet, preferring ones already started.
-  const started = lessons.filter((l) => l.mastery > 0 && l.mastery < 0.9);
-  const suggestions = [...started, ...lessons.filter((l) => l.mastery === 0)].slice(0, 3);
-  const goalPct = Math.min(1, s.todayXp / DAILY_XP_GOAL);
+  const withLessons = (readers ?? []).filter((r) => r.lessons.length > 0);
+  const reader =
+    withLessons.find((r) => r.id === picked) ?? withLessons.find((r) => r.lastStudiedLessonId) ?? withLessons[0];
+  const pick = (id: string) => {
+    localStorage.setItem(READER_KEY, id);
+    setPicked(id);
+  };
 
   return (
-    <Page>
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">
-          {t("home.greeting", { name: me.user.displayName })}
-        </h1>
-        <p className="text-muted-foreground">
-          {t("common.level", { n: s.level })} · {levelTitle(s.level)}
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-10">
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-8 lg:col-start-2 lg:row-start-1">
+        <StatChips me={me} />
+        <DailyGoal todayXp={me.stats.todayXp} />
+        <QuestCard quests={me.quests} />
+        <WeekBoard className="hidden lg:flex" />
+      </aside>
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <Card className="col-span-2 md:col-span-1">
-          <CardContent className="flex items-center gap-4">
-            <MasteryRing value={goalPct} size={64} stroke={6}>
-              <Target className="size-5 text-primary" />
-            </MasteryRing>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm text-muted-foreground">{t("home.dailyGoal")}</div>
-              <div className="text-xl font-semibold tabular-nums">
-                {s.todayXp} / {DAILY_XP_GOAL} XP
-              </div>
-              {goalPct >= 1 && <div className="text-sm font-medium text-emerald-600">{t("home.dailyGoalDone")}</div>}
+      <div className="mt-6 min-w-0 lg:col-start-1 lg:row-start-1 lg:mt-0">
+        {!reader ? (
+          <Card className="items-center gap-3 px-6 py-8 text-center">
+            <div className="grid size-14 place-items-center rounded-2xl bg-secondary text-primary">
+              {me.user.role === "admin" ? <Upload className="size-7" /> : <BookOpen className="size-7" />}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Flame className={cn("size-4", s.activeToday ? "text-orange-500" : "")} /> {t("home.streak")}
-            </div>
-            <div className="mt-1 text-xl font-semibold">{t("home.streakDays", { count: s.streak })}</div>
-            {!s.activeToday && <div className="mt-1 text-xs text-muted-foreground">{t("home.streakKeep")}</div>}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Trophy className="size-4 text-amber-500" /> {t("home.weekXp")}
-            </div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{t("common.xp", { n: s.weekXp })}</div>
-            <Link to="/leaderboard" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary">
-              {t("nav.leaderboard")} <ArrowRight className="size-3" />
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Review CTA */}
-      <Card className={cn("mt-4", s.due > 0 && "border-primary/40 bg-primary/5")}>
-        <CardContent className="flex items-center gap-4">
-          <div className="rounded-xl bg-primary/15 p-3 text-primary">
-            <Repeat className="size-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-semibold">{s.due > 0 ? t("home.dueCards", { count: s.due }) : t("home.noDue")}</div>
-            <div className="text-sm text-muted-foreground">{t("review.subtitle")}</div>
-          </div>
-          {s.due > 0 && (
-            <Button asChild>
-              <Link to="/review">{t("home.startReview")}</Link>
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Continue learning */}
-      <h2 className="mt-8 mb-3 font-heading text-lg font-semibold">{t("home.suggested")}</h2>
-      {lessons.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">{me.user.role === "admin" ? <Upload /> : <BookOpen />}</EmptyMedia>
-            <EmptyTitle>{t("home.noReaders")}</EmptyTitle>
+            <h2 className="font-heading text-lg font-semibold text-balance">{t("home.noReaders")}</h2>
             {me.user.role === "admin" && (
-              <EmptyDescription>
-                <Link to="/admin">{t("home.noReadersAdmin")}</Link>
-              </EmptyDescription>
+              <Link to="/admin" className="text-sm font-bold text-primary underline-offset-4 hover:underline">
+                {t("home.noReadersAdmin")}
+              </Link>
             )}
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-3">
-          {suggestions.map((l) => (
-            <Link key={l.id} to={`/lesson/${l.id}`}>
-              <Card className="h-full transition-colors hover:border-primary/50">
-                <CardContent className="flex items-center gap-3">
-                  <MasteryRing value={l.mastery} />
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-primary">{l.code}</div>
-                    <div className="line-clamp-2 text-sm font-medium">{l.title}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Button variant="outline" size="lg" asChild className="h-14">
-          <Link to="/learn">
-            <BookOpen /> {t("nav.learn")}
-          </Link>
-        </Button>
-        <Button variant="outline" size="lg" asChild className="h-14">
-          <Link to="/battle">
-            <Swords /> {t("battle.title")}
-          </Link>
-        </Button>
+          </Card>
+        ) : (
+          <>
+            {withLessons.length > 1 ? (
+              <ReaderSwitcher readers={withLessons} value={reader.id} onChange={pick} />
+            ) : (
+              <h1 className="hidden font-heading text-2xl font-semibold tracking-tight lg:block">{reader.title}</h1>
+            )}
+            <LessonPath
+              groups={pathNodes(reader.lessons, reader.lastStudiedLessonId)}
+              onOpen={(id) => navigate(`/lesson/${id}`)}
+            />
+          </>
+        )}
       </div>
+    </div>
+  );
+}
 
-      {/* Level + badges */}
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>{t("common.level", { n: s.level })}</span>
-            <span className="text-sm font-normal text-muted-foreground tabular-nums">
-              {s.intoLevel} / {s.levelSize} XP
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Progress value={s.progress * 100} className="h-3" />
-          {me.badges.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {me.badges.slice(0, 8).map((b) => (
-                <span key={b.id} title={t(`badges.${b.id}.desc`)} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm">
-                  {BADGES[b.id]?.icon} {t(`badges.${b.id}.name`)}
-                </span>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </Page>
+function StatChips({ me }: { me: Me }) {
+  const { t } = useTranslation();
+  const s = me.stats;
+  return (
+    <div className="flex items-center gap-2">
+      <Chip tone="streak" aria-label={t("home.streakChip", { count: s.streak })}>
+        <Flame className={cn(s.activeToday && "fill-current")} aria-hidden />
+        {s.streak}
+      </Chip>
+      <Chip tone="level">{t("home.levelChip", { n: s.level })}</Chip>
+      <Chip tone="xp" className="ml-auto" aria-label={t("home.totalXp", { n: s.xp })}>
+        {t("common.xp", { n: s.xp })}
+      </Chip>
+    </div>
+  );
+}
+
+function DailyGoal({ todayXp }: { todayXp: number }) {
+  const { t } = useTranslation();
+  const pct = Math.min(1, todayXp / DAILY_XP_GOAL);
+  return (
+    <Card className="gap-2 px-4 py-3.5">
+      <div className="flex items-baseline justify-between gap-3 text-sm font-bold">
+        <h2 className="font-heading text-base font-semibold">{t("home.dailyGoal")}</h2>
+        <span className="tabular-nums">
+          {pct >= 1 ? t("home.dailyGoalDone") : `${Math.min(todayXp, DAILY_XP_GOAL)} / ${DAILY_XP_GOAL} XP`}
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={t("home.dailyGoal")}
+        aria-valuemin={0}
+        aria-valuemax={DAILY_XP_GOAL}
+        aria-valuenow={Math.min(todayXp, DAILY_XP_GOAL)}
+        className="h-3.5 overflow-hidden rounded-[9px] bg-track"
+      >
+        <div
+          className="h-full rounded-[9px] bg-success shadow-[inset_0_-4px_0_var(--success-shade)]"
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function ReaderSwitcher({
+  readers,
+  value,
+  onChange,
+}: {
+  readers: ReaderWithLessons[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div role="radiogroup" aria-label={t("home.readers")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pt-1 pb-2 md:mx-0 md:px-0">
+      {readers.map((r) => {
+        const on = r.id === value;
+        return (
+          <button
+            key={r.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(r.id)}
+            className={cn(
+              "max-w-[16rem] shrink-0 truncate rounded-[14px] px-3.5 py-2 font-heading text-sm font-semibold transition-[translate,box-shadow] duration-100 active:translate-y-[3px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0",
+              on
+                ? "bg-primary text-primary-foreground shadow-[0_3px_0_var(--primary-shade)]"
+                : "bg-card text-foreground shadow-[0_3px_0_var(--chunky)]",
+            )}
+          >
+            {r.title}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekBoard({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  const { data } = useLeaderboard("week");
+  if (!data) return null;
+  const top = data.top.slice(0, 3);
+  // Your own row: from the board, or a 0 XP row when you haven't earned XP this week.
+  const meRow: LeaderboardEntry | null = top.some((e) => e.me)
+    ? null
+    : (data.me ?? { rank: 0, name: "", xp: 0, streak: 0, level: 1, me: true });
+  return (
+    <Card className={cn("gap-1 px-4", className)}>
+      <Link
+        to="/leaderboard"
+        aria-label={t("home.toLeaderboard")}
+        className="mb-1 flex items-center justify-between font-heading text-base font-semibold hover:text-primary"
+      >
+        <h2>{t("home.weekBoard")}</h2>
+        <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+      </Link>
+      {top.length === 0 && <p className="text-sm text-muted-foreground">{t("leaderboard.empty")}</p>}
+      {top.map((e) => (
+        <BoardRow key={e.rank} e={e} />
+      ))}
+      {meRow && (
+        <>
+          {(meRow.rank === 0 || meRow.rank > 4) && top.length > 0 && <div className="text-center text-xs leading-none text-muted-foreground" aria-hidden>⋮</div>}
+          <BoardRow e={meRow} />
+        </>
+      )}
+    </Card>
+  );
+}
+
+function BoardRow({ e }: { e: LeaderboardEntry }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        "-mx-2 flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-sm font-bold",
+        e.me && "bg-secondary ring-2 ring-primary ring-inset",
+      )}
+    >
+      <span className="w-6 font-heading text-muted-foreground tabular-nums">{e.rank ? `${e.rank}.` : "–"}</span>
+      <span className="min-w-0 flex-1 truncate">{e.me ? t("home.you") : e.name}</span>
+      <span className="font-heading tabular-nums">{e.xp}</span>
+    </div>
   );
 }

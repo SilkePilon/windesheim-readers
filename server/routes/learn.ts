@@ -187,12 +187,17 @@ export const learn = new Hono<AppEnv>()
       .orderBy(asc(schema.lesson.position));
     const progress = await db.select().from(schema.lessonProgress).where(eq(schema.lessonProgress.userId, u.id));
     const cardMastery = await cardMasteryByLesson(u.id);
+    const lastStudied = await lastStudiedByLesson(u.id, progress);
     return c.json(
       readers.map((r) => ({
         id: r.id,
         title: r.title,
         course: r.course,
         published: r.published,
+        lastStudiedLessonId: latestLesson(
+          lessons.filter((l) => l.readerId === r.id).map((l) => l.id),
+          lastStudied,
+        ),
         lessons: lessons
           .filter((l) => l.readerId === r.id)
           .map((l) => {
@@ -533,6 +538,44 @@ export const learn = new Hono<AppEnv>()
       totalPlayers: ranked.length,
     });
   });
+
+/**
+ * When the user last studied each lesson (ms): the latest quiz/explain attempt, card
+ * review or lesson_progress update. Progress rows without any progress are skipped,
+ * because opening a lesson page creates one.
+ */
+async function lastStudiedByLesson(userId: string, progress: (typeof schema.lessonProgress.$inferSelect)[]) {
+  const [attempts, reviews] = await Promise.all([
+    db
+      .select({ lessonId: schema.attempt.lessonId, at: sql<number>`max(${schema.attempt.createdAt})` })
+      .from(schema.attempt)
+      .where(eq(schema.attempt.userId, userId))
+      .groupBy(schema.attempt.lessonId),
+    db
+      .select({ lessonId: schema.cardReview.lessonId, at: sql<number>`max(${schema.cardReview.lastReview})` })
+      .from(schema.cardReview)
+      .where(eq(schema.cardReview.userId, userId))
+      .groupBy(schema.cardReview.lessonId),
+  ]);
+  const last = new Map<string, number>();
+  const bump = (lessonId: string | null, at: number | null) => {
+    if (lessonId && at != null && at > (last.get(lessonId) ?? -1)) last.set(lessonId, Number(at));
+  };
+  for (const r of attempts) bump(r.lessonId, r.at);
+  for (const r of reviews) bump(r.lessonId, r.at);
+  for (const p of progress) if (p.summaryRead || p.bestQuiz > 0 || p.bestExplain > 0) bump(p.lessonId, p.updatedAt.getTime());
+  return last;
+}
+
+/** The most recently studied of these lessons, or null when none has been studied. */
+function latestLesson(lessonIds: string[], last: Map<string, number>): string | null {
+  let best: string | null = null;
+  for (const id of lessonIds) {
+    const at = last.get(id);
+    if (at !== undefined && (best === null || at > last.get(best)!)) best = id;
+  }
+  return best;
+}
 
 async function checkLessonMaster(userId: string, lessonId: string, newBadges: BadgeId[]) {
   const p = await getOrCreateProgress(userId, lessonId);

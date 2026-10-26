@@ -43,6 +43,8 @@ export interface ReaderWithLessons {
   title: string;
   course: string | null;
   published: boolean;
+  /** Most recently studied lesson of this reader (attempt, card review or progress), if any. */
+  lastStudiedLessonId: string | null;
   lessons: LessonSummary[];
 }
 
@@ -112,6 +114,13 @@ export interface LeaderboardEntry {
   streak: number;
   level: number;
   me: boolean;
+}
+
+export interface Leaderboard {
+  period: "week" | "all";
+  top: LeaderboardEntry[];
+  me: LeaderboardEntry | null;
+  totalPlayers: number;
 }
 
 // ----- admin -----

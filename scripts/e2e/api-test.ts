@@ -34,6 +34,7 @@ ok(Array.isArray(orModels) || orSt === 502, "openrouter models returns array (or
 ok((await j(student, "POST", "/admin/settings/ai/validate", { provider: "google" }))[0] === 403, "students cannot validate keys");
 const [, readers] = await j(student, "GET", "/readers");
 const lesson = readers[0].lessons[0];
+ok(readers[0].lastStudiedLessonId === null, "/readers: lastStudiedLessonId is null before studying");
 console.log("lessons visible:", readers[0].lessons.length, lesson.code);
 const [, detail] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("detail:", detail.quizCount, detail.flashcardCount, detail.openCount);
@@ -63,6 +64,7 @@ ok(
   "/me returns exactly 3 quests with id/target/reward/progress/done",
 );
 console.log("stats:", me.stats, me.badges.map((b: any) => b.id));
+ok((await j(student, "GET", "/readers"))[1][0].lastStudiedLessonId === lesson.id, "/readers: lastStudiedLessonId is the studied lesson");
 const [, l2] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("progress:", l2.progress);
 await j(bob, "PATCH", "/me", { nickname: "Bobby" });

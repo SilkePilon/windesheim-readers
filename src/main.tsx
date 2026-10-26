@@ -13,6 +13,10 @@ import "./index.css";
 import { App } from "./App";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { captureInstallPrompt } from "@/lib/install";
+
+// Before React mounts, so an early `beforeinstallprompt` is kept for the install drawer.
+captureInstallPrompt();
 
 // A data router (one catch-all route; App keeps its declarative <Routes>) so pages can
 // use `useBlocker`, e.g. the admin structure editor's unsaved-changes guard.

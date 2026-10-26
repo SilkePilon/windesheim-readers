@@ -1,10 +1,32 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Service worker (production build only; disabled in `vite` dev). The manifest stays
+    // in public/manifest.webmanifest, linked once from index.html, so the plugin doesn't
+    // generate or inject its own.
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "script-defer",
+      manifest: false,
+      workbox: {
+        // App shell: html, js, css, latin fonts (all the UI needs) and the brand assets.
+        globPatterns: ["**/*.{html,js,css,svg,png,ico,webmanifest}", "**/*-latin-*.woff2"],
+        globIgnores: ["**/*-ext-*.woff2", "brand/logo-email.png"], // email-only asset
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true,
+        // API responses are never cached: data stays fresh and auth isn't stored.
+        runtimeCaching: [{ urlPattern: ({ url }) => url.pathname.startsWith("/api/"), handler: "NetworkOnly" }],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

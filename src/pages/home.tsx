@@ -7,6 +7,7 @@ import { PageSpinner } from "@/components/page";
 import { Chip } from "@/components/game/chip";
 import { LessonPath } from "@/components/game/lesson-path";
 import { QuestCard } from "@/components/game/quest-card";
+import { InstallNudge } from "@/components/install-drawer";
 import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
 import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
 import { DAILY_XP_GOAL } from "@shared/game";
@@ -68,6 +69,7 @@ export default function HomePage() {
           </>
         )}
       </div>
+      <InstallNudge />
     </div>
   );
 }

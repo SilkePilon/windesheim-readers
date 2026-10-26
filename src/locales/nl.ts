@@ -294,6 +294,16 @@ const nl = {
     badges: "Badges",
     lockedBadge: "Nog niet verdiend",
   },
+  install: {
+    title: "Installeer Windesheim Readers",
+    body: "Open je reader in één tik vanaf je beginscherm.",
+    install: "Installeren",
+    notNow: "Niet nu",
+    stepShare: "Tik op <b>Deel</b>",
+    stepAdd: "Kies <b>Zet op beginscherm</b>",
+    gotIt: "Begrepen",
+    profileRow: "App installeren",
+  },
   badges: {
     first_steps: { name: "Eerste stap", desc: "Je eerste XP verdiend" },
     streak_3: { name: "Op dreef", desc: "3 dagen streak" },

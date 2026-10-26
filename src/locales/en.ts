@@ -296,6 +296,16 @@ const en: Messages = {
     badges: "Badges",
     lockedBadge: "Not earned yet",
   },
+  install: {
+    title: "Install Windesheim Readers",
+    body: "Open your reader in one tap from your home screen.",
+    install: "Install",
+    notNow: "Not now",
+    stepShare: "Tap <b>Share</b>",
+    stepAdd: "Choose <b>Add to Home Screen</b>",
+    gotIt: "Got it",
+    profileRow: "Install app",
+  },
   badges: {
     first_steps: { name: "First step", desc: "Earned your first XP" },
     streak_3: { name: "On a roll", desc: "3 day streak" },

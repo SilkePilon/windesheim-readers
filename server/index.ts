@@ -54,6 +54,16 @@ app.route("/api", learn);
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));
 
 if (env.isProd) {
+  // The app shell and service worker files must revalidate on every load, or clients get
+  // stuck on an old build. Hashed /assets/* files are left to the default.
+  app.use("/*", async (c, next) => {
+    await next();
+    const p = c.req.path;
+    const noCache =
+      /^\/(sw\.js|registerSW\.js|workbox-[\w-]+\.js|manifest\.webmanifest)$/.test(p) ||
+      c.res.headers.get("Content-Type")?.startsWith("text/html");
+    if (noCache) c.header("Cache-Control", "no-cache");
+  });
   app.use("/*", serveStatic({ root: "./dist" }));
   app.get("*", serveStatic({ path: "./dist/index.html" }));
 }

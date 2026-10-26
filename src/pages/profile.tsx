@@ -6,6 +6,8 @@ import {
   Bird,
   Brain,
   Check,
+  ChevronRight,
+  Download,
   Flame,
   GraduationCap,
   Layers,
@@ -29,6 +31,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Page, PageSpinner } from "@/components/page";
 import { PlayerAvatar } from "@/components/game/player-avatar";
+import { InstallDrawer } from "@/components/install-drawer";
+import { useInstall } from "@/lib/install";
 import { api } from "@/lib/api";
 import { setLocale } from "@/lib/i18n";
 import { useInvalidateProgress, useMe } from "@/lib/queries";
@@ -141,6 +145,7 @@ export default function ProfilePage() {
             </Select>
           </SettingRow>
           <ThemeRow />
+          <InstallRow />
           <button
             type="button"
             onClick={signOut}
@@ -253,6 +258,28 @@ function NicknameRow({ current, placeholder, onSave }: { current: string; placeh
         )}
       </form>
     </SettingRow>
+  );
+}
+
+/** "Install app" row: only while install is possible and the app isn't installed yet. */
+function InstallRow() {
+  const { t } = useTranslation();
+  const { platform } = useInstall();
+  const [open, setOpen] = useState(false);
+  if (platform !== "prompt" && platform !== "ios-safari") return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex min-h-12 items-center gap-3 border-t-2 border-background px-4 py-3 text-left text-sm font-bold outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+      >
+        <Download className="size-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1">{t("install.profileRow")}</span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <InstallDrawer open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 

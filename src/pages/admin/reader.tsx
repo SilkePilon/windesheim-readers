@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useBlocker, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -331,6 +331,25 @@ export default function AdminReaderPage() {
     if (data && !dirty) setRows(toRows(data.lessons));
   }, [data, dirty]);
 
+  // Unsaved structure edits: guard in-app navigation (tabs, back arrow, dock, browser
+  // Back) with a dialog, and reload/close with the browser's own prompt.
+  // Set once the admin chose to leave (discard, or the reader was deleted). The page can
+  // stay mounted briefly during the route transition, so both guards check it.
+  const leaving = useRef(false);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+  );
+  useEffect(() => {
+    if (!dirty) return;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (leaving.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [dirty]);
+
   const lessonById = useMemo(() => new Map(data?.lessons.map((l) => [l.id, l]) ?? []), [data]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -491,6 +510,7 @@ export default function AdminReaderPage() {
                       variant="destructive"
                       onClick={async () => {
                         await api.del(`/admin/readers/${id}`);
+                        leaving.current = true;
                         void qc.invalidateQueries({ queryKey: ["readers"] });
                         void qc.invalidateQueries({ queryKey: ["admin", "readers"] });
                         navigate("/admin");
@@ -583,6 +603,26 @@ export default function AdminReaderPage() {
       {dirty && <div aria-hidden className="h-20" />}
       <SaveBar dirty={dirty} saving={saving} canSave={valid && !busy} hint={valid ? undefined : t("admin.invalidRows")} onSave={save} onReset={reset} />
       <PagePreview readerId={id} page={preview} onClose={() => setPreview(null)} />
+      <AlertDialog open={blocker.state === "blocked"} onOpenChange={(o) => !o && blocker.reset?.()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("admin.leaveTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("admin.leaveText")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>{t("admin.leaveStay")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                leaving.current = true;
+                blocker.proceed?.();
+              }}
+            >
+              {t("admin.leaveDiscard")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

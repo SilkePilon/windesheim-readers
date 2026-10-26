@@ -191,7 +191,7 @@ function ReaderCard({ r, onRetry, retrying }: { r: AdminReader; onRetry: () => v
 }
 
 /** Window-level PDF drop: dragging a file anywhere on the page shows an overlay. */
-function usePageDrop(onDrop: (file: File) => void) {
+function usePageDrop(onDrop: (files: File[]) => void) {
   const [dragging, setDragging] = useState(false);
   const cb = useRef(onDrop);
   cb.current = onDrop;
@@ -219,8 +219,8 @@ function usePageDrop(onDrop: (file: File) => void) {
       e.preventDefault();
       depth = 0;
       setDragging(false);
-      const f = e.dataTransfer?.files[0];
-      if (f) cb.current(f);
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (files.length) cb.current(files);
     };
     window.addEventListener("dragenter", enter);
     window.addEventListener("dragleave", leave);
@@ -247,11 +247,14 @@ export default function AdminReadersPage() {
     refetchInterval: (q) => (q.state.data?.some((r) => BUSY.includes(r.status)) ? 3000 : false),
   });
 
-  const dragging = usePageDrop((f) => {
-    if (!isPdf(f)) {
+  const dragging = usePageDrop((files) => {
+    // One reader per upload: take the first PDF and say so when more were dropped.
+    const f = files.find(isPdf);
+    if (!f) {
       toast.error(t("admin.dropNotPdf"));
       return;
     }
+    if (files.length > 1) toast.info(t("admin.dropOnlyOne", { name: f.name }));
     setFile(f);
     setOpen(true);
   });

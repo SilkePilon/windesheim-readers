@@ -1,4 +1,4 @@
-const PORT = process.env.E2E_PORT ?? "3100";
+const PORT = process.env.E2E_PORT ?? "3200";
 const LOG = process.env.E2E_LOG ?? "/tmp/wr-e2e/srv.log";
 const base = `http://localhost:${PORT}/api`;
 const H = { "content-type": "application/json", origin: "http://localhost:5173" };

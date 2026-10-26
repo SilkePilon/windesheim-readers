@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Runs the API regression tests against a throwaway server (port 3100, temp DB).
+# Runs the API regression tests against a throwaway server (port 3200, temp DB).
 # Never touches the demo on port 3000 or ./data.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 DIR=/tmp/wr-e2e
-export E2E_PORT=${E2E_PORT:-3100} E2E_LOG=$DIR/srv.log
+export E2E_PORT=${E2E_PORT:-3200} E2E_LOG=$DIR/srv.log
 rm -rf "$DIR" && mkdir -p "$DIR/uploads"
 env -u RESEND_API_KEY PORT=$E2E_PORT DATABASE_PATH=$DIR/app.db UPLOAD_DIR=$DIR/uploads \
   APP_URL=http://localhost:5173 APP_SECRET=e2e-secret-e2e-secret-e2e-secret-00 \

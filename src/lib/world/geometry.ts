@@ -1,7 +1,7 @@
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Point = { x: number; y: number };
 
-export type ZoneTag = "node" | "levelbar" | "bubble" | "road" | "piece" | "banner";
+export type ZoneTag = "node" | "levelbar" | "bubble" | "road" | "piece" | "banner" | "finale";
 export type RectZone = Rect & { kind: "rect"; tag: ZoneTag };
 export type Circle = { kind: "circle"; tag: ZoneTag; cx: number; cy: number; r: number };
 /** One capsule of the road corridor: a polyline segment of the road, inflated by `r`. */

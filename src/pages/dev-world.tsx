@@ -28,6 +28,8 @@ const WORLDS = [
   { label: "3 weken", groups: sample(3, 2, 2) },
   { label: "8 weken", groups: sample(8, 2, 5) },
   { label: "12 weken", groups: sample(12, 3, 14) },
+  // Every lesson done: the finale gate opens.
+  { label: "3 weken · alles af", groups: sample(3, 2, 6) },
 ];
 
 /** Dev-only gallery (/dev/world, `?dark` for the evening grade): every set piece × stage × side, plus sample worlds. */

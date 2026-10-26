@@ -3,6 +3,7 @@ import type { WorldLayout, WorldOp } from "@/lib/world/compose";
 import { hashSeed, mulberry32 } from "@/lib/world/rng";
 import type { BiomeId, SetPiece, Stage } from "@/lib/world/types";
 import { cloudPuff, r1, sparkle } from "./kit";
+import { finaleGate, finaleSign } from "./biomes/campus";
 import { REGISTRY } from "./registry";
 
 export type RenderOpts = {
@@ -10,6 +11,8 @@ export type RenderOpts = {
   dark?: boolean;
   /** Banner text, e.g. "Week 3 · Zwolle". Defaults to "Week n". */
   label?: (b: { biome: BiomeId; week: number }) => string;
+  /** Text on the finale gate's sign (closed / every lesson done). */
+  finaleLabel?: (done: boolean) => string;
 };
 
 const BIOME_IDS = Object.keys(REGISTRY) as BiomeId[];
@@ -68,18 +71,24 @@ function segmentBody(ops: WorldOp[], muted: (op: WorldOp) => boolean, lights: st
       out += m ? MUTE_OPEN : "</g>";
       open = m;
     }
-    out += liftLights(op.svg, m ? null : lights);
+    const tf = op.scale ? scaleAbout(op.anchor.x, op.anchor.y, op.scale) : "";
+    const svg = liftLights(op.svg, m ? null : lights, tf);
+    out += tf ? `<g transform="${tf}">${svg}</g>` : svg;
   }
   return open ? out + "</g>" : out;
 }
 
-function liftLights(svg: string, lights: string[] | null) {
+/** Lifts light halos out of `svg` into `lights` (wrapped in the op's transform, if any). */
+function liftLights(svg: string, lights: string[] | null, tf = "") {
   if (!svg.includes("wl-light")) return svg;
   return svg.replace(LIGHT_RE, (m) => {
-    lights?.push(m);
+    lights?.push(tf ? `<g transform="${tf}">${m}</g>` : m);
     return "";
   });
 }
+
+/** Scale by `s` about (x, y): smaller pieces at tight screen-edge slots. */
+const scaleAbout = (x: number, y: number, s: number) => `matrix(${s} 0 0 ${s} ${r1(x * (1 - s))} ${r1(y * (1 - s))})`;
 
 /** Evening grade: a multiply wash, deep blue-violet, darker towards the top (the night ahead). */
 const dusk = (id: string, x: number, w: number, h: number) =>
@@ -166,6 +175,8 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
       if (op.stage === 0) over += fogOver(op.bbox, op.side ?? 1, k * 7 + i);
       if (op.lessonId && nodeState.get(op.lessonId) === "current") over += sparkles(op.bbox);
     });
+    // The finale gate tops the last segment (never fogged: it is the goal in the distance).
+    if (layout.finale && k === layout.segments.length - 1) over += liftLights(finaleGate(layout.finale.x, layout.finale.y, layout.finale.done), lights);
     segs += `<g class="wseg" data-seg="${k}" data-biome="${s.biome}">${segmentBody(ops, muted, lights)}${over}</g>`;
   });
 
@@ -178,6 +189,8 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
 
   const label = opts.label ?? ((b) => `Week ${b.week}`);
   const banners = layout.banners.map((b) => banner(b.y, b.biome, label(b), W)).join("");
+  const f = layout.finale;
+  const sign = f ? finaleSign(f.x, f.y, f.done, (opts.finaleLabel ?? ((done) => (done ? "Diploma!" : "Finish")))(f.done)) : "";
 
   const art =
     `<defs>${SHARED_DEFS}${groundGradient(layout, `${p}-ground`)}</defs>` +
@@ -188,7 +201,7 @@ export function renderWorldSvg(layout: WorldLayout, opts: RenderOpts = {}): stri
     segs +
     `<rect x="-20" width="${W + 40}" height="${H}" fill="url(#wk-grainp)" opacity=".9"/>` +
     dusk(`${p}-dusk`, -20, W + 40, H);
-  return layers(W, H, opts.dark ? " wl-dark" : "", art, lights.join(""), banners);
+  return layers(W, H, opts.dark ? " wl-dark" : "", art, lights.join(""), banners + sign);
 }
 
 /**

@@ -596,3 +596,101 @@ export const campus: WorldBiome = {
   ],
   pieces: [mainBuilding, libraryPiece, lecture, bikeShed, sports, housing, observatory, gradStage],
 };
+
+// ---------------------------------------------------------------- finale
+
+const PILLAR_X = 52;
+const PILLAR_H = 70;
+
+/** One gate leaf: iron bars between two rails, `w` wide (negative = mirrored), skewed when open. */
+function leaf(x: number, y: number, w: number, open: boolean) {
+  const h = 42;
+  const dx = open ? (w > 0 ? 6 : -6) : 0;
+  const ww = open ? w * 0.34 : w;
+  const n = Math.max(2, Math.round(Math.abs(ww) / 6));
+  let bars = "";
+  for (let i = 0; i <= n; i++) {
+    const bx = r1(x + (ww * i) / n);
+    const k = r1((dx * i) / n);
+    bars += `M${bx} ${r1(y + k)} V${r1(y - h + k - (open ? 0 : 6 * Math.sin((Math.PI * i) / n)))} `;
+  }
+  const top = open ? `M${x} ${y - h} L${r1(x + ww)} ${r1(y - h + dx)}` : `M${x} ${y - h} Q${r1(x + ww / 2)} ${y - h - 9} ${r1(x + ww)} ${y - h}`;
+  return (
+    `<path d="${bars}" stroke="#2A2158" stroke-width="2.2" stroke-linecap="round"/>` +
+    `<path d="${top} M${x} ${y - 6} L${r1(x + ww)} ${r1(y - 6 + dx)} M${x} ${y - 24} L${r1(x + ww)} ${r1(y - 24 + dx)}" stroke="#2A2158" stroke-width="2.6" fill="none" stroke-linecap="round"/>` +
+    `<path d="${top}" stroke="${C.yellow}" stroke-width="1" fill="none" stroke-linecap="round" opacity=".8"/>`
+  );
+}
+
+/** A brick gate pillar with a cap and a lantern (or a flag once the reader has finished). */
+function pillar(x: number, y: number, done: boolean, flagCol: string) {
+  const top = y - PILLAR_H;
+  return (
+    sh(x, y, 14, 3.5) +
+    box(x - 9, y, 18, PILLAR_H, 8, FRONT, SIDE, TOP) +
+    `<path d="M${x - 9} ${y - 22} H${x + 9} M${x - 9} ${y - 46} H${x + 9}" stroke="${SIDE}" stroke-width="1.2"/>` +
+    box(x - 12, top, 24, 6, 9, ROOF, C.grapeD, "#8C66FF") +
+    (done
+      ? flag(x, top - 6, flagCol, 26)
+      : `<rect x="${x - 4}" y="${top - 16}" width="8" height="10" rx="2" fill="${C.yellowL}"/><path d="M${x - 5} ${top - 16} L${x} ${top - 21} L${x + 5} ${top - 16}Z" fill="${C.grapeD}"/>` + glow(x, top - 11, 16, true))
+  );
+}
+
+/**
+ * The finale at the end of the road (base point = road end): a campus gate with an arch. Closed
+ * (padlocked, lanterns lit) until every lesson is done; then open, with flags and falling
+ * confetti. Fits `FINALE_ZONE` (compose.ts): x ±84, y −124…+12. The sign text is drawn by
+ * `finaleSign` in the text layer.
+ */
+export function finaleGate(x: number, y: number, done: boolean) {
+  const L = x - PILLAR_X;
+  const R = x + PILLAR_X;
+  const inner = PILLAR_X - 9;
+  const plaza =
+    `<ellipse cx="${x}" cy="${y + 2}" rx="78" ry="10" fill="${done ? "#C9B8F2" : "#D8C49C"}"/>` +
+    `<ellipse cx="${x}" cy="${y + 1}" rx="64" ry="7" fill="${done ? "#F7F3FF" : "#EADBB8"}"/>`;
+  const arch =
+    `<path d="M${L - 4} ${y - PILLAR_H - 6} Q${x} ${y - PILLAR_H - 44} ${R + 4} ${y - PILLAR_H - 6} L${R + 4} ${y - PILLAR_H + 2} Q${x} ${y - PILLAR_H - 34} ${L - 4} ${y - PILLAR_H + 2}Z" fill="${ROOF}"/>` +
+    `<path d="M${L - 4} ${y - PILLAR_H - 6} Q${x} ${y - PILLAR_H - 44} ${R + 4} ${y - PILLAR_H - 6}" stroke="#8C66FF" stroke-width="2.4" fill="none"/>`;
+  const gate = done
+    ? leaf(x - inner, y, inner, true) + leaf(x + inner, y, -inner, true)
+    : leaf(x - inner, y, inner, false) +
+      leaf(x + inner, y, -inner, false) +
+      `<rect x="${x - 4}" y="${y - 22}" width="8" height="7" rx="1.5" fill="${C.yellow}"/><path d="M${x - 2.4} ${y - 22} V${y - 25} Q${x} ${y - 28} ${x + 2.4} ${y - 25} V${y - 22}" stroke="${C.yellow}" stroke-width="1.4" fill="none"/>`;
+  const confetti = done
+    ? Array.from({ length: 18 }, (_, i) => {
+        const cx = x - 70 + ((i * 53) % 140);
+        const cy = y - 112 + ((i * 29) % 58);
+        const col = [C.pink, C.yellow, "#8EC5FF", C.greenL, C.orange, "#fff"][i % 6];
+        const bit = i % 3 ? `<rect x="-1.4" y="-2.2" width="2.8" height="4.4" rx=".5" fill="${col}"/>` : `<circle r="1.8" fill="${col}"/>`;
+        return anim(cx, cy, "confetti", bit, -r1((i * 0.37) % 2.6));
+      }).join("") +
+      glow(x, y - 30, 46, true) +
+      star(x - 30, y - 96, 1, 0.3) +
+      star(x + 34, y - 104, 0.9, 1.1)
+    : "";
+  return (
+    `<g data-finale="${done ? "open" : "closed"}">` +
+    plaza +
+    pillar(L, y, done, C.pink) +
+    gate +
+    pillar(R, y, done, C.yellow) +
+    arch +
+    confetti +
+    `</g>`
+  );
+}
+
+/** The sign on the arch (text layer, so it stays crisp under the evening grade). */
+export function finaleSign(x: number, y: number, done: boolean, text: string) {
+  const w = Math.round(Math.min(120, Math.max(64, text.length * 8.4 + 26)));
+  // Resting on the arch's apex (y − 95).
+  const cy = y - PILLAR_H - 38;
+  const [bg, lip] = done ? [C.yellow, C.orangeD] : ["#4A22C4", "#2A2158"];
+  const safe = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (
+    `<g transform="translate(${r1(x)} ${r1(cy)})">` +
+    `<rect x="${-w / 2}" y="-10" width="${w}" height="24" rx="12" fill="${lip}"/><rect x="${-w / 2}" y="-13" width="${w}" height="24" rx="12" fill="${bg}"/>` +
+    `<text y="4" text-anchor="middle" font-family="Fredoka, ui-rounded, system-ui, sans-serif" font-weight="700" font-size="13" fill="${done ? C.ink : "#fff"}">${safe}</text></g>`
+  );
+}

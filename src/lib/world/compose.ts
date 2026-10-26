@@ -20,11 +20,22 @@ const INNER_FAR_CX = 335;
 const MID_GAP_DY = 100;
 const X_MIN = -20;
 const X_MAX = 410;
-/** Set pieces stay (almost) on screen: a clipped piece reads as a mistake, clipped filler doesn't. */
-const PIECE_X_MIN = -10;
-const PIECE_X_MAX = 400;
+/** Set pieces stay fully on screen, with a small inset: a clipped piece reads as a mistake, clipped filler doesn't. */
+const PIECE_INSET = 4;
+const PIECE_X_MIN = PIECE_INSET;
+const PIECE_X_MAX = WORLD_WIDTH - PIECE_INSET;
+/** Piece sizes to try, largest first (the smaller one is drawn scaled about its anchor). */
+const PIECE_SCALES = [1, 0.86];
 const BAND = 160;
 const FLORA_MIN_DIST = 26;
+/** Finale (the gate at the end of the road): its base sits this far above the last lesson. */
+const FINALE_DY = 200;
+/** The gate's exclusion zone, relative to its base point (pillars, arch, flags, confetti). */
+export const FINALE_ZONE = { x: -84, y: -124, w: 168, h: 136 } as const;
+/** Space above the top of the finale zone. */
+const FINALE_TOP_PAD = 20;
+/** The last lesson's y: room for the finale above it, nothing more. */
+const LAST_NODE_Y = FINALE_DY - FINALE_ZONE.y + FINALE_TOP_PAD;
 
 export type WorldLesson = { id: string; code: string; week: number; state: PathNodeState; level: number; mastery: number };
 export type WorldInput = { seed: string; lessons: WorldLesson[] };
@@ -44,12 +55,17 @@ export type WorldOp = {
   pieceId?: string;
   stage?: Stage;
   lessonId?: string;
+  /** Set pieces drawn smaller than designed (scaled about the anchor); absent = 1. */
+  scale?: number;
 };
+/** The gate at the end of the road; `done` once every lesson is done (stage 2: open, celebrating). */
+export type WorldFinale = { x: number; y: number; done: boolean };
 export type WorldLayout = {
   width: typeof WORLD_WIDTH;
   height: number;
   nodes: WorldNode[];
   road: { d: string; splitY: number };
+  finale: WorldFinale | null;
   zones: Zone[];
   segments: WorldSegment[];
   /** One per week border (the week above it); `y` is the border. */
@@ -77,16 +93,17 @@ function pickFlora(rng: Rng, flora: Flora[]): Flora | undefined {
   return flora[flora.length - 1];
 }
 
-/** Road path (the mockup's cubic chain) plus its corridor as capsule zones. */
-function buildRoad(nodes: WorldNode[], H: number): { d: string; zones: Zone[] } {
+/** Road path (the mockup's cubic chain, ending at the finale gate) plus its corridor as capsule zones. */
+function buildRoad(nodes: WorldNode[], H: number, end: Point): { d: string; zones: Zone[] } {
   if (!nodes.length) return { d: "", zones: [] };
   const first = nodes[0];
-  const last = nodes[nodes.length - 1];
   const pts: Point[] = [{ x: first.x, y: H + 30 }, { x: first.x, y: first.y }];
   let d = `M ${first.x} ${H + 30} L ${first.x} ${first.y}`;
-  for (let i = 0; i < nodes.length - 1; i++) {
-    const a = nodes[i];
-    const b = nodes[i + 1];
+  // The last leg swings from the final lesson to the gate.
+  const stops = [...nodes, end];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i];
+    const b = stops[i + 1];
     const m = (a.y + b.y) / 2;
     d += ` C ${a.x} ${m}, ${b.x} ${m}, ${b.x} ${b.y}`;
     for (let s = 1; s <= ROAD_STEPS; s++) {
@@ -99,8 +116,6 @@ function buildRoad(nodes: WorldNode[], H: number): { d: string; zones: Zone[] } 
       });
     }
   }
-  d += ` L ${last.x} -40`;
-  pts.push({ x: last.x, y: -40 });
   const zones: Zone[] = [];
   for (let i = 0; i < pts.length - 1; i++)
     zones.push({ kind: "road", tag: "road", x1: pts[i].x, y1: pts[i].y, x2: pts[i + 1].x, y2: pts[i + 1].y, r: ROAD_HALF });
@@ -169,7 +184,7 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
   const weeks = [...new Set(input.lessons.map((l) => l.week))].sort((a, b) => a - b);
   const ordered = weeks.flatMap((w) => input.lessons.filter((l) => l.week === w));
   const n = ordered.length;
-  const H = 360 + GAP * n;
+  const H = n ? LAST_NODE_Y + 210 + GAP * (n - 1) : 360;
 
   const nodes: WorldNode[] = ordered.map((l, i) => ({
     id: l.id,
@@ -183,7 +198,9 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     r: l.state === "current" ? 38 : 32,
   }));
   const current = nodes.find((nd) => nd.state === "current");
-  const road = buildRoad(nodes, H);
+  const last = nodes.at(-1);
+  const finale: WorldFinale | null = last ? { x: MID, y: last.y - FINALE_DY, done: nodes.every((nd) => nd.state === "done") } : null;
+  const road = buildRoad(nodes, H, finale ?? { x: MID, y: 0 });
 
   // Segments: one per week, borders halfway between neighbouring weeks' nodes.
   const segments: WorldSegment[] = weeks.map((week, k) => {
@@ -217,6 +234,7 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
       h: 34,
     });
   for (const z of road.zones) index.add(z);
+  if (finale) index.add({ kind: "rect", tag: "finale", x: finale.x + FINALE_ZONE.x, y: finale.y + FINALE_ZONE.y, w: FINALE_ZONE.w, h: FINALE_ZONE.h });
   for (const b of banners) index.add({ kind: "rect", tag: "banner", x: MID - 95, y: b.y - 20, w: 190, h: 40 });
 
   const ops: WorldOp[] = [];
@@ -233,31 +251,34 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     const candidates = fresh.length ? fresh : shuffled;
     const slots = pieceSlots(nd);
     prevPiece = null;
-    search: for (const p of candidates) {
-      for (const slot of slots) {
-        const rel = p.footprint(slot.side);
-        if (!rel.length) continue search;
-        const { x: ax, y: ay } = slot.place(bboxOf(rel));
-        const rects = rel.map((r) => ({ x: r.x + ax, y: r.y + ay, w: r.w, h: r.h }));
-        if (rects.some((r) => r.x < PIECE_X_MIN || r.x + r.w > PIECE_X_MAX || index.hits(r))) continue;
-        for (const r of rects) index.add({ kind: "rect", tag: "piece", ...r });
-        const stage = stageFor(nd.state);
-        ops.push({
-          y: ay,
-          kind: "piece",
-          svg: p.render({ x: ax, y: ay, side: slot.side, stage, current: nd.state === "current", rng }),
-          anchor: { x: ax, y: ay },
-          bbox: bboxOf(rects),
-          segment,
-          side: slot.side,
-          pieceId: p.id,
-          stage,
-          lessonId: nd.id,
-        });
-        prevPiece = p.id;
-        break search;
+    // Full size first; if nothing fits (the screen edge is tight), a slightly smaller piece.
+    search: for (const scale of PIECE_SCALES)
+      for (const p of candidates) {
+        for (const slot of slots) {
+          const rel = p.footprint(slot.side).map((r) => ({ x: r.x * scale, y: r.y * scale, w: r.w * scale, h: r.h * scale }));
+          if (!rel.length) continue;
+          const { x: ax, y: ay } = slot.place(bboxOf(rel));
+          const rects = rel.map((r) => ({ x: r.x + ax, y: r.y + ay, w: r.w, h: r.h }));
+          if (rects.some((r) => r.x < PIECE_X_MIN || r.x + r.w > PIECE_X_MAX || index.hits(r))) continue;
+          for (const r of rects) index.add({ kind: "rect", tag: "piece", ...r });
+          const stage = stageFor(nd.state);
+          ops.push({
+            y: ay,
+            kind: "piece",
+            svg: p.render({ x: ax, y: ay, side: slot.side, stage, current: nd.state === "current", rng }),
+            anchor: { x: ax, y: ay },
+            bbox: bboxOf(rects),
+            segment,
+            side: slot.side,
+            pieceId: p.id,
+            stage,
+            lessonId: nd.id,
+            ...(scale !== 1 && { scale }),
+          });
+          prevPiece = p.id;
+          break search;
+        }
       }
-    }
   }
 
   // Filler flora: Poisson disc per segment, blended across 160px transition bands.
@@ -298,6 +319,7 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     height: H,
     nodes,
     road: { d: road.d, splitY: current ? current.y : -40 },
+    finale,
     zones: index.zones,
     segments,
     banners,

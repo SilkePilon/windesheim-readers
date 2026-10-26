@@ -351,6 +351,10 @@ const nl = {
       bergen: "De bergen",
       campus: "De campus",
     },
+    finale: {
+      closed: "Finish",
+      done: "Diploma!",
+    },
   },
   admin: {
     title: "Beheer",

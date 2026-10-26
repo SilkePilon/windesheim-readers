@@ -61,6 +61,42 @@ describe("renderWorldSvg", () => {
     expect(svg).toContain("W3-campus");
   });
 
+  test("draws the finale gate (closed, then open) with its sign in the text layer", () => {
+    const open = composeWorld(reader("fin", 2, 2, 4), REGISTRY);
+    const closed = composeWorld(reader("fin", 2, 2, 1), REGISTRY);
+    expect(open.finale!.done).toBe(true);
+    expect(closed.finale!.done).toBe(false);
+    const label = (done: boolean) => (done ? "DONE-LABEL" : "CLOSED-LABEL");
+    const o = renderWorldSvg(open, { finaleLabel: label });
+    const c = renderWorldSvg(closed, { finaleLabel: label });
+    expect(o).toContain('data-finale="open"');
+    expect(o).toContain('class="confetti"');
+    expect(c).toContain('data-finale="closed"');
+    expect(c).not.toContain('class="confetti"');
+    // The gate sits in the last (campus) segment, so it pauses off-screen with it.
+    const lastSeg = c.slice(c.lastIndexOf('<g class="wseg"'));
+    expect(lastSeg).toContain('data-finale="closed"');
+    // The sign is in the text layer, after the art and lights.
+    expect(o.indexOf("DONE-LABEL")).toBeGreaterThan(o.indexOf('class="world-top"'));
+    expect(c).toContain("CLOSED-LABEL");
+  });
+
+  test("smaller edge pieces are drawn scaled about their anchor, halos included", () => {
+    let seen = 0;
+    for (let t = 0; t < 60 && !seen; t++) {
+      const w = composeWorld(reader(`sc${t}`, 6, 4, 12), REGISTRY);
+      const op = w.ops.find((o) => o.kind === "piece" && o.scale);
+      if (!op) continue;
+      seen++;
+      const svg = renderWorldSvg(w, { dark: true });
+      const tf = `matrix(${op.scale} 0 0 ${op.scale} `;
+      expect(svg).toContain(`<g transform="${tf}`);
+      expect(op.bbox.x).toBeGreaterThanOrEqual(4);
+      expect(op.bbox.x + op.bbox.w).toBeLessThanOrEqual(386);
+    }
+    expect(seen).toBe(1);
+  });
+
   test("composes and renders 40 lessons in under 30ms", () => {
     const input = reader("perf", 10, 4, 20);
     renderWorldSvg(composeWorld(input, REGISTRY), {}); // warm-up

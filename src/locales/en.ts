@@ -353,6 +353,10 @@ const en: Messages = {
       bergen: "The mountains",
       campus: "Campus",
     },
+    finale: {
+      closed: "Finish",
+      done: "Graduated!",
+    },
   },
   admin: {
     title: "Admin",

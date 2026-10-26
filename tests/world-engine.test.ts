@@ -116,6 +116,7 @@ function exclusionViolations(w: WorldLayout): string[] {
   const hard: Rect[] = w.nodes.map((n) => ({ x: n.x - 30, y: n.y + n.r + 12, w: 60, h: 10 }));
   if (current) hard.push({ x: current.x > 195 ? current.x - 152 : current.x + 60, y: current.y - 17, w: 96, h: 34 });
   for (const b of w.banners) hard.push({ x: 195 - 95, y: b.y - 20, w: 190, h: 40 });
+  if (w.finale) hard.push({ x: w.finale.x - 84, y: w.finale.y - 124, w: 168, h: 136 });
   const pieces = w.ops.filter((o) => o.kind === "piece");
   for (const op of w.ops.filter((o) => o.kind !== "ground")) {
     const id = `${op.kind}@${op.anchor.x},${op.anchor.y}`;
@@ -150,14 +151,17 @@ describe("composeWorld", () => {
     const w = composeWorld(sample, reg);
     const n = sample.lessons.length;
     expect(w.width).toBe(390);
-    expect(w.height).toBe(360 + 250 * n);
+    // The last lesson sits 344px from the top: room for the finale gate, no empty road.
+    expect(w.height).toBe(304 + 250 * n);
+    expect(w.nodes.at(-1)!.y).toBe(344);
     w.nodes.forEach((node, i) => {
       expect(node.y).toBe(w.height - 210 - i * 250);
       expect(node.x).toBe(i % 2 ? 262 : 128);
       expect(node.r).toBe(node.state === "current" ? 38 : 32);
     });
     expect(w.road.d.startsWith(`M 128 ${w.height + 30} L 128 ${w.nodes[0].y}`)).toBe(true);
-    expect(w.road.d.endsWith(`L ${w.nodes.at(-1)!.x} -40`)).toBe(true);
+    expect(w.finale).toEqual({ x: 195, y: 144, done: false });
+    expect(w.road.d.endsWith(`, 195 ${(344 + 144) / 2}, 195 144`)).toBe(true);
     expect(w.road.splitY).toBe(w.nodes[2].y);
   });
 
@@ -207,7 +211,32 @@ describe("composeWorld", () => {
     expect(pieces.length).toBeGreaterThan(0);
     expect(w.ops.some((o) => o.kind === "flora" && o.svg === "<g data-f/>")).toBe(true);
     for (const p of pieces) expect(p.y).toBe(p.anchor.y);
-    for (const p of pieces) expect(p.bbox.x >= -20 && p.bbox.x + p.bbox.w <= 410).toBe(true);
+    for (const p of pieces) expect(p.bbox.x >= 0 && p.bbox.x + p.bbox.w <= 390).toBe(true);
+  });
+
+  test("set pieces stay fully on screen (x 4…386) over 200 random readers", () => {
+    for (let t = 0; t < 200; t++)
+      for (const reg of [REGISTRY, regBig])
+        for (const p of composeWorld(randomReader(t), reg).ops.filter((o) => o.kind === "piece")) {
+          expect(p.bbox.x).toBeGreaterThanOrEqual(4);
+          expect(p.bbox.x + p.bbox.w).toBeLessThanOrEqual(386);
+        }
+  }, 30000);
+
+  test("the road ends at a finale gate above the last lesson; it opens once every lesson is done", () => {
+    for (let t = 0; t < 50; t++) {
+      const r = randomReader(t);
+      const w = composeWorld(r, REGISTRY);
+      const last = w.nodes.at(-1)!;
+      expect(w.finale).not.toBeNull();
+      expect(w.finale!.x).toBe(195);
+      expect(w.finale!.y).toBe(last.y - 200);
+      expect(w.finale!.y - 124).toBeGreaterThanOrEqual(0);
+      expect(w.finale!.done).toBe(r.lessons.every((l) => l.state === "done"));
+      expect(w.road.d.endsWith(`195 ${w.finale!.y}`)).toBe(true);
+      expect(w.zones.some((z) => z.tag === "finale")).toBe(true);
+    }
+    expect(composeWorld({ seed: "x", lessons: [] }, REGISTRY).finale).toBeNull();
   });
 
   test("hard exclusion holds over 200 random readers", () => {
@@ -238,6 +267,18 @@ describe("composeWorld", () => {
     console.log(`pieces: ${placed}/${lessons} lessons, current: ${currentPlaced}/${currents}`);
     expect(placed / lessons).toBeGreaterThanOrEqual(0.9);
     expect(currentPlaced / currents).toBeGreaterThanOrEqual(0.9);
+  }, 30000);
+
+  test("most lessons get a piece with the real registry too", () => {
+    let lessons = 0;
+    let placed = 0;
+    for (let t = 0; t < 200; t++) {
+      const w = composeWorld(randomReader(t), REGISTRY);
+      lessons += w.nodes.length;
+      placed += new Set(w.ops.filter((o) => o.kind === "piece").map((o) => o.lessonId)).size;
+    }
+    console.log(`real registry pieces: ${placed}/${lessons} lessons`);
+    expect(placed / lessons).toBeGreaterThanOrEqual(0.9);
   }, 30000);
 
   test("piece ops record the side they face, and render with it", () => {

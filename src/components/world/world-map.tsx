@@ -49,6 +49,7 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
     );
     const svg = renderWorldSvg(layout, {
       label: (b) => `${t("common.week", { n: b.week })} · ${t(`world.biome.${b.biome}`)}`,
+      finaleLabel: (done) => t(done ? "world.finale.done" : "world.finale.closed"),
     });
     return { layout, svg };
     // `t` changes with the language, which is in the deps.

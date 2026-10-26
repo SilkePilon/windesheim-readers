@@ -2,6 +2,7 @@ import { and, count, eq, gte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, schema } from "../db";
 import type { BadgeId } from "../../shared/game";
+import type { QuestId } from "../../shared/quests";
 
 const TZ = "Europe/Amsterdam";
 
@@ -48,6 +49,8 @@ export interface XpResult {
   gained: number;
   streak: number;
   newBadges: BadgeId[];
+  /** Daily quests completed by this action. */
+  quests?: QuestId[];
 }
 
 /** Award XP, update the daily streak and check streak / time badges. */

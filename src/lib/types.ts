@@ -1,4 +1,5 @@
 import type { BadgeId } from "@shared/game";
+import type { QuestId } from "@shared/quests";
 
 export interface Me {
   user: {
@@ -25,6 +26,7 @@ export interface Me {
     due: number;
   };
   badges: { id: BadgeId; earnedAt: string }[];
+  quests: { id: QuestId; target: number; reward: number; progress: number; done: boolean }[];
 }
 
 export interface LessonSummary {
@@ -90,6 +92,7 @@ export interface XpResult {
   gained: number;
   streak: number;
   newBadges: BadgeId[];
+  quests?: QuestId[];
 }
 
 export interface GradeResult extends XpResult {

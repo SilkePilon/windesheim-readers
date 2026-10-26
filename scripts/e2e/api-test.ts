@@ -46,6 +46,11 @@ const [, queue] = await j(student, "GET", `/review/queue?lessonId=${lesson.id}`)
 for (const c of queue) await j(student, "POST", "/review", { flashcardId: c.id, rating: 3 });
 console.log("reviewed", queue.length, "due now:", (await j(student, "GET", "/review/queue"))[1].length);
 const [, me] = await j(student, "GET", "/me");
+ok(
+  Array.isArray(me.quests) && me.quests.length === 3 &&
+    me.quests.every((q: any) => q.id && q.target > 0 && q.reward > 0 && typeof q.progress === "number" && typeof q.done === "boolean"),
+  "/me returns exactly 3 quests with id/target/reward/progress/done",
+);
 console.log("stats:", me.stats, me.badges.map((b: any) => b.id));
 const [, l2] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("progress:", l2.progress);

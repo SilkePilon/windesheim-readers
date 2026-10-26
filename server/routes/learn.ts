@@ -19,6 +19,8 @@ import {
   updateProgress,
   xpSince,
 } from "../lib/game";
+import { getQuests, recordQuestEvent } from "../lib/quests";
+import type { QuestEvent, QuestId } from "../../shared/quests";
 import { computeMastery, levelFromXp, XP, type BadgeId } from "../../shared/game";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
@@ -43,6 +45,15 @@ function createQuizSession(userId: string, lessonId: string, questionIds: string
   return id;
 }
 const NEW_CARDS_PER_SESSION = 15;
+
+/** Award XP, then feed the action's quest events (plus the xp itself) to the daily quests. */
+async function award(userId: string, amount: number, reason: string, events: QuestEvent[] = []) {
+  const res = await awardXp(userId, amount, reason);
+  const quests = new Set<QuestId>();
+  for (const e of [...events, { kind: "xp", amount: res.gained, reason } as const])
+    for (const q of (await recordQuestEvent(userId, e)).completed) quests.add(q);
+  return quests.size ? { ...res, quests: [...quests] } : res;
+}
 
 /** Lessons visible to this user: from published readers (admins see all). */
 async function visibleLesson(lessonId: string, isAdmin: boolean) {
@@ -136,6 +147,7 @@ export const learn = new Hono<AppEnv>()
         due,
       },
       badges: badges.map((b) => ({ id: b.badge as BadgeId, earnedAt: b.earnedAt })),
+      quests: await getQuests(u.id),
     });
   })
 
@@ -255,7 +267,7 @@ export const learn = new Hono<AppEnv>()
     const p = await getOrCreateProgress(u.id, row.lesson.id);
     if (p.summaryRead) return c.json({ gained: 0 });
     await updateProgress(u.id, row.lesson.id, { summaryRead: true });
-    return c.json(await awardXp(u.id, XP.summaryRead, "summary"));
+    return c.json(await award(u.id, XP.summaryRead, "summary"));
   })
 
   // ----- flashcards (FSRS spaced repetition) -----
@@ -325,7 +337,10 @@ export const learn = new Hono<AppEnv>()
       .values({ userId: u.id, flashcardId, lessonId: card.lessonId, ...fromCard(next) })
       .onConflictDoUpdate({ target: [schema.cardReview.userId, schema.cardReview.flashcardId], set: fromCard(next) });
 
-    const res = await awardXp(u.id, XP.card[rating] ?? 1, "card");
+    const res = await award(u.id, XP.card[rating] ?? 1, "card", [
+      { kind: "card_review" },
+      { kind: "card_lesson", lessonId: card.lessonId },
+    ]);
     const total = await totalReviews(u.id);
     for (const [n, b] of [[100, "cards_100"], [500, "cards_500"]] as const)
       if (total >= n && (await grantBadge(u.id, b))) res.newBadges.push(b);
@@ -383,7 +398,9 @@ export const learn = new Hono<AppEnv>()
 
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId, kind: "quiz", score: correct, maxScore: max });
     await updateProgress(u.id, lessonId, { quiz: max >= 5 ? correct / max : (correct / max) * 0.6 });
-    const res = await awardXp(u.id, (correct * XP.quizCorrect + (perfect ? XP.quizPerfectBonus : 0)) * factor, "quiz");
+    const res = await award(u.id, (correct * XP.quizCorrect + (perfect ? XP.quizPerfectBonus : 0)) * factor, "quiz", [
+      { kind: "quiz_submit", pct: correct / max, lessonId },
+    ]);
     if (perfect && (await grantBadge(u.id, "perfect_quiz"))) res.newBadges.push("perfect_quiz");
     await checkLessonMaster(u.id, lessonId, res.newBadges);
     return c.json({ ...res, correct, max });
@@ -414,7 +431,7 @@ export const learn = new Hono<AppEnv>()
       locale: u.locale ?? "nl",
     });
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId: q.lessonId, kind: "explain", score: grade.score, maxScore: 100 });
-    const res = await awardXp(u.id, grade.score * XP.openPerPoint, "open");
+    const res = await award(u.id, grade.score * XP.openPerPoint, "open", [{ kind: "open", lessonId: q.lessonId }]);
     return c.json({ ...grade, ...res, modelAnswer: q.data.modelAnswer });
   })
 
@@ -431,7 +448,9 @@ export const learn = new Hono<AppEnv>()
     const grade = await gradeExplanation({ concept, source, explanation, locale: u.locale ?? "nl" });
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId, kind: "explain", score: grade.score, maxScore: 100 });
     await updateProgress(u.id, lessonId, { explain: grade.score / 100 });
-    const res = await awardXp(u.id, grade.score * XP.explainPerPoint, "explain");
+    const res = await award(u.id, grade.score * XP.explainPerPoint, "explain", [
+      { kind: "explain", score: grade.score, lessonId },
+    ]);
     if (grade.score >= 90 && (await grantBadge(u.id, "explain_master"))) res.newBadges.push("explain_master");
     await checkLessonMaster(u.id, lessonId, res.newBadges);
     return c.json({ ...grade, ...res });

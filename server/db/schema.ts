@@ -237,3 +237,16 @@ export const userBadge = sqliteTable(
   },
   (t) => [uniqueIndex("user_badge_uq").on(t.userId, t.badge)],
 );
+
+export const questProgress = sqliteTable(
+  "quest_progress",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    dayKey: text("day_key").notNull(), // YYYY-MM-DD (Europe/Amsterdam)
+    questId: text("quest_id").notNull(),
+    progress: integer("progress").notNull().default(0),
+    seenLessons: text("seen_lessons", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    completedAt: ts("completed_at"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.dayKey, t.questId] })],
+);

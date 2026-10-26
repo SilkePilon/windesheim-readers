@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db, schema } from "../db";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import { awardXp, grantBadge } from "../lib/game";
+import { recordQuestEvent } from "../lib/quests";
 import { displayName } from "../middleware";
 import type { SessionUser } from "../auth";
 import { XP } from "../../shared/game";
@@ -146,7 +147,9 @@ async function end(r: Room) {
     const placeXp = r.players.size >= 2 ? (XP.battlePlace[p.rank - 1] ?? 0) : 0;
     const amount = placeXp + XP.battleParticipation;
     xpById[p.id] = amount;
-    await awardXp(p.id, amount, "battle").catch(() => {});
+    await awardXp(p.id, amount, "battle")
+      .then(() => recordQuestEvent(p.id, { kind: "xp", amount, reason: "battle" }))
+      .catch(() => {});
     await db
       .insert(schema.attempt)
       .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: p.score, maxScore: r.questions.length * 1000 })

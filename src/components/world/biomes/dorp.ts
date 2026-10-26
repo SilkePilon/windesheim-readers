@@ -51,7 +51,7 @@ const windmillPiece = definePiece({
   id: "dorp-windmill",
   biome: "dorp",
   w: 110,
-  h: 96,
+  h: 93,
   below: 17,
   render: (c, X) => {
     // The sails sweep a circle (r ≈ 37.5 at the blade corners): keep the whole sweep inside the footprint.

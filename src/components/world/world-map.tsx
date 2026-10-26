@@ -14,7 +14,7 @@ const press =
 
 const NODE: Record<PathNode["state"], string> = {
   done: `h-16 w-[70px] text-base bg-success text-success-foreground shadow-[0_6px_0_var(--success-shade)] active:shadow-none motion-reduce:active:shadow-[0_6px_0_var(--success-shade)] ${press}`,
-  current: `h-[72px] w-20 text-[19px] bg-primary text-primary-foreground shadow-[0_6px_0_var(--primary-shade),0_0_0_6px_var(--background),0_0_0_9px_var(--primary)] active:shadow-[0_0_0_6px_var(--background),0_0_0_9px_var(--primary)] motion-reduce:active:shadow-[0_6px_0_var(--primary-shade),0_0_0_6px_var(--background),0_0_0_9px_var(--primary)] ${press}`,
+  current: `h-[72px] w-20 text-[19px] bg-primary text-primary-foreground shadow-[0_6px_0_var(--primary-shade)] active:shadow-none motion-reduce:active:shadow-[0_6px_0_var(--primary-shade)] ${press}`,
   started: `h-16 w-[70px] text-base bg-card text-primary shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--primary)_35%,transparent),0_6px_0_var(--chunky)] active:shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--primary)_35%,transparent)] motion-reduce:active:shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--primary)_35%,transparent),0_6px_0_var(--chunky)] ${press}`,
   new: `h-16 w-[70px] text-base bg-card text-muted-foreground shadow-[0_6px_0_var(--chunky)] active:shadow-none motion-reduce:active:shadow-[0_6px_0_var(--chunky)] ${press}`,
 };

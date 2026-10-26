@@ -1,8 +1,10 @@
-const base = "http://localhost:3000/api";
+const PORT = process.env.E2E_PORT ?? "3100";
+const LOG = process.env.E2E_LOG ?? "/tmp/wr-e2e/srv.log";
+const base = `http://localhost:${PORT}/api`;
 const H = { "content-type": "application/json", origin: "http://localhost:5173" };
 await fetch(base + "/auth/sign-in/magic-link", { method: "POST", headers: H, body: JSON.stringify({ email: "eve@student.windesheim.nl" }) });
 await Bun.sleep(300);
-const link = (await Bun.file("/tmp/srv.log").text()).match(/\[magic-link\] eve@student\.windesheim\.nl\n\s+(\S+)/)![1]!.replace("5173", "3000");
+const link = (await Bun.file(LOG).text()).match(/\[magic-link\] eve@student\.windesheim\.nl\n\s+(\S+)/)![1]!.replace("5173", PORT);
 const cookie = (await fetch(link, { redirect: "manual" })).headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
 const j = async (m: string, p: string, b?: unknown) => (await fetch(base + p, { method: m, headers: { ...H, cookie }, body: b ? JSON.stringify(b) : undefined })).json();
 const readers = await j("GET", "/readers");

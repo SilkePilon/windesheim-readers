@@ -1,10 +1,16 @@
-const base = "http://localhost:3000/api";
+const PORT = process.env.E2E_PORT ?? "3100";
+const LOG = process.env.E2E_LOG ?? "/tmp/wr-e2e/srv.log";
+const base = `http://localhost:${PORT}/api`;
 const H = { "content-type": "application/json", origin: "http://localhost:5173" };
+function ok(cond: unknown, msg: string) {
+  if (!cond) { console.error("FAIL:", msg); process.exit(1); }
+  console.log("ok:", msg);
+}
 async function login(email: string) {
   await fetch(base + "/auth/sign-in/magic-link", { method: "POST", headers: H, body: JSON.stringify({ email, callbackURL: "/" }) });
   await Bun.sleep(300);
-  const log = await Bun.file("/tmp/srv.log").text();
-  const link = [...log.matchAll(new RegExp(`\\[magic-link\\] ${email.replace(".", "\\.")}\\n\\s+(\\S+)`, "g"))].pop()![1]!.replace("5173", "3000");
+  const log = await Bun.file(LOG).text();
+  const link = [...log.matchAll(new RegExp(`\\[magic-link\\] ${email.replace(".", "\\.")}\\n\\s+(\\S+)`, "g"))].pop()![1]!.replace("5173", PORT);
   const r = await fetch(link, { redirect: "manual" });
   return r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
 }
@@ -16,22 +22,23 @@ const admin = await login("admin@windesheim.nl");
 const student = await login("s1234567@student.windesheim.nl");
 const bob = await login("bob@student.windesheim.nl");
 console.log("student me:", (await j(student, "GET", "/me"))[1].user.role);
-console.log("student admin access:", (await j(student, "GET", "/admin/readers"))[0]);
+ok((await j(student, "GET", "/admin/readers"))[0] === 403, "students cannot access admin");
 const [, readers] = await j(student, "GET", "/readers");
 const lesson = readers[0].lessons[0];
 console.log("lessons visible:", readers[0].lessons.length, lesson.code);
 const [, detail] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("detail:", detail.quizCount, detail.flashcardCount, detail.openCount);
-// quiz
-const [, qs] = await j(student, "GET", `/lessons/${lesson.id}/quiz?n=10`);
-console.log("quiz qs:", qs.map((q: any) => q.type).join(","), "leak?", JSON.stringify(qs).includes("explanation"));
-const answers = [];
+// quiz (server-side sessions; only the first check counts)
+const [, quiz] = await j(student, "GET", `/lessons/${lesson.id}/quiz?n=10`);
+const qs = quiz.questions;
+ok(typeof quiz.sessionId === "string" && qs.length > 0, "quiz session created");
+ok(!JSON.stringify(qs).includes("explanation"), "quiz questions leak no explanations");
+console.log("quiz qs:", qs.map((q: any) => q.type).join(","));
 for (const q of qs) {
-  // cheat-free: first check with a guess, then submit the correct answer from check
-  const [, c] = await j(student, "POST", `/questions/${q.id}/check`, { answer: q.type === "fill" ? "Strategisch" : q.type === "mc" ? 0 : q.type === "tf" ? true : q.items });
-  answers.push({ questionId: q.id, answer: c.correctAnswer });
+  await j(student, "POST", `/questions/${q.id}/check`, { sessionId: quiz.sessionId, answer: q.type === "fill" ? "Strategisch" : q.type === "mc" ? 0 : q.type === "tf" ? true : q.items });
 }
-const [, sub] = await j(student, "POST", `/lessons/${lesson.id}/quiz/submit`, { answers });
+const [, sub] = await j(student, "POST", `/lessons/${lesson.id}/quiz/submit`, { sessionId: quiz.sessionId });
+ok(typeof sub.gained === "number", "quiz submit awards xp");
 console.log("submit:", sub);
 // read + review
 console.log("read:", (await j(student, "POST", `/lessons/${lesson.id}/read`))[1].gained);
@@ -49,7 +56,7 @@ console.log("invalid review:", (await j(student, "POST", "/review", { flashcardI
 
 // battle
 function ws(cookie: string) {
-  const s = new WebSocket("ws://localhost:3000/api/battle/ws", { headers: { cookie } } as any);
+  const s = new WebSocket(`ws://localhost:${PORT}/api/battle/ws`, { headers: { cookie } } as any);
   const msgs: any[] = [];
   s.onmessage = (e) => msgs.push(JSON.parse(e.data as string));
   return { s, msgs, ready: new Promise((r) => (s.onopen = r)), send: (m: any) => s.send(JSON.stringify(m)) };

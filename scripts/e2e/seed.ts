@@ -1,6 +1,10 @@
 import { Database } from "bun:sqlite";
 const db = new Database(process.argv[2]);
-const reader = db.query("select id from reader limit 1").get() as { id: string };
+let reader = db.query("select id from reader limit 1").get() as { id: string } | null;
+if (!reader) {
+  db.run("insert into reader (id, title, file_name, page_count, status, created_at) values ('e2e-reader', 'E2E Reader', 'e2e.pdf', 40, 'ready', ?)", [Date.now()]);
+  reader = { id: "e2e-reader" };
+}
 db.run("update reader set status='ready', error=null, published=1, course='Organisatieprocessen BC1' where id=?", [reader.id]);
 db.run("delete from lesson where reader_id=?", [reader.id]);
 const id = () => Math.random().toString(36).slice(2, 12);

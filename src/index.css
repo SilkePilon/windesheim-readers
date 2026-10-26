@@ -152,18 +152,19 @@
   --primary-shade: #4a22c4;
   --success: #19c59b;
   --success-shade: #0e9474;
-  --success-foreground: #ffffff;
+  /* Foregrounds on fills: white only where it reaches WCAG AA 4.5:1. */
+  --success-foreground: #0d2a27;
   --warning: #ff8a1f;
   --warning-shade: color-mix(in oklab, var(--warning), black 18%);
-  --warning-foreground: #ffffff;
+  --warning-foreground: #241a4a;
   --hard: #ffa41b;
   --hard-shade: #d68300;
   --danger: #ff5c8a;
   --danger-shade: #d63a68;
-  --danger-foreground: #ffffff;
+  --danger-foreground: #241a4a;
   --info: #3e8bff;
   --info-shade: #2066d6;
-  --info-foreground: #ffffff;
+  --info-foreground: #241a4a;
   --gold: #ffc83d;
   --gold-shade: #e0a100;
   --gold-foreground: #241a4a;

@@ -18,7 +18,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageSpinner } from "@/components/page";
+import { PageError, PageSpinner } from "@/components/page";
 import { Markdown } from "@/components/markdown";
 import { ExplainTab } from "@/components/explain-tab";
 import { OpenTab } from "@/components/open-tab";
@@ -38,9 +38,10 @@ type View = (typeof VIEWS)[number];
 type ActivityId = "cards" | View | "quiz";
 
 export default function LessonPage() {
+  const { t } = useTranslation();
   const { id = "" } = useParams();
   const [params] = useSearchParams();
-  const { data: lesson, isLoading } = useLesson(id);
+  const { data: lesson, isLoading, isError, isFetching, refetch } = useLesson(id);
   const raw = params.get("view");
   const view = VIEWS.find((v) => v === raw) ?? null;
 
@@ -49,6 +50,7 @@ export default function LessonPage() {
     window.scrollTo(0, 0);
   }, [id, view]);
 
+  if (isError && !lesson) return <PageError title={t("lesson.loadFailed")} onRetry={() => void refetch()} retrying={isFetching} />;
   if (isLoading || !lesson) return <PageSpinner />;
   return view ? <SubView lesson={lesson} view={view} /> : <Overview lesson={lesson} />;
 }

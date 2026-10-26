@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
 
 export function Page({ children, className, wide }: { children: ReactNode; className?: string; wide?: boolean }) {
@@ -38,6 +40,25 @@ export function PageHeader({
         {description && <p className="mt-1 text-sm text-muted-foreground md:text-base">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/** A page whose data didn't load: a notice with a retry. */
+export function PageError({ title, onRetry, retrying }: { title?: string; onRetry: () => void; retrying?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex min-h-[50dvh] items-center justify-center px-4">
+      <Notice
+        className="w-full max-w-md"
+        title={title ?? t("common.error")}
+        description={t("common.errorHint")}
+        action={
+          <Button variant="chunky" size="lg" onClick={onRetry} disabled={retrying}>
+            {retrying && <Spinner />} {t("common.retry")}
+          </Button>
+        }
+      />
     </div>
   );
 }

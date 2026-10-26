@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
+import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
@@ -18,14 +19,18 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
   const [answer, setAnswer] = useState("");
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   const submit = async () => {
     setLoading(true);
+    setError(false);
     try {
       const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer });
       setGrade(res);
       celebrate(res, { quietXp: true });
       invalidate();
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -52,6 +57,7 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
             {loading ? <Spinner /> : <Sparkles />} {t("open.submit")}
           </Button>
         </div>
+        {error && <Notice variant="inset" title={t("open.gradeFailed")} description={t("common.errorHint")} />}
       </Card>
       {grade && <GradeCard grade={grade} />}
     </div>
@@ -60,8 +66,23 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
 
 export function OpenTab({ lessonId }: { lessonId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useQuery({ queryKey: ["open", lessonId], queryFn: () => api.get<PublicQuestion[]>(`/lessons/${lessonId}/open`) });
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ["open", lessonId],
+    queryFn: () => api.get<PublicQuestion[]>(`/lessons/${lessonId}/open`),
+  });
   if (isLoading) return <div className="flex justify-center py-12"><Spinner className="size-6" /></div>;
+  if (isError)
+    return (
+      <Notice
+        title={t("common.error")}
+        description={t("common.errorHint")}
+        action={
+          <Button variant="chunky" size="lg" onClick={() => void refetch()} disabled={isFetching}>
+            {isFetching && <Spinner />} {t("common.retry")}
+          </Button>
+        }
+      />
+    );
   if (!data?.length)
     return (
       <Card className="items-center gap-3 px-6 py-10 text-center">

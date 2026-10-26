@@ -6,6 +6,7 @@ import { Bot, Eraser, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/markdown";
+import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
 
 export function TutorTab({ lessonId, code }: { lessonId: string; code: string }) {
@@ -14,7 +15,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   const listRef = useRef<HTMLDivElement>(null);
   // Follow new tutor output only while the student is at the bottom; scrolling up to re-read pauses it.
   const follow = useRef(true);
-  const { messages, sendMessage, status, stop, setMessages, error } = useChat({
+  const { messages, sendMessage, regenerate, status, stop, setMessages, error } = useChat({
     id: `tutor-${lessonId}`,
     transport: new DefaultChatTransport({ api: `/api/lessons/${lessonId}/chat`, credentials: "include" }),
   });
@@ -101,7 +102,17 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
             ))}
           </div>
         )}
-        {error && <p className="text-sm text-destructive">{t("common.error")}: {error.message}</p>}
+        {error && (
+          <Notice
+            title={t("tutor.failed")}
+            description={t("common.errorHint")}
+            action={
+              <Button variant="chunky" size="lg" onClick={() => void regenerate()} disabled={busy}>
+                {t("common.retry")}
+              </Button>
+            }
+          />
+        )}
       </div>
 
       {/* Sits above the floating dock on mobile (16px inset + 60px dock + 5px shadow + gap). */}

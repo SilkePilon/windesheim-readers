@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageSpinner } from "@/components/page";
+import { Notice } from "@/components/notice";
 import { Pill } from "@/components/admin/status-pill";
 import { SaveBar } from "@/components/admin/save-bar";
 import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/model-combobox";
@@ -163,13 +164,15 @@ function RoleCard({
             {result?.ok && <Pill tone="success">{t("admin.ai.testOk", { ms: result.ms })}</Pill>}
           </div>
           {result && !result.ok && (
-            <p
-              role="alert"
-              title={result.error}
-              className="-mt-2 line-clamp-4 rounded-md bg-danger/10 px-2.5 py-2 text-xs break-words text-danger-shade dark:text-danger"
-            >
-              {t("admin.ai.testFail", { error: result.error })}
-            </p>
+            <Notice
+              variant="flat"
+              title={t("admin.ai.testFail")}
+              description={
+                <span title={result.error} className="line-clamp-4">
+                  {result.error}
+                </span>
+              }
+            />
           )}
         </FieldGroup>
       </CardContent>

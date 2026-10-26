@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "@/components/ui/spinner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Notice } from "@/components/notice";
 import { AppLayout } from "@/components/app-layout";
 import { Page, PageHeader } from "@/components/page";
 import { StudyShell } from "@/components/shell/study-shell";
@@ -67,10 +67,9 @@ export default function BattlePage() {
     navigate("/battle");
   };
 
-  const errorText = b.error
-    ? b.error === "KICKED"
-      ? t("battle.kicked")
-      : (t(`battle.errors.${b.error}`, { defaultValue: "" }) as string) || b.error
+  const errorCopy = b.error
+    ? ((t(`battle.errors.${b.error}`, { returnObjects: true, defaultValue: null }) as { title: string; description?: string } | null) ??
+      (t("battle.errors.GENERIC", { returnObjects: true }) as { title: string; description?: string }))
     : null;
 
   if (!room) {
@@ -78,10 +77,13 @@ export default function BattlePage() {
       <AppLayout>
         <Page className="max-w-4xl">
           <PageHeader title={t("battle.title")} description={t("battle.subtitle")} />
-          {errorText && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{errorText}</AlertDescription>
-            </Alert>
+          {errorCopy && (
+            <Notice
+              tone={b.error === "CLOSED" ? "info" : b.error === "KICKED" ? "warning" : "danger"}
+              title={errorCopy.title}
+              description={errorCopy.description}
+              className="mb-5"
+            />
           )}
           {codeParam && !b.error ? (
             <div className="flex justify-center py-16">

@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { PageSpinner } from "@/components/page";
+import { PageError, PageSpinner } from "@/components/page";
 import { FlashcardSession } from "@/components/flashcard-session";
 import { Quiz } from "@/components/quiz";
 import { useLesson } from "@/lib/queries";
@@ -10,7 +10,8 @@ export default function LessonStudyPage({ mode }: { mode: "cards" | "quiz" }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { data: lesson } = useLesson(id);
+  const { data: lesson, isError, isFetching, refetch } = useLesson(id);
+  if (isError && !lesson) return <PageError title={t("lesson.loadFailed")} onRetry={() => void refetch()} retrying={isFetching} />;
   if (!lesson) return <PageSpinner />;
 
   const close = () => navigate(`/lesson/${id}`);

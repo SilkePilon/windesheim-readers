@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { PageSpinner } from "@/components/page";
+import { Notice } from "@/components/notice";
 import { StatusPill, canRetry, readerPillState } from "@/components/admin/status-pill";
 import { AdminActions } from "@/pages/admin/layout";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
@@ -109,7 +110,7 @@ function UploadDialog({
               <FieldLabel htmlFor="course">{t("admin.course")}</FieldLabel>
               <Input id="course" value={course} onChange={(e) => setCourse(e.target.value)} placeholder="Organisatieprocessen BC1" />
             </Field>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <Notice variant="flat" title={t("admin.uploadFailed")} description={error} />}
           </FieldGroup>
           <DialogFooter>
             <Button type="submit" variant="chunky" disabled={!file || busy}>

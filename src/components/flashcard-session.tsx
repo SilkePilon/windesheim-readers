@@ -5,6 +5,7 @@ import { Check, CircleAlert, PartyPopper, RotateCcw, Sparkles, Zap, type LucideI
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { StudyShell } from "@/components/shell/study-shell";
+import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
@@ -195,11 +196,18 @@ export function FlashcardSession({
     );
   } else if (isError) {
     body = (
-      <EndMessage icon={<Sparkles />} title={t("common.error")}>
-        <Button variant="chunky" size="xl" className="w-full" onClick={() => void refetch()}>
-          {t("common.retry")}
-        </Button>
-      </EndMessage>
+      <div className="flex flex-1 items-center justify-center py-10">
+        <Notice
+          className="w-full max-w-md"
+          title={t("common.error")}
+          description={t("common.errorHint")}
+          action={
+            <Button variant="chunky" size="lg" onClick={() => void refetch()} disabled={isFetching}>
+              {isFetching && <Spinner />} {t("common.retry")}
+            </Button>
+          }
+        />
+      </div>
     );
   } else if (!card) {
     const finished = initial > 0;

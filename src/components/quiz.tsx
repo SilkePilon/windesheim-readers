@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { StudyShell } from "@/components/shell/study-shell";
+import { Notice } from "@/components/notice";
 import { FeedbackSheet } from "@/components/game/feedback-sheet";
 import { Chip } from "@/components/game/chip";
 import { QuestionInput, correctAnswerText, isAnswered, type Reveal } from "@/components/question-input";
@@ -180,11 +181,18 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
     );
   } else if (phase === "error") {
     body = (
-      <CenterMessage icon={<ListChecks />} title={t("common.error")}>
-        <Button variant="chunky" size="xl" onClick={() => void start()} disabled={busy}>
-          {busy && <Spinner />} {t("common.retry")}
-        </Button>
-      </CenterMessage>
+      <div className="flex flex-1 items-center justify-center py-10">
+        <Notice
+          className="w-full max-w-md"
+          title={t("common.error")}
+          description={t("common.errorHint")}
+          action={
+            <Button variant="chunky" size="lg" onClick={() => void start()} disabled={busy}>
+              {busy && <Spinner />} {t("common.retry")}
+            </Button>
+          }
+        />
+      </div>
     );
   } else if (phase === "loading" || (phase === "playing" && !q)) {
     body = (

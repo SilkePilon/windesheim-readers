@@ -34,6 +34,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Notice } from "@/components/notice";
 import { Spinner } from "@/components/ui/spinner";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -537,10 +538,13 @@ export default function AdminReaderPage() {
         </Alert>
       )}
       {data.error && !busy && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>{t(data.status === "error" ? "admin.pill.error" : "admin.pill.partial")}</AlertTitle>
-          <AlertDescription className="break-all">{data.error}</AlertDescription>
-        </Alert>
+        <Notice
+          variant="flat"
+          tone={data.status === "error" ? "danger" : "warning"}
+          title={t(data.status === "error" ? "admin.pill.error" : "admin.pill.partial")}
+          description={<span className="break-all">{data.error}</span>}
+          className="mb-4"
+        />
       )}
 
       <Card variant="flat" className="gap-0 py-0">

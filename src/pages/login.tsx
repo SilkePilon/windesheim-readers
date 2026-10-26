@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { MailCheck, TriangleAlert } from "lucide-react";
+import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth-client";
 import { useMe } from "@/lib/queries";
 import { setLocale } from "@/lib/i18n";
 import { PageSpinner } from "@/components/page";
+import { Notice } from "@/components/notice";
 import { completeEmail, STUDENT_DOMAIN, STAFF_DOMAIN, type EmailDomainKind } from "@shared/email";
 import { cn } from "@/lib/utils";
 import { storageGet, storageSet } from "@/lib/storage";
@@ -33,7 +34,8 @@ export default function LoginPage() {
   const [initial] = useState(remembered);
   const [value, setValue] = useState(initial.value);
   const [override, setOverride] = useState<EmailDomainKind | undefined>(initial.override);
-  const [error, setError] = useState<string | null>(null);
+  // `field`: a typo hint under the input; otherwise a notice (wrong domain, or the server said no).
+  const [error, setError] = useState<{ kind: "field" | "domain" | "server"; text: string } | null>(null);
   const [linkError, setLinkError] = useState(!!params.get("error"));
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -56,8 +58,8 @@ export default function LoginPage() {
     e.preventDefault();
     const email = completed.email;
     if (!email) return inputRef.current?.focus();
-    if (/\s/.test(email)) return setError(t("login.invalidEmail"));
-    if (!ALLOWED.test(email)) return setError(t("login.domainError"));
+    if (/\s/.test(email)) return setError({ kind: "field", text: t("login.invalidEmail") });
+    if (!ALLOWED.test(email)) return setError({ kind: "domain", text: t("login.domainError") });
     setError(null);
     setLinkError(false);
     setSending(true);
@@ -67,7 +69,12 @@ export default function LoginPage() {
       errorCallbackURL: "/login?error=link",
     });
     setSending(false);
-    if (error) setError(error.message === "EMAIL_DOMAIN_NOT_ALLOWED" ? t("login.domainError") : (error.message ?? t("common.error")));
+    if (error)
+      setError(
+        error.message === "EMAIL_DOMAIN_NOT_ALLOWED"
+          ? { kind: "domain", text: t("login.domainError") }
+          : { kind: "server", text: error.message ?? t("common.errorHint") },
+      );
     else {
       storageSet(LAST_EMAIL, email);
       setSentTo(email);
@@ -99,9 +106,7 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={submit} noValidate className="flex flex-col">
             {linkError && (
-              <p role="alert" className="mb-4 flex gap-2 rounded-[14px] bg-danger/12 px-3 py-2.5 text-left text-sm font-bold text-danger-shade dark:text-danger">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {t("login.linkError")}
-              </p>
+              <Notice variant="inset" tone="danger" title={t("login.linkErrorTitle")} description={t("login.linkError")} className="mb-5" />
             )}
             <label htmlFor="email" className="text-[13px] font-bold">
               {t("login.email")}
@@ -152,10 +157,20 @@ export default function LoginPage() {
             <span id="email-full" className="sr-only">
               {completed.email}
             </span>
-            {error && (
+            {error?.kind === "field" && (
               <p id="email-error" role="alert" className="mt-2 text-left text-sm font-bold text-danger-shade dark:text-danger">
-                {error}
+                {error.text}
               </p>
+            )}
+            {error && error.kind !== "field" && (
+              <Notice
+                id="email-error"
+                variant="inset"
+                tone={error.kind === "domain" ? "warning" : "danger"}
+                title={error.kind === "domain" ? t("login.domainErrorTitle") : t("common.error")}
+                description={error.text}
+                className="mt-4"
+              />
             )}
             <Button type="submit" variant="chunky" size="xl" className="mt-5 w-full" disabled={sending}>
               {sending && <Spinner />} {t("login.send")}

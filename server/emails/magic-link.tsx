@@ -70,7 +70,7 @@ const darkCss = `
 }
 `;
 
-export function MagicLinkEmail({ url, locale }: { url: string; locale: EmailLocale }) {
+export function MagicLinkEmail({ url, locale, withLogo = true }: { url: string; locale: EmailLocale; withLogo?: boolean }) {
   const t = copy[locale];
   return (
     <Html lang={locale} dir="ltr">
@@ -93,13 +93,15 @@ export function MagicLinkEmail({ url, locale }: { url: string; locale: EmailLoca
               padding: "36px 28px 28px",
             }}
           >
-            <Img
-              src="cid:logo"
-              alt={APP_NAME}
-              width="64"
-              height="64"
-              style={{ display: "block", margin: "0 auto 20px", border: 0, outline: "none" }}
-            />
+            {withLogo && (
+              <Img
+                src="cid:logo"
+                alt={APP_NAME}
+                width="64"
+                height="64"
+                style={{ display: "block", margin: "0 auto 20px", border: 0, outline: "none" }}
+              />
+            )}
             <Heading
               as="h1"
               className="wr-text"
@@ -179,8 +181,16 @@ export function MagicLinkEmail({ url, locale }: { url: string; locale: EmailLoca
   );
 }
 
-export async function renderMagicLinkEmail({ url, locale }: { url: string; locale: EmailLocale }) {
-  const el = <MagicLinkEmail url={url} locale={locale} />;
+export async function renderMagicLinkEmail({
+  url,
+  locale,
+  withLogo = true,
+}: {
+  url: string;
+  locale: EmailLocale;
+  withLogo?: boolean;
+}) {
+  const el = <MagicLinkEmail url={url} locale={locale} withLogo={withLogo} />;
   const [html, text] = await Promise.all([render(el), render(el, { plainText: true })]);
   return { subject: copy[locale].subject, html, text };
 }

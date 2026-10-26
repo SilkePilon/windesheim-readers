@@ -22,6 +22,11 @@ export default defineConfig({
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
+        // "script-defer" registration doesn't turn these on by itself: without them a new
+        // build waits until every tab / the installed app is closed. main.tsx reloads once
+        // on controllerchange so open pages pick up the new shell.
+        skipWaiting: true,
+        clientsClaim: true,
         // API responses are never cached: data stays fresh and auth isn't stored.
         runtimeCaching: [{ urlPattern: ({ url }) => url.pathname.startsWith("/api/"), handler: "NetworkOnly" }],
       },

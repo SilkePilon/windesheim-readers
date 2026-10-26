@@ -35,7 +35,9 @@ export function shouldShowInstall(p: {
 }): boolean {
   if (!p.isMobile) return false;
   if (p.platform !== "prompt" && p.platform !== "ios-safari") return false;
-  return p.dismissedAt === null || p.now - p.dismissedAt >= INSTALL_SNOOZE_MS;
+  if (p.dismissedAt === null) return true;
+  // A dismissal "in the future" (clock skew) counts as now, so it can't snooze forever.
+  return p.now - Math.min(p.dismissedAt, p.now) >= INSTALL_SNOOZE_MS;
 }
 
 // Module-level store: the beforeinstallprompt event fires early (often before React
@@ -89,10 +91,24 @@ function currentPlatform(): InstallPlatform {
   return installPlatform({ ua: navigator.userAgent, standalone: isStandalone() || remembered, hasPrompt: !!deferred });
 }
 
+/**
+ * The stored dismissal time, clamped to `now`: a timestamp from the future (clock skew)
+ * would otherwise snooze the drawer indefinitely.
+ */
+export function parseDismissedAt(raw: string | null, now: number): number | null {
+  const v = Number(raw);
+  if (!raw || !Number.isFinite(v) || v <= 0) return null;
+  return Math.min(v, now);
+}
+
 export function installDismissedAt(): number | null {
-  if (dismissedThisSession) return Date.now();
-  const v = Number(storageGet(DISMISSED_KEY));
-  return Number.isFinite(v) && v > 0 ? v : null;
+  const now = Date.now();
+  if (dismissedThisSession) return now;
+  const raw = storageGet(DISMISSED_KEY);
+  const at = parseDismissedAt(raw, now);
+  // Persist the clamp, so the 14 days run from now rather than from the future value.
+  if (at !== null && String(at) !== raw) storageSet(DISMISSED_KEY, String(at));
+  return at;
 }
 
 export function useInstall() {

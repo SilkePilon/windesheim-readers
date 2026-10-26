@@ -18,6 +18,18 @@ import { captureInstallPrompt } from "@/lib/install";
 // Before React mounts, so an early `beforeinstallprompt` is kept for the install drawer.
 captureInstallPrompt();
 
+// A new service worker activates immediately (skipWaiting + clientsClaim). Reload once
+// when it takes over, so this page doesn't keep old JS that asks for deleted chunks.
+// Skipped on the very first install (no previous controller); the flag prevents loops.
+if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
 // A data router (one catch-all route; App keeps its declarative <Routes>) so pages can
 // use `useBlocker`, e.g. the admin structure editor's unsaved-changes guard.
 const router = createBrowserRouter([{ path: "*", element: <App /> }]);

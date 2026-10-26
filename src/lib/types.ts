@@ -72,6 +72,8 @@ export interface QueueCard {
   front: string;
   back: string;
   isNew: boolean;
+  /** Next-due interval in ms from now, per rating. */
+  intervals: { again: number; hard: number; good: number; easy: number };
 }
 
 export type PublicQuestion =
@@ -129,6 +131,7 @@ export interface AdminReader {
   createdAt: string;
   lessonCount: number;
   readyCount: number;
+  failedCount: number;
 }
 
 export interface AdminLessonRow {

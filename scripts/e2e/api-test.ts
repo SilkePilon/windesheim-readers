@@ -52,6 +52,8 @@ console.log("submit:", sub);
 // read + review
 console.log("read:", (await j(student, "POST", `/lessons/${lesson.id}/read`))[1].gained);
 const [, queue] = await j(student, "GET", `/review/queue?lessonId=${lesson.id}`);
+ok(queue.length > 0 && queue.every((c: any) => ["again", "good", "easy"].every((k) => typeof c.intervals?.[k] === "number") && c.intervals.again < c.intervals.good && c.intervals.good < c.intervals.easy), "queue cards have intervals again < good < easy (ms)");
+ok((await j(admin, "POST", "/admin/readers/e2e-reader/retry"))[1].action === "none", "retry on a healthy ready reader is a no-op");
 for (const c of queue) await j(student, "POST", "/review", { flashcardId: c.id, rating: 3 });
 console.log("reviewed", queue.length, "due now:", (await j(student, "GET", "/review/queue"))[1].length);
 const [, me] = await j(student, "GET", "/me");

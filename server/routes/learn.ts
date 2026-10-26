@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
-import { fsrs, createEmptyCard, type Card, type Grade } from "ts-fsrs";
+import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
 import { db, schema } from "../db";
 import { displayName, requireUser, type AppEnv } from "../middleware";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
@@ -317,8 +317,22 @@ export const learn = new Hono<AppEnv>()
     const lessonCodes = new Map(
       (await db.select({ id: schema.lesson.id, code: schema.lesson.code }).from(schema.lesson)).map((l) => [l.id, l.code]),
     );
+    const reviews = new Map(
+      (await db.select().from(schema.cardReview).where(eq(schema.cardReview.userId, u.id))).map((r) => [r.flashcardId, r]),
+    );
+    const preview = (id: string) => {
+      const r = reviews.get(id);
+      const rec = scheduler.repeat(r ? toCard(r) : createEmptyCard(now), now);
+      const ms = (g: Grade) => rec[g].card.due.getTime() - now.getTime();
+      return { again: ms(Rating.Again), hard: ms(Rating.Hard), good: ms(Rating.Good), easy: ms(Rating.Easy) };
+    };
     return c.json(
-      [...due, ...shuffle(fresh)].map((card) => ({ ...card, isNew: !!card.isNew, lessonCode: lessonCodes.get(card.lessonId) ?? "" })),
+      [...due, ...shuffle(fresh)].map((card) => ({
+        ...card,
+        isNew: !!card.isNew,
+        lessonCode: lessonCodes.get(card.lessonId) ?? "",
+        intervals: preview(card.id),
+      })),
     );
   })
 

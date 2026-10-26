@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { db, schema } from "../db";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
-import { extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
+import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
+import { retryAction } from "../ai/retry";
 import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings } from "../ai/providers";
 import { listModels, validateKey } from "../ai/models";
 
@@ -35,6 +36,7 @@ export const admin = new Hono<AppEnv>()
           ...r,
           lessonCount: mine.reduce((a, x) => a + x.n, 0),
           readyCount: mine.find((x) => x.status === "ready")?.n ?? 0,
+          failedCount: mine.find((x) => x.status === "error")?.n ?? 0,
         };
       }),
     );
@@ -147,6 +149,34 @@ export const admin = new Hono<AppEnv>()
     await db.delete(schema.reader).where(eq(schema.reader.id, id));
     await unlink(pdfPath(id)).catch(() => {});
     return c.json({ ok: true });
+  })
+
+  .post("/readers/:id/retry", async (c) => {
+    const id = c.req.param("id");
+    const r = await db.query.reader.findFirst({ where: eq(schema.reader.id, id) });
+    if (!r) return c.json({ error: "NOT_FOUND" }, 404);
+    const lessons = await db
+      .select({ id: schema.lesson.id, status: schema.lesson.status })
+      .from(schema.lesson)
+      .where(eq(schema.lesson.readerId, id));
+    const action = retryAction(r, lessons);
+    if (action.kind === "extract") {
+      await db.update(schema.reader).set({ status: "extracting", error: null }).where(eq(schema.reader.id, id));
+      void extractAndStructure(id).catch(async (e) => {
+        await db
+          .update(schema.reader)
+          .set({ status: "error", error: e instanceof Error ? e.message : String(e) })
+          .where(eq(schema.reader.id, id));
+      });
+    } else if (action.kind === "generate") {
+      void generateReader(id, action.lessonIds).catch(async (e) => {
+        await db
+          .update(schema.reader)
+          .set({ status: "error", error: e instanceof Error ? e.message : String(e) })
+          .where(eq(schema.reader.id, id));
+      });
+    }
+    return c.json({ action: action.kind });
   })
 
   .post("/readers/:id/restructure", async (c) => {

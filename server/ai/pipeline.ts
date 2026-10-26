@@ -2,8 +2,10 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { join } from "node:path";
 import { extractText, getDocumentProxy } from "unpdf";
 import { db, schema } from "../db";
+import { env } from "../env";
 import { getModel } from "./providers";
 
 // ---------- helpers ----------
@@ -309,4 +311,13 @@ export async function recoverInterruptedJobs() {
     .set({ status: "error", error: interrupted })
     .where(inArray(schema.reader.status, ["extracting", "structuring"]));
   await db.update(schema.reader).set({ status: "ready", error: interrupted }).where(eq(schema.reader.status, "generating"));
+}
+
+/** Re-run extract + structure from the stored PDF. Refuses if lessons exist (proposeStructure deletes them). */
+export async function extractAndStructure(readerId: string) {
+  const existing = await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, readerId)).limit(1);
+  if (existing.length) throw new Error("Reader already has lessons; refusing to re-structure");
+  const bytes = new Uint8Array(await Bun.file(join(env.uploadDir, `${readerId}.pdf`)).arrayBuffer());
+  await extractPdf(readerId, bytes);
+  await proposeStructure(readerId);
 }

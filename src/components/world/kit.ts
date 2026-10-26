@@ -8,7 +8,7 @@
  * - `(x, y)` is the baseline point (where the thing touches the ground), `s` the scale.
  *
  * Animation classes (CSS in world.css): sails, smoke, bob, flag, spark, fog, water, sway,
- * flicker, beam, float, graze, blink, ring. Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
+ * flicker, beam, float, graze, blink, ring, drift, jet. Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
  * hides in dark mode. Shared defs referenced here (`wk-glow`) live in render.ts.
  */
 import type { Rng } from "@/lib/world/rng";
@@ -835,3 +835,32 @@ export function willow(x: number, y: number, s = 1, alive = false) {
       (alive ? anim(0, -40, "sway", `<g transform="translate(0 40)">${strands}</g>`) : strands),
   );
 }
+
+// ---------------------------------------------------------------- city & harbour helpers (Task 4)
+
+/**
+ * 3/4 block: lit front face (`x`..`x+w`, `h` tall, baseline `y`), shaded side receding `d` to the
+ * upper right (rising `d`·0.22, like the house), optional lit top.
+ */
+export function block(x: number, y: number, w: number, h: number, d: number, front: string, side: string, top?: string) {
+  const k = d * 0.22;
+  return (
+    `<rect x="${r1(x)}" y="${r1(y - h)}" width="${r1(w)}" height="${r1(h)}" fill="${front}"/>` +
+    `<path d="M${r1(x + w)} ${r1(y)} L${r1(x + w + d)} ${r1(y - k)} L${r1(x + w + d)} ${r1(y - h - k)} L${r1(x + w)} ${r1(y - h)}Z" fill="${side}"/>` +
+    (top ? `<path d="M${r1(x)} ${r1(y - h)} L${r1(x + w)} ${r1(y - h)} L${r1(x + w + d)} ${r1(y - h - k)} L${r1(x + d)} ${r1(y - h - k)}Z" fill="${top}"/>` : "")
+  );
+}
+
+const SKIN = ["#F2C29B", "#D9A06E", "#9C6644"];
+const HAIR = ["#5E3B26", "#241A4A", "#E9B44C", "#B5562F"];
+/** A little standing person (~18px), front view; `k` varies skin and hair. */
+export const person = (x: number, y: number, shirt: string, k = 0, s = 1) =>
+  g(
+    x,
+    y,
+    s,
+    `<ellipse cx="1" cy=".4" rx="4" ry="1.2" fill="${C.shadow}" opacity=".18"/><path d="M-1.2 -6 V-.4 M1.2 -6 V-.4" stroke="#3A3266" stroke-width="1.7" stroke-linecap="round"/>` +
+      `<path d="M-3 -5.6 L-3 -11.4 Q0 -13.2 3 -11.4 L3 -5.6Z" fill="${shirt}"/><path d="M1 -5.6 L1 -12.7 Q2.4 -12.3 3 -11.4 L3 -5.6Z" fill="#000" opacity=".14"/>` +
+      `<path d="M-3 -11 L-4.2 -7 M3 -11 L4.2 -7.2" stroke="${shirt}" stroke-width="1.5" stroke-linecap="round"/>` +
+      `<circle cx="0" cy="-15" r="2.8" fill="${SKIN[k % 3]}"/><path d="M-2.9 -15.2 Q-2.7 -18.4 0 -18.2 Q2.8 -18.2 2.9 -15.2 Q1 -16.6 -2.9 -15.2Z" fill="${HAIR[k % 4]}"/>`,
+  );

@@ -86,8 +86,8 @@ describe("registry", () => {
     }
   });
 
-  test("bos and dorp have at least 8 set pieces, all of their own biome", () => {
-    for (const id of ["bos", "dorp"] as const) {
+  test("bos, dorp, stad and haven have at least 8 set pieces, all of their own biome", () => {
+    for (const id of ["bos", "dorp", "stad", "haven"] as const) {
       expect(REGISTRY[id].pieces.length).toBeGreaterThanOrEqual(8);
       for (const p of REGISTRY[id].pieces) {
         expect(p.biome).toBe(id);
@@ -96,9 +96,9 @@ describe("registry", () => {
     }
   });
 
-  test("bos and dorp pieces come alive at stage 2 (an animation class) and keep footprints within 110×110", () => {
-    const ANIM = /class="[^"]*\b(sails|smoke|flag|water|bob|spark|sway|flicker|beam|float|graze|blink|ring)\b/;
-    for (const id of ["bos", "dorp"] as const)
+  test("bos, dorp, stad and haven pieces come alive at stage 2 (an animation class) and keep footprints within 110×110", () => {
+    const ANIM = /class="[^"]*\b(sails|smoke|flag|water|bob|spark|sway|flicker|beam|float|graze|blink|ring|drift|jet)\b/;
+    for (const id of ["bos", "dorp", "stad", "haven"] as const)
       for (const p of REGISTRY[id].pieces)
         for (const side of [1, -1] as const) {
           for (const r of p.footprint(side)) expect(r.w <= 110 && r.h <= 110).toBe(true);

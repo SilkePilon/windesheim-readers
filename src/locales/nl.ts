@@ -43,7 +43,8 @@ const nl = {
   login: {
     email: "E-mailadres",
     emailPlaceholder: "s1234567 of naam.achternaam",
-    switchDomain: "Gebruik @{{domain}}",
+    switchDomain: "@{{domain}}, wissel naar @{{other}}",
+    invalidEmail: "Dit is geen geldig e-mailadres. Haal de spaties weg.",
     hint: "Je krijgt een link in je mail. Geen wachtwoord nodig.",
     send: "Stuur inloglink",
     sent: "Check je mail!",

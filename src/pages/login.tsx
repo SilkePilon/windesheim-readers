@@ -11,13 +11,14 @@ import { setLocale } from "@/lib/i18n";
 import { PageSpinner } from "@/components/page";
 import { completeEmail, STUDENT_DOMAIN, STAFF_DOMAIN, type EmailDomainKind } from "@shared/email";
 import { cn } from "@/lib/utils";
+import { storageGet, storageSet } from "@/lib/storage";
 
 const ALLOWED = /@(student\.)?windesheim\.nl$/i;
 const LAST_EMAIL = "wr.login.email";
 
 /** Prefill from the last used address: the local part, plus an override if its domain isn't the guess. */
 function remembered(): { value: string; override?: EmailDomainKind } {
-  const last = localStorage.getItem(LAST_EMAIL);
+  const last = storageGet(LAST_EMAIL);
   if (!last) return { value: "" };
   const { localPart, domain } = completeEmail(last);
   const kind: EmailDomainKind | undefined = domain === STUDENT_DOMAIN ? "student" : domain === STAFF_DOMAIN ? "staff" : undefined;
@@ -55,6 +56,7 @@ export default function LoginPage() {
     e.preventDefault();
     const email = completed.email;
     if (!email) return inputRef.current?.focus();
+    if (/\s/.test(email)) return setError(t("login.invalidEmail"));
     if (!ALLOWED.test(email)) return setError(t("login.domainError"));
     setError(null);
     setLinkError(false);
@@ -67,7 +69,7 @@ export default function LoginPage() {
     setSending(false);
     if (error) setError(error.message === "EMAIL_DOMAIN_NOT_ALLOWED" ? t("login.domainError") : (error.message ?? t("common.error")));
     else {
-      localStorage.setItem(LAST_EMAIL, email);
+      storageSet(LAST_EMAIL, email);
       setSentTo(email);
     }
   };
@@ -139,7 +141,7 @@ export default function LoginPage() {
                       setError(null);
                       inputRef.current?.focus();
                     }}
-                    aria-label={t("login.switchDomain", { domain: other === "student" ? STUDENT_DOMAIN : STAFF_DOMAIN })}
+                    aria-label={t("login.switchDomain", { domain: completed.domain, other: other === "student" ? STUDENT_DOMAIN : STAFF_DOMAIN })}
                     className="pointer-events-auto -my-1 truncate rounded-md py-1 text-muted-foreground decoration-dotted underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
                   >
                     @{completed.domain}

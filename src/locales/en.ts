@@ -45,7 +45,8 @@ const en: Messages = {
   login: {
     email: "Email address",
     emailPlaceholder: "s1234567 or name.surname",
-    switchDomain: "Use @{{domain}}",
+    switchDomain: "@{{domain}}, switch to @{{other}}",
+    invalidEmail: "That isn't a valid email address. Remove the spaces.",
     hint: "We'll email you a link. No password needed.",
     send: "Send sign-in link",
     sent: "Check your email!",

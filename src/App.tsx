@@ -18,6 +18,8 @@ const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
 const AdminLessonPage = lazy(() => import("@/pages/admin/lesson"));
 const AdminSettingsPage = lazy(() => import("@/pages/admin/settings"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/users"));
+// Dev-only art gallery; the import is dropped from production builds.
+const DevWorldPage = import.meta.env.DEV ? lazy(() => import("@/pages/dev-world")) : null;
 
 function RequireAuth({ children, admin }: { children: ReactNode; admin?: boolean }) {
   const { data: me, isLoading } = useMe();
@@ -33,6 +35,16 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {DevWorldPage && (
+        <Route
+          path="/dev/world"
+          element={
+            <Suspense fallback={<PageSpinner />}>
+              <DevWorldPage />
+            </Suspense>
+          }
+        />
+      )}
       {/* Full-screen study mode (cards, quiz, review session, battle play) renders here,
           outside AppLayout, so there is no dock or rail. Pages wrap themselves in
           <StudyShell>. Routes are added with their tasks. */}

@@ -20,6 +20,9 @@ const INNER_FAR_CX = 335;
 const MID_GAP_DY = 100;
 const X_MIN = -20;
 const X_MAX = 410;
+/** Set pieces stay (almost) on screen: a clipped piece reads as a mistake, clipped filler doesn't. */
+const PIECE_X_MIN = -10;
+const PIECE_X_MAX = 400;
 const BAND = 160;
 const FLORA_MIN_DIST = 26;
 
@@ -124,8 +127,8 @@ function pieceSlots(nd: WorldNode): Slot[] {
   /** Anchor x so the bbox is centred on `cx`, clamped into the horizontal bounds. */
   const centreX = (fb: Rect, cx: number) => {
     let ax = cx - (fb.x + fb.w / 2);
-    if (ax + fb.x < X_MIN) ax = X_MIN - fb.x;
-    if (ax + fb.x + fb.w > X_MAX) ax = X_MAX - fb.x - fb.w;
+    if (ax + fb.x < PIECE_X_MIN) ax = PIECE_X_MIN - fb.x;
+    if (ax + fb.x + fb.w > PIECE_X_MAX) ax = PIECE_X_MAX - fb.x - fb.w;
     return ax;
   };
   /** Vertical clearance needed so a bbox whose nearest edge is `gap` px from the node misses its circle. */
@@ -224,7 +227,10 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     const segment = segIndexOfWeek.get(nd.week)!;
     const seg = segments[segment];
     const rng = rngFor(`${seed}:${seg.salt}:${nd.id}`);
-    const candidates = shuffle(rng, registry[seg.biome].pieces).filter((p) => p.id !== prevPiece);
+    const shuffled = shuffle(rng, registry[seg.biome].pieces);
+    const fresh = shuffled.filter((p) => p.id !== prevPiece);
+    // Single-piece biomes: repeating beats an empty lesson.
+    const candidates = fresh.length ? fresh : shuffled;
     const slots = pieceSlots(nd);
     prevPiece = null;
     search: for (const p of candidates) {
@@ -233,7 +239,7 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
         if (!rel.length) continue search;
         const { x: ax, y: ay } = slot.place(bboxOf(rel));
         const rects = rel.map((r) => ({ x: r.x + ax, y: r.y + ay, w: r.w, h: r.h }));
-        if (rects.some((r) => r.x < X_MIN || r.x + r.w > X_MAX || index.hits(r))) continue;
+        if (rects.some((r) => r.x < PIECE_X_MIN || r.x + r.w > PIECE_X_MAX || index.hits(r))) continue;
         for (const r of rects) index.add({ kind: "rect", tag: "piece", ...r });
         const stage = stageFor(nd.state);
         ops.push({
@@ -259,7 +265,13 @@ export function composeWorld(input: WorldInput, registry: Record<BiomeId, Biome>
     const rng = rngFor(`${seed}:${seg.salt}:flora:${k}`);
     const bounds = { x: X_MIN, y: seg.top, w: X_MAX - X_MIN, h: seg.bottom - seg.top };
     // Denser at the screen edges, sparser in the middle where the road runs.
-    const pts = poisson(rng, bounds, FLORA_MIN_DIST, (x) => rng() < 0.55 + 0.45 * Math.min(1, Math.abs(x - MID) / 160));
+    const density = registry[seg.biome].density ?? 1;
+    const pts = poisson(
+      rng,
+      bounds,
+      FLORA_MIN_DIST,
+      (x) => rng() < (0.55 + 0.45 * Math.min(1, Math.abs(x - MID) / 160)) * density,
+    );
     for (const pt of pts) {
       let biome = seg.biome;
       if (k < segments.length - 1 && pt.y < seg.top + BAND / 2) {

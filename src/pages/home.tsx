@@ -5,9 +5,9 @@ import { BookOpen, ChevronRight, Flame, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageSpinner } from "@/components/page";
 import { Chip } from "@/components/game/chip";
-import { LessonPath } from "@/components/game/lesson-path";
 import { QuestCard } from "@/components/game/quest-card";
 import { InstallNudge } from "@/components/install-drawer";
+import { WorldMap } from "@/components/world/world-map";
 import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
 import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
 import { DAILY_XP_GOAL } from "@shared/game";
@@ -62,7 +62,8 @@ export default function HomePage() {
             ) : (
               <h1 className="hidden font-heading text-2xl font-semibold tracking-tight lg:block">{reader.title}</h1>
             )}
-            <LessonPath
+            <WorldMap
+              seed={reader.id}
               groups={pathNodes(reader.lessons, reader.lastStudiedLessonId)}
               onOpen={(id) => navigate(`/lesson/${id}`)}
             />

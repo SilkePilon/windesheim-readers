@@ -257,6 +257,12 @@ describe("composeWorld", () => {
     }
   });
 
+  test("single-piece biomes still give every lesson a piece (repeat filter falls back)", () => {
+    const w = composeWorld(sample, reg);
+    const withPiece = new Set(w.ops.filter((o) => o.kind === "piece").map((o) => o.lessonId));
+    expect(withPiece.size).toBe(sample.lessons.length);
+  });
+
   test("composes 40 lessons in under 15ms", () => {
     const input: WorldInput = {
       seed: "perf",

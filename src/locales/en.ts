@@ -318,6 +318,18 @@ const en: Messages = {
     levelUp: "Level up! You're now level {{n}}",
     badge: "New badge: {{name}}",
   },
+  world: {
+    biome: {
+      bos: "The forest",
+      dorp: "The village",
+      stad: "Zwolle",
+      haven: "The harbour",
+      jungle: "The jungle",
+      woestijn: "The desert",
+      bergen: "The mountains",
+      campus: "Campus",
+    },
+  },
   admin: {
     title: "Admin",
     readers: "Readers",

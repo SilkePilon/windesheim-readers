@@ -316,6 +316,18 @@ const nl = {
     levelUp: "Level up! Je bent nu level {{n}}",
     badge: "Nieuwe badge: {{name}}",
   },
+  world: {
+    biome: {
+      bos: "Het bos",
+      dorp: "Het dorp",
+      stad: "Zwolle",
+      haven: "De haven",
+      jungle: "De jungle",
+      woestijn: "De woestijn",
+      bergen: "De bergen",
+      campus: "De campus",
+    },
+  },
   admin: {
     title: "Beheer",
     readers: "Readers",

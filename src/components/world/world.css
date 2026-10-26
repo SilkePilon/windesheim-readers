@@ -1,0 +1,50 @@
+/* Lesson world: kit animations, night variants, pausing. Scoped to .world-svg. */
+@keyframes wk-sail { to { transform: rotate(360deg); } }
+@keyframes wk-puff {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  25% { opacity: 0.85; }
+  100% { transform: translateY(-34px) scale(1.5); opacity: 0; }
+}
+@keyframes wk-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes wk-flap { 0%, 100% { transform: skewY(0); } 50% { transform: skewY(-9deg); } }
+@keyframes wk-twinkle { 0%, 100% { opacity: 0; transform: scale(0.4); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes wk-drift { from { transform: translateX(-30px); } to { transform: translateX(30px); } }
+@keyframes wk-flow { to { stroke-dashoffset: -40; } }
+@keyframes wk-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes wk-flicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.9, 1.12); } 60% { transform: scale(1.08, 0.92); } }
+@keyframes wk-beam { 0%, 100% { transform: scaleX(1); opacity: 0.9; } 50% { transform: scaleX(-1); opacity: 0.5; } }
+
+.world-svg .sails { animation: wk-sail 9s linear infinite; transform-box: fill-box; transform-origin: center; }
+.world-svg .smoke { animation: wk-puff 3.2s ease-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.world-svg .bob { animation: wk-bob 1.8s ease-in-out infinite; }
+.world-svg .flag { animation: wk-flap 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: left center; }
+.world-svg .spark { animation: wk-twinkle 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.world-svg .fog { animation: wk-drift 7s ease-in-out infinite alternate; }
+.world-svg .water { animation: wk-flow 2.4s linear infinite; }
+/* Palm crowns and flames: origin at the element's own (0,0), the crown/flame base. */
+.world-svg .sway { animation: wk-sway 3.6s ease-in-out infinite; transform-origin: 0 0; }
+.world-svg .flicker { animation: wk-flicker 0.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.world-svg .beam { animation: wk-beam 4s ease-in-out infinite; transform-origin: 0 0; }
+
+/* Off-screen segments: freeze (IntersectionObserver toggles .paused). */
+.world-svg .paused,
+.world-svg .paused * { animation-play-state: paused !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .world-svg * { animation: none !important; }
+}
+
+/* Night: lamps/windows on and the dusk grade, in dark mode (or forced with .wl-dark). */
+.world-svg .wl-on,
+.world-svg .wl-dusk { display: none; }
+.dark .world-svg .wl-on,
+.dark .world-svg .wl-dusk,
+.world-svg.wl-dark .wl-on,
+.world-svg.wl-dark .wl-dusk { display: inline; }
+.dark .world-svg .wl-off,
+.world-svg.wl-dark .wl-off { display: none; }
+
+/* The current node bobs gently (spec: "bobbing node"). */
+@keyframes wk-node-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.world-bob { animation: wk-node-bob 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .world-bob { animation: none; } }

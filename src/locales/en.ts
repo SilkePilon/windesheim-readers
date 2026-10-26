@@ -248,6 +248,18 @@ const en: Messages = {
       UNAUTHORIZED: { title: "You're signed out", description: "Sign in again to play." },
       GENERIC: { title: "Something went wrong", description: "Please try again." },
     },
+    endConfirm: {
+      title: "End the battle?",
+      body: "The battle stops for all players.",
+      cancel: "Keep playing",
+      confirm: "End battle",
+    },
+    leaveConfirm: {
+      title: "Leave the battle?",
+      body: "You can rejoin later with the code.",
+      cancel: "Stay",
+      confirm: "Leave",
+    },
     correctLabel: "Correct! +{{n}}",
     wrongLabel: "Wrong",
     noAnswer: "No answer",

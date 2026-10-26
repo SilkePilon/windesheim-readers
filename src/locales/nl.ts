@@ -246,6 +246,18 @@ const nl = {
       UNAUTHORIZED: { title: "Je bent uitgelogd", description: "Log opnieuw in om mee te doen." },
       GENERIC: { title: "Er ging iets mis", description: "Probeer het nog een keer." },
     } as Record<string, { title: string; description?: string }>,
+    endConfirm: {
+      title: "Battle beëindigen?",
+      body: "De battle stopt voor alle spelers.",
+      cancel: "Doorgaan",
+      confirm: "Beëindigen",
+    },
+    leaveConfirm: {
+      title: "Battle verlaten?",
+      body: "Je kunt later opnieuw meedoen met de code.",
+      cancel: "Blijven",
+      confirm: "Verlaten",
+    },
     correctLabel: "Goed! +{{n}}",
     wrongLabel: "Fout",
     noAnswer: "Geen antwoord",

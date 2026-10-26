@@ -123,4 +123,31 @@ const end = host.msgs.find((m) => m.t === "end");
 console.log("battle end:", JSON.stringify(end?.ranking), JSON.stringify(end?.xp));
 const errs = [...host.msgs, ...p1.msgs, ...p2.msgs].filter((m) => m.t === "error");
 console.log("ws errors:", errs);
+
+// Player leave: the host's room state drops them. Host end: everyone gets `closed`.
+{
+  const h2 = ws(admin), a = ws(student), b = ws(bob);
+  await Promise.all([h2.ready, a.ready, b.ready]);
+  h2.send({ t: "create", lessonIds: readers[0].lessons.map((l: any) => l.id), count: 3, hostPlays: false });
+  await Bun.sleep(300);
+  const code2 = h2.msgs.find((m) => m.t === "room").code;
+  a.send({ t: "join", code: code2 }); b.send({ t: "join", code: code2 });
+  await Bun.sleep(300);
+  ok(h2.msgs.filter((m) => m.t === "room").pop().players.length === 2, "two players in the lobby");
+  const bobId = (await j(bob, "GET", "/me"))[1].user.id;
+  b.send({ t: "leave" });
+  await Bun.sleep(200);
+  const after = h2.msgs.filter((m) => m.t === "room").pop();
+  ok(after.players.length === 1 && !after.players.some((p: any) => p.id === bobId), "leave: the host's room state drops the player");
+  h2.send({ t: "end" });
+  await Bun.sleep(200);
+  ok(h2.msgs.some((m) => m.t === "closed" && m.reason === "host") && a.msgs.some((m) => m.t === "closed" && m.reason === "host"), "end: host and players get closed");
+  ok(!b.msgs.some((m) => m.t === "closed"), "a player who left gets nothing more");
+  a.send({ t: "join", code: code2 });
+  await Bun.sleep(200);
+  ok(a.msgs.filter((m) => m.t === "error").pop()?.error === "ROOM_NOT_FOUND", "an ended battle can't be rejoined");
+  h2.send({ t: "start" });
+  await Bun.sleep(150);
+  ok(h2.msgs.filter((m) => m.t === "error").pop()?.error === "NOT_IN_ROOM", "the host's old connection is out of the room");
+}
 process.exit(0);

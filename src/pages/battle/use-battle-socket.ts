@@ -55,6 +55,24 @@ export function useBattleSocket() {
   const [answeredIndex, setAnsweredIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /** Back to "not in a battle": every piece of room state goes, the error/notice stays. */
+  const resetRoom = useCallback(() => {
+    setRoom(null);
+    setQuestion(null);
+    setReveal(null);
+    setEnd(null);
+    setProgress(null);
+    setAnsweredIndex(null);
+  }, []);
+
+  const disconnect = useCallback(() => {
+    const ws = wsRef.current;
+    wsRef.current = null;
+    queue.current = [];
+    setConnected(false);
+    ws?.close();
+  }, []);
+
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState <= 1) return wsRef.current;
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/battle/ws`);
@@ -91,8 +109,14 @@ export function useBattleSocket() {
           setAnsweredIndex(msg.index);
           break;
         case "kicked":
+          resetRoom();
           setError("KICKED");
-          setRoom(null);
+          break;
+        case "closed":
+          // The host ended the battle (it's gone on the server, so drop the socket too).
+          if (wsRef.current === ws) disconnect();
+          resetRoom();
+          setError("CLOSED");
           break;
         case "error":
           setError(msg.error);
@@ -100,7 +124,7 @@ export function useBattleSocket() {
       }
     };
     return ws;
-  }, []);
+  }, [disconnect, resetRoom]);
 
   const send = useCallback(
     (msg: unknown) => {
@@ -113,16 +137,20 @@ export function useBattleSocket() {
     [connect],
   );
 
-  const leave = useCallback(() => {
-    wsRef.current?.close();
-    wsRef.current = null;
-    setConnected(false);
-    setRoom(null);
-    setQuestion(null);
-    setReveal(null);
-    setEnd(null);
-    setAnsweredIndex(null);
-  }, []);
+  /**
+   * Walk out of the battle. `end` (host only) stops it for everyone; otherwise you leave
+   * the room. Then the socket closes and all local battle state resets.
+   */
+  const leave = useCallback(
+    (how: "leave" | "end" = "leave") => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: how }));
+      disconnect();
+      resetRoom();
+      setError(null);
+    },
+    [disconnect, resetRoom],
+  );
 
   useEffect(
     () => () => {

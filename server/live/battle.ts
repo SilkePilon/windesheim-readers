@@ -104,6 +104,10 @@ function currentQuestionMsg(r: Room) {
   };
 }
 
+function answeredCount(r: Room) {
+  return [...r.players.values()].filter((x) => x.answers.has(r.index)).length;
+}
+
 function startQuestion(r: Room) {
   r.state = "question";
   r.startedAt = Date.now();
@@ -174,6 +178,8 @@ const clientMsg = z.discriminatedUnion("t", [
   z.object({ t: z.literal("answer"), index: z.number().int(), answer: z.unknown() }),
   z.object({ t: z.literal("next") }),
   z.object({ t: z.literal("kick"), playerId: z.string() }),
+  z.object({ t: z.literal("leave") }),
+  z.object({ t: z.literal("end") }),
 ]);
 
 /** One instance per websocket connection. */
@@ -247,13 +253,39 @@ export function battleConnection(user: SessionUser) {
       }
 
       const r = room;
-      if (!r) return send(ws, { t: "error", error: "NOT_IN_ROOM" });
+      // A room the host ended (or that timed out) is gone, even if this connection still points at it.
+      if (!r || rooms.get(r.code) !== r) {
+        room = null;
+        return send(ws, { t: "error", error: "NOT_IN_ROOM" });
+      }
       r.lastActivity = Date.now();
       const isHost = r.hostId === user.id;
 
       if (msg.t === "start" && isHost && r.state === "lobby") {
         r.index = 0;
         return startQuestion(r);
+      }
+
+      // Host ends the battle for everyone. An aborted battle awards no XP.
+      if (msg.t === "end" && isHost) {
+        broadcast(r, { t: "closed", reason: "host" });
+        closeRoom(r);
+        room = null;
+        return;
+      }
+
+      // A player walks out: they're removed from the room (and its ranking).
+      if (msg.t === "leave") {
+        room = null;
+        r.hostSockets.delete(ws);
+        const p = r.players.get(user.id);
+        if (p && !isHost) {
+          r.players.delete(user.id);
+          broadcast(r, roomState(r));
+          // The rest may all have answered already.
+          if (r.state === "question" && r.players.size > 0 && answeredCount(r) >= r.players.size) reveal(r);
+        } else p?.sockets.delete(ws);
+        return;
       }
 
       if (msg.t === "next" && isHost) {
@@ -291,7 +323,7 @@ export function battleConnection(user: SessionUser) {
         p.score += points;
         p.answers.set(r.index, { answer: msg.answer, at: elapsed, correct, points });
         send(ws, { t: "answered", index: r.index });
-        const answered = [...r.players.values()].filter((x) => x.answers.has(r.index)).length;
+        const answered = answeredCount(r);
         broadcast(r, { t: "progress", answered, total: r.players.size });
         if (answered >= r.players.size) reveal(r);
       }

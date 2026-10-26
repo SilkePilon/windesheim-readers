@@ -10,6 +10,7 @@ import { useInvalidateProgress, useMe } from "@/lib/queries";
 import { useBattleSocket } from "./use-battle-socket";
 import { Setup } from "./setup";
 import { Lobby, Play, Results } from "./stage";
+import { CloseConfirm } from "./close-confirm";
 
 /**
  * Live quiz battle. Joining and hosting happen in the normal app shell; once you're in
@@ -26,19 +27,24 @@ export default function BattlePage() {
   const b = useBattleSocket();
   // Keyed by question index so a new question never shows the previous pick.
   const [answer, setAnswer] = useState<{ index: number; value: unknown } | null>(null);
-  const joinedRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  // The code this page has joined (or left). Leaving keeps it until the URL drops the
+  // code: navigation commits after the state reset, and a re-run of the join effect with
+  // the old code would otherwise put you straight back in the room.
+  const joinedRef = useRef<string | null>(null);
   // The socket closes on unmount, so a remount (StrictMode in dev) must join again.
   useEffect(
     () => () => {
-      joinedRef.current = false;
+      joinedRef.current = null;
     },
     [],
   );
 
   // Join via link /battle/123456
   useEffect(() => {
-    if (codeParam && /^\d{6}$/.test(codeParam) && !joinedRef.current) {
-      joinedRef.current = true;
+    if (!codeParam) joinedRef.current = null;
+    else if (/^\d{6}$/.test(codeParam) && joinedRef.current !== codeParam) {
+      joinedRef.current = codeParam;
       b.send({ t: "join", code: codeParam });
     }
   }, [codeParam, b]);
@@ -46,10 +52,20 @@ export default function BattlePage() {
   // Put the room code in the URL so the host can share the link.
   useEffect(() => {
     if (b.room && codeParam !== b.room.code) {
-      joinedRef.current = true;
+      joinedRef.current = b.room.code;
       navigate(`/battle/${b.room.code}`, { replace: true });
     }
   }, [b.room, codeParam, navigate]);
+
+  // Out of the room (left, removed, ended): a next battle starts without an old pick.
+  useEffect(() => {
+    if (!b.room) setAnswer(null);
+  }, [b.room]);
+
+  // Removed or the host ended it: back to the join/host screen, which shows why.
+  useEffect(() => {
+    if ((b.error === "CLOSED" || b.error === "KICKED") && codeParam) navigate("/battle", { replace: true });
+  }, [b.error, codeParam, navigate]);
 
   useEffect(() => {
     if (b.end) invalidate();
@@ -61,9 +77,10 @@ export default function BattlePage() {
   const isHost = !!room && room.hostId === meId;
   const isPlayer = !!room && room.players.some((p) => p.id === meId);
 
-  const leave = () => {
-    b.leave();
-    joinedRef.current = false;
+  // The host ends the battle for everyone; a player only walks out.
+  const leave = (how: "leave" | "end") => {
+    setConfirming(false);
+    b.leave(how);
     navigate("/battle");
   };
 
@@ -91,7 +108,8 @@ export default function BattlePage() {
             </div>
           ) : (
             <Setup
-              initialCode={codeParam}
+              // Not the code of a battle you were just removed from or that just ended.
+              initialCode={b.error === "CLOSED" || b.error === "KICKED" ? undefined : codeParam}
               onJoin={(code) => b.send({ t: "join", code })}
               onCreate={(lessonIds, count, hostPlays) => b.send({ t: "create", lessonIds, count, hostPlays })}
             />
@@ -119,7 +137,7 @@ export default function BattlePage() {
     );
   } else if (ended) {
     progress = 1;
-    body = <Results end={b.end!} meId={meId} onPlayAgain={leave} />;
+    body = <Results end={b.end!} meId={meId} onPlayAgain={() => leave("leave")} />;
   } else if (q) {
     progress = (q.index + (reveal ? 1 : 0)) / q.total;
     const picked = answer?.index === q.index ? answer.value : undefined;
@@ -154,12 +172,19 @@ export default function BattlePage() {
     <div className="dark stage bg-background text-foreground">
       <StudyShell
         wide
-        onClose={leave}
+        // Results are final: nothing to confirm. Otherwise ask first.
+        onClose={() => (room.state === "ended" ? leave("leave") : setConfirming(true))}
         progress={progress}
         right={!b.connected ? <Spinner className="text-muted-foreground" aria-label={t("battle.connecting")} /> : undefined}
       >
         {body}
       </StudyShell>
+      <CloseConfirm
+        open={confirming}
+        onOpenChange={setConfirming}
+        isHost={isHost}
+        onConfirm={() => leave(isHost ? "end" : "leave")}
+      />
     </div>
   );
 }

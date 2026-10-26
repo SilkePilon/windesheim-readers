@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Page, PageHeader, PageSpinner } from "@/components/page";
+import { PageSpinner } from "@/components/page";
 import { api } from "@/lib/api";
 import type { AiSettings, ModelChoice, ProviderId } from "@/lib/types";
 
@@ -37,7 +37,7 @@ function ModelPicker({
   const [testing, setTesting] = useState(false);
 
   return (
-    <Card>
+    <Card variant="flat">
       <CardHeader>
         <CardTitle>{t(`admin.ai.${role}`)}</CardTitle>
         <CardDescription>{t(`admin.ai.${role}Hint`)}</CardDescription>
@@ -122,10 +122,10 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <Page>
-      <PageHeader title={t("admin.ai.title")} description={t("admin.ai.intro")} />
+    <div className="max-w-3xl">
+      <p className="mb-4 text-muted-foreground">{t("admin.ai.intro")}</p>
       <div className="space-y-4">
-        <Card>
+        <Card variant="flat">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="size-5" /> {t("admin.ai.keys")}
@@ -176,11 +176,11 @@ export default function AdminSettingsPage() {
         <ModelPicker role="fast" value={fast} onChange={setFast} defaults={data.defaults} />
 
         <div className="sticky bottom-20 flex justify-end md:bottom-4">
-          <Button size="lg" onClick={() => save()} disabled={saving} className="shadow-lg">
+          <Button size="lg" variant="chunky" onClick={() => save()} disabled={saving}>
             {saving && <Spinner />} {t("common.save")}
           </Button>
         </div>
       </div>
-    </Page>
+    </div>
   );
 }

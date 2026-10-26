@@ -1,30 +1,56 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { FileUp, Library, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { FileUp, RotateCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Page, PageHeader, PageSpinner } from "@/components/page";
-import { ReaderStatusBadge } from "@/components/admin-status";
+import { PageSpinner } from "@/components/page";
+import { StatusPill, canRetry, readerPillState } from "@/components/admin/status-pill";
+import { AdminActions } from "@/pages/admin/layout";
+import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api } from "@/lib/api";
 import type { AdminReader } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-function UploadDialog() {
+const BUSY = ["extracting", "structuring", "generating"];
+
+const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+const stripPdf = (name: string) => name.replace(/\.pdf$/i, "");
+
+function UploadDialog({
+  open,
+  onOpenChange,
+  file,
+  onFile,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  file: File | null;
+  onFile: (file: File | null) => void;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [course, setCourse] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The title follows the file name until the admin types their own.
+  const autoTitle = useRef("");
+
+  useEffect(() => {
+    if (!file) return;
+    setTitle((cur) => {
+      if (cur && cur !== autoTitle.current) return cur;
+      autoTitle.current = stripPdf(file.name);
+      return autoTitle.current;
+    });
+  }, [file]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +63,10 @@ function UploadDialog() {
       fd.set("title", title);
       fd.set("course", course);
       const { id } = await api.post<{ id: string }>("/admin/readers", fd);
-      setOpen(false);
+      onOpenChange(false);
+      onFile(null);
+      setTitle("");
+      setCourse("");
       navigate(`/admin/readers/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -47,12 +76,7 @@ function UploadDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Upload /> {t("admin.upload")}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
@@ -67,18 +91,14 @@ function UploadDialog() {
                 className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50"
               >
                 <FileUp className="size-6" />
-                {file ? <span className="font-medium text-foreground">{file.name}</span> : "PDF"}
+                {file ? <span className="font-bold break-all text-foreground">{file.name}</span> : "PDF"}
               </label>
               <input
                 id="file"
                 type="file"
                 accept="application/pdf,.pdf"
                 className="sr-only"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setFile(f);
-                  if (f && !title) setTitle(f.name.replace(/\.pdf$/i, ""));
-                }}
+                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
               />
             </Field>
             <Field>
@@ -92,8 +112,8 @@ function UploadDialog() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </FieldGroup>
           <DialogFooter>
-            <Button type="submit" disabled={!file || busy}>
-              {busy && <Spinner />} {busy ? t("admin.uploading") : t("admin.upload")}
+            <Button type="submit" variant="chunky" disabled={!file || busy}>
+              {busy ? <Spinner /> : <Upload />} {busy ? t("admin.uploading") : t("admin.upload")}
             </Button>
           </DialogFooter>
         </form>
@@ -102,53 +122,183 @@ function UploadDialog() {
   );
 }
 
+function ReaderCard({ r, onRetry, retrying }: { r: AdminReader; onRetry: () => void; retrying: boolean }) {
+  const { t } = useTranslation();
+  const state = readerPillState(r);
+  const pct = r.lessonCount ? Math.round((r.readyCount / r.lessonCount) * 100) : 0;
+
+  return (
+    <Card variant="flat" className="relative h-full gap-0 p-4 transition-shadow hover:ring-primary/50">
+      <div>
+        <StatusPill reader={r} />
+      </div>
+      <h3 className="mt-2.5 font-heading text-base leading-snug font-semibold">
+        {/* Stretched link: the whole card opens the reader; buttons sit above it. */}
+        <Link to={`/admin/readers/${r.id}`} className="outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-3 focus-visible:after:ring-ring/50">
+          {r.title}
+        </Link>
+      </h3>
+      <p className="truncate text-muted-foreground">{r.course ?? r.fileName}</p>
+
+      {state === "generating" && (
+        <>
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={r.lessonCount}
+            aria-valuenow={r.readyCount}
+            aria-label={t("admin.progress", { ready: r.readyCount, total: r.lessonCount })}
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-track"
+          >
+            <div className="h-full rounded-full bg-primary transition-[width] motion-reduce:transition-none" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{t("admin.progress", { ready: r.readyCount, total: r.lessonCount })}</p>
+        </>
+      )}
+
+      {(state === "error" || state === "partial") && (
+        <p className="mt-2 line-clamp-2 text-xs text-danger-shade dark:text-danger">
+          {state === "partial" && r.failedCount > 0 ? t("admin.failedLessons", { count: r.failedCount }) : r.error}
+        </p>
+      )}
+
+      {state === "review" ? (
+        <p className="mt-2 text-xs text-muted-foreground">{t("admin.proposed", { count: r.lessonCount })}</p>
+      ) : (
+        state !== "generating" && (
+          <p className="mt-2 flex gap-3 text-xs text-muted-foreground">
+            {r.lessonCount > 0 && <span>{t("admin.lessonCount", { count: r.lessonCount })}</span>}
+            {r.pageCount > 0 && <span>{t("admin.pagesN", { n: r.pageCount })}</span>}
+          </p>
+        )
+      )}
+
+      {(state === "review" || canRetry(r)) && (
+        <div className="relative z-10 mt-auto pt-3">
+          {state === "review" ? (
+            <Button variant="flat" asChild>
+              <Link to={`/admin/readers/${r.id}`}>{t("admin.reviewStructure")}</Link>
+            </Button>
+          ) : (
+            <Button variant="flat" onClick={onRetry} disabled={retrying}>
+              {retrying ? <Spinner /> : <RotateCw />} {t("admin.retry")}
+            </Button>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Window-level PDF drop: dragging a file anywhere on the page shows an overlay. */
+function usePageDrop(onDrop: (file: File) => void) {
+  const [dragging, setDragging] = useState(false);
+  const cb = useRef(onDrop);
+  cb.current = onDrop;
+
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+    const enter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
+      setDragging(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setDragging(false);
+    };
+    const over = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // allow the drop (and stop the browser opening the PDF)
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      const f = e.dataTransfer?.files[0];
+      if (f) cb.current(f);
+    };
+    window.addEventListener("dragenter", enter);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragenter", enter);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
+  return dragging;
+}
+
 export default function AdminReadersPage() {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const { retry, pending } = useRetryReader();
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "readers"],
     queryFn: () => api.get<AdminReader[]>("/admin/readers"),
-    refetchInterval: (q) => (q.state.data?.some((r) => ["extracting", "structuring", "generating"].includes(r.status)) ? 3000 : false),
+    refetchInterval: (q) => (q.state.data?.some((r) => BUSY.includes(r.status)) ? 3000 : false),
   });
-  if (isLoading) return <PageSpinner />;
+
+  const dragging = usePageDrop((f) => {
+    if (!isPdf(f)) {
+      toast.error(t("admin.dropNotPdf"));
+      return;
+    }
+    setFile(f);
+    setOpen(true);
+  });
 
   return (
-    <Page wide>
-      <PageHeader title={t("admin.readers")} actions={<UploadDialog />} />
-      {!data?.length ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Library />
-            </EmptyMedia>
-            <EmptyTitle>{t("admin.noReaders")}</EmptyTitle>
-          </EmptyHeader>
-        </Empty>
+    <>
+      <AdminActions>
+        <Button variant="chunky" onClick={() => setOpen(true)}>
+          <Upload /> {t("admin.upload")}
+        </Button>
+      </AdminActions>
+
+      {isLoading ? (
+        <PageSpinner />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {data.map((r) => (
-            <Link key={r.id} to={`/admin/readers/${r.id}`}>
-              <Card className="h-full transition-colors hover:border-primary/50">
-                <CardContent className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold">{r.title}</div>
-                      <div className="truncate text-sm text-muted-foreground">{r.course ?? r.fileName}</div>
-                    </div>
-                    {r.published && <Badge>{t("admin.published")}</Badge>}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <ReaderStatusBadge status={r.status} />
-                    <span>{r.pageCount} p.</span>
-                    <span>
-                      {r.readyCount}/{r.lessonCount} {t("learn.lessons").toLowerCase()}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {data?.map((r) => (
+            <ReaderCard key={r.id} r={r} onRetry={() => retry(r.id)} retrying={pending === r.id} />
           ))}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={cn(
+              "grid min-h-36 place-items-center rounded-lg border-2 border-dashed border-input p-4 text-center text-muted-foreground transition-colors outline-none hover:border-primary/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+              !data?.length && "col-span-full min-h-56",
+              data && data.length % 3 === 1 && "lg:col-span-2",
+            )}
+          >
+            <span className="flex flex-col items-center gap-1.5">
+              <Upload className="size-6" />
+              <span className="font-bold">{data?.length ? t("admin.dropHint") : t("admin.noReaders")}</span>
+              <span className="text-xs">{data?.length ? t("admin.dropOrClick") : t("admin.dropHint")}</span>
+            </span>
+          </button>
         </div>
       )}
-    </Page>
+
+      <UploadDialog open={open} onOpenChange={setOpen} file={file} onFile={setFile} />
+
+      {dragging && (
+        <div className="pointer-events-none fixed inset-0 z-[60] grid place-items-center bg-background/70 p-6 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-primary bg-card px-10 py-8 text-center font-heading text-lg font-semibold text-primary">
+            <FileUp className="size-8" />
+            {t("admin.dropRelease")}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

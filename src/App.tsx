@@ -11,6 +11,7 @@ import ReviewPage from "@/pages/review";
 import LeaderboardPage from "@/pages/leaderboard";
 import ProfilePage from "@/pages/profile";
 import BattlePage from "@/pages/battle";
+import { AdminLayout } from "@/pages/admin/layout";
 
 const AdminReadersPage = lazy(() => import("@/pages/admin/readers"));
 const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
@@ -65,15 +66,17 @@ export function App() {
           path="admin/*"
           element={
             <RequireAuth admin>
-              <Suspense fallback={<PageSpinner />}>
-                <Routes>
-                  <Route index element={<AdminReadersPage />} />
-                  <Route path="readers/:id" element={<AdminReaderPage />} />
-                  <Route path="lessons/:id" element={<AdminLessonPage />} />
-                  <Route path="settings" element={<AdminSettingsPage />} />
-                  <Route path="users" element={<AdminUsersPage />} />
-                </Routes>
-              </Suspense>
+              <AdminLayout>
+                <Suspense fallback={<PageSpinner />}>
+                  <Routes>
+                    <Route index element={<AdminReadersPage />} />
+                    <Route path="readers/:id" element={<AdminReaderPage />} />
+                    <Route path="lessons/:id" element={<AdminLessonPage />} />
+                    <Route path="settings" element={<AdminSettingsPage />} />
+                    <Route path="users" element={<AdminUsersPage />} />
+                  </Routes>
+                </Suspense>
+              </AdminLayout>
             </RequireAuth>
           }
         />

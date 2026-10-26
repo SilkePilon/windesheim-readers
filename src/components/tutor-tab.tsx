@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils";
 export function TutorTab({ lessonId, code }: { lessonId: string; code: string }) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Follow new tutor output only while the student is at the bottom; scrolling up to re-read pauses it.
+  const follow = useRef(true);
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({
     id: `tutor-${lessonId}`,
     transport: new DefaultChatTransport({ api: `/api/lessons/${lessonId}/chat`, credentials: "include" }),
@@ -19,18 +21,36 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   const busy = status === "submitted" || status === "streaming";
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, status]);
+    const page = () => document.scrollingElement ?? document.documentElement;
+    const atBottom = () => {
+      const el = page();
+      return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    };
+    const onScroll = () => {
+      follow.current = atBottom();
+    };
+    // Streaming text and markdown re-renders change the height without a new message, so watch the list itself.
+    const ro = new ResizeObserver(() => {
+      if (follow.current) page().scrollTop = page().scrollHeight;
+    });
+    if (listRef.current) ro.observe(listRef.current);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
 
   const send = (text: string) => {
     if (!text.trim() || busy) return;
+    follow.current = true;
     void sendMessage({ text });
     setInput("");
   };
 
   return (
     <div className="flex min-h-[60dvh] flex-col">
-      <div className="flex-1 space-y-4 pb-4">
+      <div ref={listRef} className="flex-1 space-y-4 pb-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center py-6 text-center">
             <div className="mb-3 grid size-14 place-items-center rounded-[18px] bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]">
@@ -82,7 +102,6 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
           </div>
         )}
         {error && <p className="text-sm text-destructive">{t("common.error")}: {error.message}</p>}
-        <div ref={bottomRef} />
       </div>
 
       {/* Sits above the floating dock on mobile (16px inset + 60px dock + 5px shadow + gap). */}

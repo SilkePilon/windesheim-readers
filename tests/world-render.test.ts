@@ -86,6 +86,26 @@ describe("registry", () => {
     }
   });
 
+  test("bos and dorp have at least 8 set pieces, all of their own biome", () => {
+    for (const id of ["bos", "dorp"] as const) {
+      expect(REGISTRY[id].pieces.length).toBeGreaterThanOrEqual(8);
+      for (const p of REGISTRY[id].pieces) {
+        expect(p.biome).toBe(id);
+        expect(p.id.startsWith(`${id}-`)).toBe(true);
+      }
+    }
+  });
+
+  test("bos and dorp pieces come alive at stage 2 (an animation class) and keep footprints within 110×110", () => {
+    const ANIM = /class="[^"]*\b(sails|smoke|flag|water|bob|spark|sway|flicker|beam|float|graze|blink|ring)\b/;
+    for (const id of ["bos", "dorp"] as const)
+      for (const p of REGISTRY[id].pieces)
+        for (const side of [1, -1] as const) {
+          for (const r of p.footprint(side)) expect(r.w <= 110 && r.h <= 110).toBe(true);
+          expect(p.render({ x: 100, y: 200, side, stage: 2, current: false, rng: mulberry32(1) })).toMatch(ANIM);
+        }
+  });
+
   test("piece ids are unique", () => {
     const ids = BIOMES.flatMap((b) => REGISTRY[b].pieces.map((p) => p.id));
     expect(new Set(ids).size).toBe(ids.length);

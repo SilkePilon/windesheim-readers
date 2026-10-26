@@ -8,7 +8,7 @@
  * - `(x, y)` is the baseline point (where the thing touches the ground), `s` the scale.
  *
  * Animation classes (CSS in world.css): sails, smoke, bob, flag, spark, fog, water, sway,
- * flicker, beam. Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
+ * flicker, beam, float, graze, blink, ring. Night variants: `wl-on` shows only in dark mode (lit lamps/windows), `wl-off`
  * hides in dark mode. Shared defs referenced here (`wk-glow`) live in render.ts.
  */
 import type { Rng } from "@/lib/world/rng";
@@ -565,3 +565,273 @@ export type WorldBiome = Biome & {
   /** Night biome (campus): lamps and windows are lit in both themes. */
   night?: boolean;
 };
+
+// ---------------------------------------------------------------- piece-building helpers (Task 3+)
+
+/** Positioned, optionally scaled group for piece-local drawings (never mirrored: light stays top-left). */
+export const place = (x: number, y: number, s: number, body: string) => g(x, y, s, body);
+
+/**
+ * Positioned group mirrored by `f` (1 = as drawn, facing right; −1 = facing left). Only for
+ * profile animals and flat details, whose shading is top/bottom; volumes stay unmirrored.
+ */
+export const facing = (x: number, y: number, f: 1 | -1, s: number, body: string) =>
+  `<g transform="translate(${r1(x)} ${r1(y)}) scale(${r1(f * s * 100) / 100} ${r1(s * 100) / 100})">${body}</g>`;
+
+/**
+ * Maps a path written in piece-local units (x towards the road, y from the baseline) to world
+ * coordinates via the piece's `X`. Absolute M/L/Q/C/Z commands only (every number is an x,y pair).
+ */
+export function mp(d: string, X: (d: number) => number, y0: number) {
+  let i = 0;
+  return d.replace(/-?\d*\.?\d+/g, (n) => String(i++ % 2 === 0 ? X(+n) : r1(y0 + +n)));
+}
+
+/** An animated wrapper: `<g transform=translate><g class=cls style=delay>body</g></g>`, origin at (x, y). */
+export const anim = (x: number, y: number, cls: string, body: string, delay = 0) =>
+  cls
+    ? `<g transform="translate(${r1(x)} ${r1(y)})"><g class="${cls}"${delay ? ` style="animation-delay:${r1(delay)}s"` : ""}>${body}</g></g>`
+    : `<g transform="translate(${r1(x)} ${r1(y)})">${body}</g>`;
+
+/** Post-and-rail fence from (x1, y1) to (x2, y2), absolute baseline points. */
+export function fence(x1: number, y1: number, x2: number, y2: number, col: string = C.woodL, shade: string = C.wood, rails = 2) {
+  const n = Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1) / 11) + 1);
+  let out = "";
+  for (let k = 0; k < rails; k++) {
+    const dy = k === 0 ? -7.5 : -3.5;
+    out += `<path d="M${r1(x1)} ${r1(y1 + dy)} L${r1(x2)} ${r1(y2 + dy)}" stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>`;
+  }
+  for (let i = 0; i < n; i++) {
+    const px = r1(x1 + ((x2 - x1) * i) / (n - 1));
+    const py = r1(y1 + ((y2 - y1) * i) / (n - 1));
+    out += `<rect x="${r1(px - 1.2)}" y="${r1(py - 10)}" width="2.4" height="10.5" rx=".8" fill="${col}"/><rect x="${r1(px + 0.2)}" y="${r1(py - 10)}" width="1" height="10.5" fill="${shade}" opacity=".6"/>`;
+  }
+  return out;
+}
+
+/** A ladder leaning from (x1, y1) (foot) to (x2, y2) (top). */
+export function ladder(x1: number, y1: number, x2: number, y2: number, col: string = C.woodL) {
+  const n = Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1) / 6));
+  let rungs = "";
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const x = r1(x1 + (x2 - x1) * t);
+    const y = r1(y1 + (y2 - y1) * t);
+    rungs += `M${x - 3} ${y} h6 `;
+  }
+  return `<path d="M${r1(x1 - 3)} ${r1(y1)} L${r1(x2 - 3)} ${r1(y2)} M${r1(x1 + 3)} ${r1(y1)} L${r1(x2 + 3)} ${r1(y2)} ${rungs}" stroke="${col}" stroke-width="1.5" stroke-linecap="round" fill="none"/>`;
+}
+
+/** Round hay bale (side view): lit face, shaded body, spiral. */
+export const hayBale = (x: number, y: number, s = 1) =>
+  g(
+    x,
+    y,
+    s,
+    `${sh(0, 0, 11, 3)}<rect x="-6" y="-12" width="16" height="12" rx="5" fill="#D9A93A"/><circle cx="-5" cy="-6" r="6.2" fill="#F2C95C"/><path d="M-5 -6 m-3.2 0 a3.2 3.2 0 1 1 3.2 3.2 a1.8 1.8 0 1 1 1.8 -1.8" stroke="#C9952A" stroke-width="1" fill="none"/><path d="M0 -11.6 H8" stroke="#F7DC8A" stroke-width="1.4" stroke-linecap="round"/>`,
+  );
+
+/** Little stack of logs (end grain facing the viewer). */
+export const logPile = (x: number, y: number, s = 1) =>
+  g(
+    x,
+    y,
+    s,
+    `<ellipse cx="3" cy="1" rx="12" ry="3" fill="${C.shadow}" opacity=".16"/>` +
+      [[-6, -4], [2, -4], [10, -4], [-2, -11], [6, -11]].map(([lx, ly]) => `<circle cx="${lx}" cy="${ly}" r="4" fill="#C99A6B"/><circle cx="${lx}" cy="${ly}" r="1.6" fill="#8a5a3a"/>`).join(""),
+  );
+
+/** A stack of planks (3/4 view). */
+export const planks = (x: number, y: number, s = 1) =>
+  g(
+    x,
+    y,
+    s,
+    `${sh(2, 0, 16, 3.5)}` +
+      [0, -3.4, -6.8].map((dy, i) => `<path d="M${-15 + i * 2} ${dy} L${13 + i} ${dy} L${16 + i} ${dy - 3} L${-12 + i * 2} ${dy - 3}Z" fill="${C.woodL}"/><path d="M${-15 + i * 2} ${dy} L${13 + i} ${dy}" stroke="${C.wood}" stroke-width="1.2"/>`).join(""),
+  );
+
+/** Grass tuft. */
+export const tuft = (x: number, y: number, s = 1, c: string = C.green) =>
+  g(x, y, s, `<path d="M-4 0 Q-5 -5 -7 -7 M-1 0 Q-1 -6 -2 -9 M1 0 Q2 -6 4 -8 M3 0 Q5 -3 7 -4" stroke="${c}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`);
+
+/** 3/4 ridge tent: lit front triangle with a door, shaded roof plane running back-right. */
+export const tent = (x: number, y: number, s = 1, col: [string, string] = [C.orange, C.orangeD], open = true) =>
+  g(
+    x,
+    y,
+    s,
+    `${sh(10, 0, 24, 5)}<path d="M-14 0 L0 -22 L22 -27 L32 -6Z" fill="${col[1]}"/><path d="M0 -22 L22 -27 L32 -6 L14 0Z" fill="${col[1]}"/><path d="M0 -22 L14 0 L32 -6 L22 -27Z" fill="#000" opacity=".08"/>` +
+      `<path d="M-14 0 L0 -22 L14 0Z" fill="${col[0]}"/><path d="M0 -22 L22 -27" stroke="#fff" stroke-opacity=".45" stroke-width="1.6" stroke-linecap="round"/>` +
+      (open
+        ? `<path d="M-5 0 L0 -13 L5 0Z" fill="${C.ink}" opacity=".75"/><path d="M0 -13 L5 0 L9 0Z" fill="#fff" opacity=".35"/>`
+        : `<path d="M0 -13 V0" stroke="${col[1]}" stroke-width="1.2"/>`) +
+      `<path d="M-14 0 L-19 2 M14 0 L19 2" stroke="${C.wood}" stroke-width="1" stroke-linecap="round"/>`,
+  );
+
+/** Campfire: stone ring and crossed logs; `alive` lights it (flickering flame, glow, smoke). */
+export function campfire(x: number, y: number, alive = false) {
+  const stones = [[-9, -1], [-5, 2], [1, 3], [7, 2], [10, -1], [6, -4], [-6, -4]]
+    .map(([sx, sy], i) => `<ellipse cx="${sx}" cy="${sy}" rx="3.2" ry="2.2" fill="${i < 2 ? "#C3BEDD" : "#A79CD6"}"/>`)
+    .join("");
+  const logs = `<path d="M-7 0 L6 -5" stroke="#8a5a3a" stroke-width="3" stroke-linecap="round"/><path d="M-6 -5 L7 0" stroke="#6E4428" stroke-width="3" stroke-linecap="round"/>`;
+  const flame = alive
+    ? `<g transform="translate(0 -1)"><g class="flicker"><path d="M0 -20 Q7 -11 5 -5 Q3 -1 0 -1 Q-3 -1 -5 -5 Q-7 -11 0 -20Z" fill="${C.orange}"/><path d="M-1 -14 Q4 -8 2.5 -4 Q0 -2 -2.5 -4 Q-4 -8 -1 -14Z" fill="${C.yellow}"/><path d="M0 -9 Q2 -5 1 -3.5 Q0 -3 -1 -3.5 Q-2 -5 0 -9Z" fill="#FFF3B0"/></g></g>` +
+      [0, 1.4].map((d) => `<circle class="smoke" style="animation-delay:${d}s" cx="1" cy="-24" r="3" fill="#fff" opacity=".8"/>`).join("")
+    : "";
+  return (
+    (alive ? glow(x, y - 8, 26) : "") +
+    g(x, y, 1, `<ellipse cx="1" cy="0" rx="12" ry="4.5" fill="#5E4A3A" opacity=".35"/>${stones}${logs}${flame}`)
+  );
+}
+
+/** A white duck facing right (mirror with `f`); `alive` floats it and rings the water. */
+export function duck(x: number, y: number, s = 1, f: 1 | -1 = 1, alive = false, delay = 0) {
+  const body =
+    `<path d="M-7 -1 Q-9 -6 -4 -6.5 L2 -6.5 Q1.5 -12.5 6 -12.5 Q10 -12.5 10 -8.5 L13.5 -7.6 L10 -6.6 Q9.5 -3 7 -1.5 Q4 0.6 -1 0.6 Q-6 0.6 -7 -1Z" fill="#fff"/>` +
+    `<path d="M-6.5 -2 Q-2 1 4 -0.5 Q7 -1.5 8 -3 Q5 0.6 -1 0.6 Q-5.5 0.6 -6.5 -2Z" fill="#DCD6F0"/><path d="M-4 -5 Q0 -6.5 4 -4 Q0 -2.5 -4 -5Z" fill="#E8E3F8"/>` +
+    `<path d="M10 -8.6 L13.5 -7.6 L10 -6.6Z" fill="${C.orange}"/><circle cx="7.4" cy="-9.6" r=".9" fill="${C.ink}"/>`;
+  const rings = alive
+    ? [0, 1.2].map((d) => `<ellipse class="ring" style="animation-delay:${r1(delay + d)}s" cx="0" cy="0" rx="10" ry="2.6" fill="none" stroke="#fff" stroke-width="1"/>`).join("")
+    : `<ellipse cx="0" cy="0" rx="9" ry="2.2" fill="none" stroke="#fff" stroke-width="1" opacity=".6"/>`;
+  return facing(x, y, f, s, rings + (alive ? anim(0, 0, "float", body, delay) : body));
+}
+
+/** Black-and-white Dutch cow facing right (mirror with `f`); `alive` lets it graze. */
+export function cow(x: number, y: number, s = 1, f: 1 | -1 = 1, alive = false, delay = 0) {
+  const leg = (lx: number, c: string) => `<rect x="${lx}" y="-9" width="2.6" height="9" rx="1" fill="${c}"/><rect x="${lx}" y="-1.6" width="2.6" height="1.6" fill="#3A3266"/>`;
+  const head =
+    `<path d="M-1 -3 Q0 -7 4 -6.5 L9 -5 Q12 -4 12 0 Q12 4 8.5 4.5 L3 4 Q-1 2 -1 -3Z" fill="#FAF7FF"/><path d="M1 -6.6 Q5 -7 6 -4 Q4 -1 0.5 -2 Z" fill="#2B2442"/>` +
+    `<ellipse cx="10" cy="2.6" rx="3.4" ry="2.6" fill="#F4A7B9"/><circle cx="9.4" cy="2.6" r=".6" fill="#B5566F"/><circle cx="11.2" cy="2.4" r=".6" fill="#B5566F"/><circle cx="6.4" cy="-2.6" r=".9" fill="${C.ink}"/>` +
+    `<path d="M2 -6.4 Q2.6 -9.6 4.6 -9.8" stroke="${C.creamD}" stroke-width="1.4" fill="none" stroke-linecap="round"/><ellipse cx="0" cy="-4.4" rx="2.6" ry="1.3" fill="#2B2442" transform="rotate(-20 0 -4.4)"/>`;
+  return facing(
+    x,
+    y,
+    f,
+    s,
+    `<ellipse cx="2" cy="1" rx="15" ry="3" fill="${C.shadow}" opacity=".16"/>${leg(-11, "#D9D3EC")}${leg(5, "#D9D3EC")}` +
+      `<path d="M-13 -15 Q-13 -20 -8 -20 L7 -20 Q12 -20 12 -15 L12 -11 Q12 -7 7 -7 L-8 -7 Q-13 -7 -13 -11Z" fill="#FAF7FF"/><path d="M-13 -11 Q-13 -7 -8 -7 L7 -7 Q12 -7 12 -11 Q4 -8.5 -13 -11Z" fill="#DCD6F0"/>` +
+      `<path d="M-9 -20 Q-4 -20 -3 -16 Q-5 -11 -10 -12.5 Q-13 -14 -12.5 -17.5Z" fill="#2B2442"/><path d="M2 -20 L7 -20 Q9 -16 6 -13 Q2 -12 1 -16Z" fill="#2B2442"/><ellipse cx="-4" cy="-8" rx="3" ry="2" fill="#F4A7B9"/>` +
+      `<path d="M-13 -17 Q-16 -14 -15 -8" stroke="#FAF7FF" stroke-width="1.2" fill="none"/><circle cx="-15" cy="-7.5" r="1.4" fill="#2B2442"/>${leg(-8, "#FAF7FF")}${leg(8, "#FAF7FF")}` +
+      `<path d="M-11 -19.4 Q0 -21 9 -19.4" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
+      (alive ? anim(10, -15, "graze", head, delay) : `<g transform="translate(10 -15)">${head}</g>`),
+  );
+}
+
+/** Deer facing right (mirror with `f`): `stag` (antlers), `doe`, or `fawn` (spots); `alive` grazes. */
+export function deer(x: number, y: number, s = 1, f: 1 | -1 = 1, kind: "stag" | "doe" | "fawn" = "doe", alive = false, delay = 0) {
+  const fur = kind === "fawn" ? "#C98A55" : "#B9774A";
+  const lit = kind === "fawn" ? "#DDA46E" : "#D4955F";
+  const leg = (lx: number, c: string) => `<path d="M${lx} -12 L${lx + 0.4} -1" stroke="${c}" stroke-width="1.9" stroke-linecap="round"/><path d="M${lx - 0.5} -0.6 h2" stroke="#3A2A2A" stroke-width="1.4" stroke-linecap="round"/>`;
+  const antlers =
+    kind === "stag"
+      ? `<path d="M3 -8 Q1 -15 -3 -18 M1.6 -12.5 L-2.6 -13.5 M2 -15 Q4 -18 3.5 -21 M6 -8 Q8 -14 6.5 -19 M7.4 -12.6 L10.4 -15" stroke="#E9D6AE" stroke-width="1.5" fill="none" stroke-linecap="round"/>`
+      : "";
+  const head =
+    `<path d="M-3 2 L1 -6 L6 -6 L4 4Z" fill="${fur}"/>${antlers}<ellipse cx="5" cy="-6.5" rx="4.6" ry="3.4" fill="${fur}"/><ellipse cx="9" cy="-5" rx="3" ry="2.3" fill="${lit}"/><ellipse cx="11.8" cy="-5.6" rx=".9" ry=".7" fill="#3A2A2A"/>` +
+    `<circle cx="5" cy="-7.6" r="1.2" fill="${C.ink}"/><circle cx="4.6" cy="-8" r=".4" fill="#fff"/><ellipse cx="1" cy="-9.4" rx="1.6" ry="3.2" fill="${fur}" transform="rotate(-35 1 -9.4)"/><ellipse cx="1.2" cy="-9.2" rx=".7" ry="2" fill="#F3DEC0" transform="rotate(-35 1.2 -9.2)"/>`;
+  const spots = kind === "fawn" ? [[-6, -16], [-2, -17.4], [2, -16.4], [-4, -14], [0, -14.4]].map(([a, b]) => `<circle cx="${a}" cy="${b}" r=".9" fill="#FFF6E5"/>`).join("") : "";
+  return facing(
+    x,
+    y,
+    f,
+    s,
+    `<ellipse cx="2" cy="1" rx="13" ry="2.8" fill="${C.shadow}" opacity=".16"/>${leg(-7, "#8a5a3a")}${leg(6, "#8a5a3a")}` +
+      `<ellipse cx="0" cy="-15" rx="11" ry="5.6" fill="${fur}"/><path d="M-10 -16.5 Q-4 -21.5 6 -20 Q9 -19.5 10 -17 Q0 -18.5 -10 -16.5Z" fill="${lit}"/><path d="M-9 -12.6 Q0 -9 9 -12.6 Q5 -9.6 0 -9.4 Q-6 -9.6 -9 -12.6Z" fill="#F3DEC0"/>` +
+      `${spots}<ellipse cx="-11" cy="-16.6" rx="2.2" ry="1.6" fill="#FFF6E5"/>${leg(-9.4, fur)}${leg(4, fur)}` +
+      (alive ? anim(7, -17, "graze", head, delay) : `<g transform="translate(7 -17)">${head}</g>`),
+  );
+}
+
+/** Fairy lights strung through absolute points, sagging between them. `alive` lights and blinks them. */
+export function fairyLights(pts: [number, number][], alive = false) {
+  const BULB = [C.yellowL, "#FF8FB0", "#fff", "#B9A6FF", C.yellow];
+  let wire = "";
+  let bulbs = "";
+  let halos = "";
+  let k = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, ay] = pts[i];
+    const [bx, by] = pts[i + 1];
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2 + 7;
+    wire += `M${r1(ax)} ${r1(ay)} Q${r1(mx)} ${r1(my)} ${r1(bx)} ${r1(by)} `;
+    for (const t of [0.2, 0.4, 0.6, 0.8]) {
+      const v = 1 - t;
+      const px = v * v * ax + 2 * v * t * mx + t * t * bx;
+      const py = v * v * ay + 2 * v * t * my + t * t * by + 1.6;
+      const col = BULB[k % BULB.length];
+      bulbs += alive
+        ? `<circle class="blink" style="animation-delay:${r1((k * 0.37) % 1.6)}s" cx="${r1(px)}" cy="${r1(py)}" r="1.8" fill="${col}"/>`
+        : `<circle cx="${r1(px)}" cy="${r1(py)}" r="1.5" fill="#E9E4F5"/>`;
+      if (alive && k % 2 === 0) halos += glow(px, py, 7);
+      k++;
+    }
+  }
+  return `<path d="${wire.trim()}" stroke="#3A3266" stroke-width=".8" fill="none" opacity=".7"/>${bulbs}${halos}`;
+}
+
+/** Bunting (little pennants) sagging from (x1, y1) to (x2, y2); `alive` flutters them. */
+export function bunting(x1: number, y1: number, x2: number, y2: number, alive = false, cols: string[] = [C.pink, C.yellow, C.grape, C.greenM, C.orange]) {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2 + 6;
+  const n = Math.max(3, Math.round(Math.abs(x2 - x1) / 7));
+  let out = `<path d="M${r1(x1)} ${r1(y1)} Q${r1(mx)} ${r1(my)} ${r1(x2)} ${r1(y2)}" stroke="#3A3266" stroke-width=".7" fill="none" opacity=".7"/>`;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const v = 1 - t;
+    const px = r1(v * v * x1 + 2 * v * t * mx + t * t * x2);
+    const py = r1(v * v * y1 + 2 * v * t * my + t * t * y2);
+    out += `<path${alive ? ` class="flag" style="animation-delay:${r1(i * 0.2)}s"` : ""} d="M${r1(px - 2.4)} ${py} L${r1(px + 2.4)} ${py} L${px} ${r1(py + 5)}Z" fill="${cols[i % cols.length]}"/>`;
+  }
+  return out;
+}
+
+/** A small flying bird (a "v"), bobbing when alive. */
+export const birdV = (x: number, y: number, s = 1, alive = false, delay = 0) =>
+  anim(x, y, alive ? "bob" : "", `<path d="M${-5 * s} ${-1 * s} Q${-2.5 * s} ${-3.5 * s} 0 0 Q${2.5 * s} ${-3.5 * s} ${5 * s} ${-1 * s}" stroke="${C.ink}" stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".7"/>`, delay);
+
+/** Fruit tree: the round tree with apples (or pears) hanging in the canopy. */
+export function fruitTree(x: number, y: number, s = 1, fruit: string = "#E8364F") {
+  const spots = [[-12, -26], [-3, -38], [8, -33], [12, -22], [-1, -24], [-14, -36], [4, -19]];
+  return (
+    tree(x, y, s) +
+    g(x, y, s, spots.map(([a, b]) => `<circle cx="${a}" cy="${b}" r="2.6" fill="${fruit}"/><circle cx="${a - 0.8}" cy="${b - 0.8}" r=".8" fill="#fff" opacity=".7"/>`).join(""))
+  );
+}
+
+/** Silver birch: white trunk with dark marks, light airy canopy. */
+export const birch = (x: number, y: number, s = 1) =>
+  g(
+    x,
+    y,
+    s,
+    `${sh(0, 0, 16)}<path d="M-2.4 0 L-1.6 -36 L1.6 -36 L2.4 0Z" fill="#F4F1FF"/><path d="M0.6 0 L0.8 -36 L1.6 -36 L2.4 0Z" fill="#D9D3EC"/><path d="M-2 -8 h2.6 M-1.8 -17 h2 M-1.6 -26 h2.4 M0 -31 h1.4" stroke="#3A3266" stroke-width="1.3" stroke-linecap="round"/>` +
+      `<path d="M0 -22 L7 -30" stroke="#E9E4F5" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<ellipse cx="0" cy="-42" rx="15" ry="13" fill="#6FBF5A"/><ellipse cx="9" cy="-34" rx="8" ry="6" fill="#6FBF5A"/><ellipse cx="-4" cy="-45" rx="10" ry="9" fill="#9BD97A"/><ellipse cx="-10" cy="-37" rx="6" ry="5" fill="#9BD97A"/><circle cx="-7" cy="-50" r="3.6" fill="#CDEFA8"/>`,
+  );
+
+/** Weeping willow: a lobed dome with long hanging strands; `alive` sways the strands. */
+export function willow(x: number, y: number, s = 1, alive = false) {
+  let dark = "";
+  let lit = "";
+  for (let i = -5; i <= 5; i++) {
+    const sx = i * 4.4;
+    const top = -40 + Math.abs(i) * 1.8;
+    const end = -6 - Math.abs(i) * 1.6;
+    const d = `M${r1(sx)} ${r1(top - 4)} Q${r1(sx * 1.25)} ${r1((top + end) / 2)} ${r1(sx * 1.32)} ${r1(end)} `;
+    if (i < 0) lit += d;
+    else dark += d;
+  }
+  const strands =
+    `<path d="${dark.trim()}" stroke="#5FA54A" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="${lit.trim()}" stroke="#8DC86A" stroke-width="3.4" fill="none" stroke-linecap="round"/>` +
+    `<path d="M-16 -34 Q-20 -22 -21 -12 M-8 -40 Q-10 -26 -11 -14" stroke="#C3EB9A" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
+  return g(
+    x,
+    y,
+    s,
+    `${sh(0, 0, 24)}<path d="M-3 0 Q-2 -16 -4 -30 L3 -32 Q2 -14 3 0Z" fill="${C.wood}"/><path d="M0.5 0 Q1 -14 2.6 -32 L3 -32 Q2 -14 3 0Z" fill="${C.woodD}"/>` +
+      `<circle cx="0" cy="-44" r="14" fill="#5FA54A"/><circle cx="-13" cy="-38" r="11" fill="#5FA54A"/><circle cx="13" cy="-38" r="11" fill="#4E9140"/><circle cx="-5" cy="-48" r="9" fill="#8DC86A"/><circle cx="-15" cy="-40" r="6" fill="#8DC86A"/><circle cx="-8" cy="-53" r="3.4" fill="#C3EB9A"/>` +
+      (alive ? anim(0, -40, "sway", `<g transform="translate(0 40)">${strands}</g>`) : strands),
+  );
+}

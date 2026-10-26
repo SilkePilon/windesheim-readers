@@ -6,6 +6,7 @@ import { hashSeed, mulberry32 } from "../src/lib/world/rng";
 import type { Biome, BiomeId, SetPiece } from "../src/lib/world/types";
 import type { Rect } from "../src/lib/world/geometry";
 import type { PathNodeState } from "../shared/path";
+import { REGISTRY } from "../src/components/world/registry";
 
 const BIOMES: BiomeId[] = ["bos", "dorp", "stad", "haven", "jungle", "woestijn", "bergen", "campus"];
 
@@ -211,6 +212,10 @@ describe("composeWorld", () => {
 
   test("hard exclusion holds over 200 random readers", () => {
     for (let t = 0; t < 200; t++) expect(exclusionViolations(composeWorld(randomReader(t), t % 2 ? reg : reg3))).toEqual([]);
+  }, 30000);
+
+  test("hard exclusion holds over 200 random readers with the real registry", () => {
+    for (let t = 0; t < 200; t++) expect(exclusionViolations(composeWorld(randomReader(t), REGISTRY))).toEqual([]);
   }, 30000);
 
   test("most lessons (and the current one) get a 110×100 piece", () => {

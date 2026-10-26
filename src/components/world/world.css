@@ -12,6 +12,10 @@
 @keyframes wk-flow { to { stroke-dashoffset: -40; } }
 @keyframes wk-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 @keyframes wk-flicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.9, 1.12); } 60% { transform: scale(1.08, 0.92); } }
+@keyframes wk-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-3deg); } }
+@keyframes wk-graze { 0%, 35%, 100% { transform: rotate(0deg); } 48%, 82% { transform: rotate(38deg); } 65% { transform: rotate(32deg); } }
+@keyframes wk-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes wk-ring { 0% { transform: scale(0.5); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
 @keyframes wk-beam { 0%, 100% { transform: scaleX(1); opacity: 0.9; } 50% { transform: scaleX(-1); opacity: 0.5; } }
 
 .world .sails { animation: wk-sail 9s linear infinite; transform-box: fill-box; transform-origin: center; }
@@ -24,6 +28,11 @@
 /* Palm crowns and flames: origin at the element's own (0,0), the crown/flame base. */
 .world .sway { animation: wk-sway 3.6s ease-in-out infinite; transform-origin: 0 0; }
 .world .flicker { animation: wk-flicker 0.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+/* Ducks and boats rocking on the water; animal heads lowering to graze (origin = neck). */
+.world .float { animation: wk-float 2.6s ease-in-out infinite; transform-origin: 0 0; }
+.world .graze { animation: wk-graze 5.5s ease-in-out infinite; transform-origin: 0 0; }
+.world .blink { animation: wk-blink 1.6s ease-in-out infinite; }
+.world .ring { animation: wk-ring 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 .world .beam { animation: wk-beam 4s ease-in-out infinite; transform-origin: 0 0; }
 
 /* Off-screen segments: freeze (IntersectionObserver toggles .paused). */

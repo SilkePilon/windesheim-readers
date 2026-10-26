@@ -587,6 +587,13 @@ export function mp(d: string, X: (d: number) => number, y0: number) {
   return d.replace(/-?\d*\.?\d+/g, (n) => String(i++ % 2 === 0 ? X(+n) : r1(y0 + +n)));
 }
 
+/**
+ * Clamps an element's anchor x so its art, reaching `l` px left and `r` px right of the anchor, stays
+ * within ±`half` of the piece anchor. Primitives are never mirrored and crowns and cast shadows fall
+ * to the right, so the same element needs a different position for each `side`.
+ */
+export const fit = (c: PieceCtx, x: number, l: number, r: number, half = 54) => r1(Math.min(Math.max(x, c.x - half + l), c.x + half - r));
+
 /** An animated wrapper: `<g transform=translate><g class=cls style=delay>body</g></g>`, origin at (x, y). */
 export const anim = (x: number, y: number, cls: string, body: string, delay = 0) =>
   cls

@@ -14,6 +14,7 @@ import {
   duck,
   facing,
   fence,
+  fit,
   flag,
   flowers,
   fruitTree,
@@ -51,22 +52,25 @@ const windmillPiece = definePiece({
   biome: "dorp",
   w: 110,
   h: 96,
+  below: 14,
   render: (c, X) => {
+    // The sails sweep a circle (r ≈ 36): keep the whole sweep inside the footprint.
+    const wx = fit(c, X(-26), 36, 36, 55);
     if (c.stage === 0) {
-      const base = `<ellipse cx="${X(-26)}" cy="${c.y - 4}" rx="16" ry="5.5" fill="#CFC3A8"/><ellipse cx="${X(-26)}" cy="${c.y - 6}" rx="12" ry="3.6" fill="#E9D6AE"/>`;
+      const base = `<ellipse cx="${wx}" cy="${c.y - 4}" rx="16" ry="5.5" fill="#CFC3A8"/><ellipse cx="${wx}" cy="${c.y - 6}" rx="12" ry="3.6" fill="#E9D6AE"/>`;
       return base + plot(X(22), c.y, 1) + seedlings(X(-24), c.y + 10, 4, 8);
     }
     if (c.stage === 1)
       return (
-        windmill(X(-26), c.y - 6, 0.78, false, false) +
-        `<g transform="translate(${X(-26)} ${c.y - 6}) scale(.78)">${scaffold(-16, 0, 32, 50)}</g>` +
-        building(X(26), c.y + 4, 0.72, { craneSide: 0 }) +
+        windmill(wx, c.y - 6, 0.78, false, false) +
+        `<g transform="translate(${wx} ${c.y - 6}) scale(.78)">${scaffold(-16, 0, 32, 50)}</g>` +
+        building(fit(c, X(26), 20, 34, 55), c.y + 4, 0.72, { craneSide: 0 }) +
         tulipStrip(X(-2), c.y + 14, 0.8, c.rng)
       );
     const [roof, roofD] = ROOFS[Math.floor(c.rng() * ROOFS.length)];
     return (
-      windmill(X(-26), c.y - 6, 0.78, true) +
-      house(X(26), c.y + 4, 0.8, { alive: true, roof, roofD }) +
+      windmill(wx, c.y - 6, 0.78, true) +
+      house(fit(c, X(26), 20, 34, 55), c.y + 4, 0.8, { alive: true, roof, roofD }) +
       tulipStrip(X(-2), c.y + 14, 0.8, c.rng) +
       flowers(X(42), c.y + 10, c.rng, 4, 8)
     );
@@ -81,12 +85,12 @@ function barn(x: number, y: number, done: boolean, s = 0.88) {
   const silo =
     `<path d="M-33 0 L-33 -44 Q-27 -52 -21 -44 L-21 0Z" fill="#E9E4F5"/><path d="M-27 0 L-27 -50 Q-23 -49 -21 -44 L-21 0Z" fill="#C9C3E3"/>` +
     `<path d="M-33 -44 Q-27 -54 -21 -44 Q-27 -46 -33 -44Z" fill="#8C82B5"/><path d="M-33 -14 H-21 M-33 -30 H-21" stroke="#B9AEE6" stroke-width="1.2"/>`;
-  if (!done) return place(x, y, s, `${sh(4, 0, 30, 6)}<path d="M-33 0 L-33 -24 L-21 -24 L-21 0Z" fill="#E9E4F5"/>`) + building(x + 2 * s, y, 0.95 * s, { ...BARN, craneSide: 0 });
+  if (!done) return place(x, y, s, `${sh(2, 0, 30, 6)}<path d="M-33 0 L-33 -24 L-21 -24 L-21 0Z" fill="#E9E4F5"/>`) + building(x + 2 * s, y, 0.95 * s, { ...BARN, craneSide: 0 });
   return place(
     x,
     y,
     s,
-    `${sh(6, 0, 38, 7)}${silo}<path d="M8 0 L34 -6 L34 -28 L8 -22Z" fill="${BARN.side}"/><path d="M-20 0 L8 0 L8 -22 L4 -34 L-6 -40 L-16 -34 L-20 -22Z" fill="${BARN.wall}"/>` +
+    `${sh(2, 0, 32, 6)}${silo}<path d="M8 0 L34 -6 L34 -28 L8 -22Z" fill="${BARN.side}"/><path d="M-20 0 L8 0 L8 -22 L4 -34 L-6 -40 L-16 -34 L-20 -22Z" fill="${BARN.wall}"/>` +
       `<path d="M8 -22 L4 -34 L30 -40 L34 -28Z" fill="#6E6496"/><path d="M4 -34 L-6 -40 L20 -46 L30 -40Z" fill="#8C82B5"/><path d="M-6 -40 L20 -46" stroke="#fff" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"/>` +
       `<path d="M-20 -22 L-16 -34 L-6 -40 L4 -34 L8 -22" stroke="#fff" stroke-width="1.6" fill="none" stroke-linejoin="round"/>` +
       `<rect x="-15" y="-17" width="16" height="17" fill="#B8392E"/><path d="M-15 -17 L1 0 M1 -17 L-15 0" stroke="#fff" stroke-width="1.3"/><rect x="-15" y="-17" width="16" height="17" fill="none" stroke="#fff" stroke-width="1.4"/>` +
@@ -108,7 +112,7 @@ const farm = definePiece({
   w: 110,
   h: 92,
   render: (c, X) => {
-    const bx = X(-24);
+    const bx = fit(c, X(-24), 30, 38, 55);
     const meadowFence = (rails: number) => fence(X(6), c.y - 24, X(52), c.y - 28, C.cream, "#C9C3E3", rails);
     if (c.stage === 0) return plot(bx + 4, c.y - 4, 1) + meadowFence(0) + seedlings(X(30), c.y - 4, 3) + seedlings(X(22), c.y + 6, 3);
     if (c.stage === 1) return meadowFence(2) + barn(bx, c.y, false) + hayBale(X(30), c.y - 6, 0.9) + hayBale(X(42), c.y + 4, 0.8);
@@ -139,7 +143,7 @@ function greenhouse(x: number, y: number, glass: boolean) {
     x,
     y,
     1,
-    `${sh(8, 0, 30, 6)}<path d="M-19 0 L4 0 L34 -6 L34 -3 L4 2 L-19 2Z" fill="#B9AEE6"/>${plants}` +
+    `${sh(4, 0, 28, 6)}<path d="M-19 0 L4 0 L34 -6 L34 -3 L4 2 L-19 2Z" fill="#B9AEE6"/>${plants}` +
       (glass
         ? `<path d="M-18 0 L4 0 L4 -20 L-7 -30 L-18 -20Z" fill="#E3F4FF" opacity=".55"/><path d="M4 0 L34 -6 L34 -26 L4 -20Z" fill="#9CCBF5" opacity=".5"/><path d="M-7 -30 L23 -36 L34 -26 L4 -20Z" fill="#EAF6FF" opacity=".75"/>` +
           `<path d="M-15 -6 L-9 -16 M-14 -2 L-12 -5 M8 -6 L12 -14" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".9"/>`
@@ -193,7 +197,7 @@ const tulips = definePiece({
     const gx = X(-26) - 8;
     const k = Math.floor(c.rng() * TULIP_COLS.length);
     const fx = X(24);
-    const back = tree(X(-44), c.y - 44, 0.6, "y");
+    const back = tree(fit(c, X(-44), 14, 17, 55), c.y - 44, 0.6, "y");
     if (c.stage === 0)
       return back + tulipField(fx, c.y, 0, k) + place(gx, c.y - 6, 1, `<path d="M-18 0 L4 0 L34 -6 L12 -6Z" fill="none" stroke="#B9AEE6" stroke-width="2"/>`) + plot(gx + 6, c.y - 10, 0.62);
     if (c.stage === 1) return back + greenhouse(gx, c.y - 6, false) + tulipField(fx, c.y, 1, k) + `<rect x="${gx + 20}" y="${c.y - 4}" width="9" height="5" rx="1" fill="${C.creamD}"/>`;
@@ -256,7 +260,7 @@ const churchSquare = definePiece({
       square +
       church(ox, oy, true) +
       vane(spireTop.x, spireTop.y, true) +
-      tree(X(40), c.y - 10, 0.62, "l") +
+      tree(fit(c, X(40), 14, 18, 52), c.y - 10, 0.62, "l") +
       bench(X(12), c.y + 4, 0.75) +
       lamp(X(-32), c.y + 4, 0.7) +
       birdV(X(28), c.y - 82, 1, true) +
@@ -300,7 +304,7 @@ const bakery = definePiece({
   w: 110,
   h: 82,
   render: (c, X) => {
-    const hx = X(-21) - 1;
+    const hx = fit(c, X(-21) - 1, 24, 45, 55);
     if (c.stage === 0) return plot(hx + 2, c.y - 4, 0.95) + crate(X(18), c.y + 2, 0.9) + crate(X(30), c.y - 8, 0.8) + planks(X(40), c.y + 4, 0.7);
     if (c.stage === 1) return building(hx, c.y, 1.05, { wall: "#FFE7C2", side: "#EBC994", craneSide: 0 }) + stall(X(28), c.y - 12, [C.pink, "#fff"], "cheese", false) + crate(X(40), c.y + 4, 0.9) + crate(X(22), c.y + 6, 0.75);
     const shop = place(
@@ -312,12 +316,13 @@ const bakery = definePiece({
         `<path d="M-22 -24 H3" stroke="${C.orangeD}" stroke-width="1"/>` +
         `<path d="M-22 -28 H-30" stroke="${C.ink}" stroke-width="1.2"/><path d="M-28 -28 V-26" stroke="${C.ink}" stroke-width=".8"/><circle cx="-29.4" cy="-22.6" r="3.4" fill="none" stroke="#D9902A" stroke-width="1.8"/><circle cx="-26.6" cy="-22.6" r="3.4" fill="none" stroke="#E8A93A" stroke-width="1.8"/>`,
     );
+    // The cheese stall stands behind the shop (draw it first, so the pretzel sign hangs in front).
     return (
+      stall(X(26), c.y - 14, [C.pink, "#fff"], "cheese", true) +
       house(hx, c.y, 1.05, { wall: "#FFE7C2", side: "#EBC994", roof: C.orange, roofD: C.orangeD, alive: true }) +
       shop +
       bunting(hx + 20, c.y - 42, X(26) - 13, c.y - 40, true) +
-      stall(X(26), c.y - 14, [C.pink, "#fff"], "cheese", true) +
-      stall(X(38), c.y + 4, ["#3F8FE0", "#fff"], "flowers", true) +
+      stall(fit(c, X(38), 16, 26, 55), c.y + 4, ["#3F8FE0", "#fff"], "flowers", true) +
       crate(X(4), c.y + 7, 0.7)
     );
   },
@@ -363,11 +368,11 @@ const canal = definePiece({
     const bx = X(2.6);
     const house2 = house(X(34) - 2, c.y - 34, 0.56, { roof: C.grape, roofD: C.grapeD });
     if (c.stage === 0) return house2 + ditch(false) + plot(X(32), c.y - 4, 0.62) + seedlings(X(-34), c.y - 6, 3);
-    if (c.stage === 1) return house2 + willow(X(-36), c.y - 16, 0.5) + ditch(true) + drawbridge(bx, by, false);
+    if (c.stage === 1) return house2 + willow(fit(c, X(-36), 24, 25, 55), c.y - 16, 0.5) + ditch(true) + drawbridge(bx, by, false);
     const boat = anim(X(10), c.y - 4, "float", `<path d="M-10 -3 H10 Q8 2 0 2 Q-8 2 -10 -3Z" fill="${C.orange}"/><path d="M-10 -3 H10 L9 -1 H-9Z" fill="${C.orangeD}"/><rect x="-4" y="-8" width="7" height="5" rx="1.2" fill="${C.cream}"/><rect x="-3" y="-7" width="2.4" height="2" fill="${C.glass}"/>`, 0.4);
     return (
       house(X(34) - 2, c.y - 34, 0.56, { roof: C.grape, roofD: C.grapeD, alive: true }) +
-      willow(X(-36), c.y - 16, 0.78, true) +
+      willow(fit(c, X(-36), 24, 25, 55), c.y - 16, 0.78, true) +
       ditch(true) +
       `<path class="water" d="${mp("M-8 -54 L12 -2", X, c.y)}" stroke="#fff" stroke-width="1.6" stroke-dasharray="6 12" stroke-linecap="round" opacity=".85"/>` +
       duck(X(-6), c.y - 46, 0.6, c.side, true) +
@@ -448,7 +453,7 @@ const pitch = definePiece({
   w: 110,
   h: 84,
   render: (c, X) => {
-    const px = X(2);
+    const px = c.x;
     const py = c.y;
     // Trapezoid: front edge y=2 (±52), back edge y=−30 (±41).
     const edge = (t: number, side: -1 | 1) => ({ x: px + side * (52 - 11 * t), y: py + 2 - 32 * t });

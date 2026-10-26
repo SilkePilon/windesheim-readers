@@ -10,6 +10,7 @@ import {
   deer,
   definePiece,
   duck,
+  fit,
   fairyLights,
   flag,
   flowers,
@@ -47,7 +48,7 @@ const cabin = definePiece({
   w: 110,
   h: 96,
   render: (c, X) => {
-    const back = pine(X(-36), c.y - 14, 1.05);
+    const back = pine(fit(c, X(-36), 21, 24, 55), c.y - 14, 1.05);
     if (c.stage === 0) return back + plot(X(4), c.y - 2, 1.1) + seedlings(X(-12), c.y + 6, 3);
     if (c.stage === 1) return back + building(X(2), c.y, 1, { ...LOG, craneSide: c.side });
     const pile =
@@ -82,7 +83,7 @@ const camp = definePiece({
   w: 108,
   h: 80,
   render: (c, X) => {
-    const back = pine(X(-42), c.y - 22, 0.9) + pine(X(-22), c.y - 40, 0.68);
+    const back = pine(fit(c, X(-42), 18, 21), c.y - 22, 0.9) + pine(X(-22), c.y - 40, 0.68);
     if (c.stage === 0)
       return back + plot(X(-8), c.y - 6, 0.9) + campfire(X(28), c.y + 2) + roll(X(26), c.y - 16, TENT_A) + roll(X(38), c.y - 10, TENT_B) + seedlings(X(-30), c.y + 6, 3);
     const tentB =
@@ -91,14 +92,14 @@ const camp = definePiece({
         : // Frame only: the A-poles and ridge, the fabric still rolled up beside it.
           place(X(4), c.y - 30, 0.86, `<path d="M-14 0 L0 -22 L14 0 M0 -22 L22 -27 M22 -27 L32 -6 M22 -27 L12 -5" stroke="${C.ink}" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/>`) +
           roll(X(12), c.y - 18, TENT_B);
-    const pennant = place(X(-24), c.y - 28.6, 1, `<rect x="-.6" y="-9" width="1.2" height="9" fill="${C.wood}"/>${c.stage === 2 ? `<path class="flag" d="M.6 -9 L8 -7 L.6 -5Z" fill="${C.yellow}"/>` : ""}`);
+    const pennant = place(X(-14), c.y - 26, 1, `<rect x="-.6" y="-9" width="1.2" height="9" fill="${C.wood}"/>${c.stage === 2 ? `<path class="flag" d="M.6 -9 L8 -7 L.6 -5Z" fill="${C.yellow}"/>` : ""}`);
     const lantern =
       place(X(-2), c.y + 4, 1, `<rect x="-.7" y="-20" width="1.4" height="20" fill="${C.woodD}"/><path d="M0 -20 h5 v2" stroke="${C.woodD}" stroke-width="1.2" fill="none"/><rect x="2.6" y="-17" width="5" height="6" rx="1.4" fill="${C.yellowL}"/><path d="M2.6 -17 h5 l-1 -1.6 h-3Z" fill="${C.ink}"/>`) +
       glow(X(-2) + 5, c.y - 10, 11);
     return (
       back +
       tentB +
-      tent(X(-24), c.y - 4, 1.12, TENT_A) +
+      tent(X(-14), c.y - 4, 1, TENT_A) +
       pennant +
       logSeat(X(24), c.y - 12) +
       (c.stage === 2 ? campfire(X(28), c.y + 2, true) + lantern + logSeat(X(40), c.y + 4) : campfire(X(28), c.y + 2) + logPile(X(40), c.y + 4, 0.75))
@@ -128,7 +129,7 @@ const lake = definePiece({
   h: 76,
   below: 10,
   render: (c, X) => {
-    const back = pine(X(-40), c.y - 34, 0.85) + tree(X(-12), c.y - 38, 0.62) + pine(X(16), c.y - 36, 0.66);
+    const back = pine(fit(c, X(-40), 17, 20), c.y - 34, 0.85) + tree(X(-12), c.y - 38, 0.62) + pine(X(16), c.y - 36, 0.66);
     const lx = X(-6);
     const ly = c.y - 14;
     const deckTop = (from: number) => mp(`M${from} -16 L52 -16 L52 -11 L${from} -11Z`, X, c.y);
@@ -176,16 +177,16 @@ function cliff(x: number, y: number) {
     x,
     y,
     1,
-    `${sh(4, 0, 36, 7)}<path d="M-9 0 L-8 -66 Q0 -78 9 -74 L8 0Z" fill="#5E5980"/>` +
-      `<path d="M-36 0 Q-40 -26 -30 -44 Q-24 -60 -10 -66 L-6 -66 Q-9 -36 -7 0Z" fill="#A39FC4"/><path d="M-30 -30 Q-28 -46 -18 -56" stroke="#D3CFE8" stroke-width="2.6" fill="none" stroke-linecap="round"/>` +
-      `<path d="M-32 -16 Q-22 -20 -12 -16 M-26 -40 Q-18 -43 -11 -40" stroke="#7E79A3" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
-      `<path d="M7 0 Q10 -40 7 -74 Q22 -80 30 -60 Q38 -36 35 0Z" fill="#8F8AAE"/><path d="M20 -74 Q28 -70 30 -60 Q38 -36 35 0 L22 0 Q28 -36 20 -74Z" fill="#76719A"/>` +
-      `<path d="M10 -50 Q18 -54 26 -50 M11 -24 Q20 -27 30 -23" stroke="#6E6992" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+    `${sh(-4, 0, 32, 7)}<path d="M-9 0 L-8 -66 Q0 -78 9 -74 L8 0Z" fill="#706872"/>` +
+      `<path d="M-36 0 Q-40 -26 -30 -44 Q-24 -60 -10 -66 L-6 -66 Q-9 -36 -7 0Z" fill="#CFC8BE"/><path d="M-30 -30 Q-28 -46 -18 -56" stroke="#ECE7DF" stroke-width="2.6" fill="none" stroke-linecap="round"/>` +
+      `<path d="M-32 -16 Q-22 -20 -12 -16 M-26 -40 Q-18 -43 -11 -40" stroke="#A69E95" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+      `<path d="M7 0 Q10 -40 7 -74 Q22 -80 30 -60 Q38 -36 35 0Z" fill="#BAB2A8"/><path d="M20 -74 Q28 -70 30 -60 Q38 -36 35 0 L22 0 Q28 -36 20 -74Z" fill="#9E968D"/>` +
+      `<path d="M10 -50 Q18 -54 26 -50 M11 -24 Q20 -27 30 -23" stroke="#958C84" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
       `<path d="M-32 -42 Q-26 -62 -8 -68 Q-14 -60 -22 -52 Q-28 -46 -32 -42Z" fill="#7CC96A"/><path d="M-28 -46 Q-22 -58 -12 -64" stroke="#B5E89F" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
       `<path d="M7 -72 Q20 -82 30 -62 Q22 -70 8 -68Z" fill="#5FAF55"/>` +
       // Mossy boulders at the foot of each crag.
-      `<path d="M-38 0 Q-40 -9 -32 -11 Q-24 -12 -22 -4 Q-22 0 -38 0Z" fill="#8F8AAE"/><path d="M-36 -6 Q-33 -10 -28 -10" stroke="#C3BEDD" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
-      `<path d="M26 0 Q24 -8 32 -10 Q40 -10 40 -3 Q40 0 26 0Z" fill="#76719A"/>`,
+      `<path d="M-38 0 Q-40 -9 -32 -11 Q-24 -12 -22 -4 Q-22 0 -38 0Z" fill="#BAB2A8"/><path d="M-36 -6 Q-33 -10 -28 -10" stroke="#E2DCD2" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+      `<path d="M26 0 Q24 -8 32 -10 Q40 -10 40 -3 Q40 0 26 0Z" fill="#9E968D"/>`,
   );
 }
 
@@ -326,7 +327,7 @@ const fairyRing = definePiece({
   w: 106,
   h: 86,
   render: (c, X) => {
-    const back = pine(X(-42), c.y - 34, 0.78) + birch(X(30), c.y - 36, 0.72);
+    const back = pine(fit(c, X(-42), 16, 18, 53), c.y - 34, 0.78) + birch(X(30), c.y - 36, 0.72);
     const moss = `<ellipse cx="${X(10)}" cy="${c.y - 10}" rx="38" ry="13" fill="#A8E6B8" opacity=".8"/><ellipse cx="${X(8)}" cy="${c.y - 12}" rx="24" ry="7" fill="#C6F2D0" opacity=".8"/>`;
     // A ring around the moss: back ones first (smaller), front ones last.
     const ring = (s: number) =>
@@ -439,7 +440,7 @@ const rangerTower = definePiece({
   h: 100,
   render: (c, X) => {
     const tx = X(-4) - 3;
-    const back = pine(X(-38), c.y - 12, 0.7);
+    const back = pine(fit(c, X(-38), 14, 16, 48), c.y - 12, 0.7);
     if (c.stage === 0) {
       const footings = [[-18, 0], [14, 0], [-8, -5], [24, -5]].map(([dx, dy]) => `<path d="M${tx + dx - 3} ${c.y + dy} h6 v-3 h-6Z" fill="#B9AEE6"/><path d="M${tx + dx - 3} ${c.y + dy - 3} h6 l1 -1 h-6Z" fill="#D9CEFF"/>`).join("");
       return back + plot(tx + 2, c.y - 4, 1) + footings + logPile(X(34), c.y + 4, 0.8);

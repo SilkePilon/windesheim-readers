@@ -564,7 +564,12 @@ const ruins = definePiece({
     const lintel = place(cA, c.y - 64, 1, block(-8, 0, 34, 5, 5, STONE.front, STONE.side, STONE.top));
     const drum = place(X(30), c.y + 2, 1, `${sh(2, 0, 12, 2.6)}<rect x="-8" y="-9" width="16" height="9" rx="1" fill="${STONE.side}"/><ellipse cx="-8" cy="-4.5" rx="2.6" ry="4.5" fill="${STONE.top}"/>`);
     const sandStreaks = [[-50, -54, 46], [-20, -30, 50], [4, -70, 40]]
-      .map(([d, dy, w], i) => `<path class="water" style="animation-delay:-${i * 0.8}s" d="M${X(d)} ${c.y + dy} q${r1((c.side * w) / 2)} -4 ${c.side * w} 0" stroke="${DUNE.hi}" stroke-width="1.6" fill="none" stroke-dasharray="6 10" stroke-linecap="round" opacity=".9"/>`)
+      // Wind-blown sand: long soft wisps gliding along (the dash period matches wk-flow's 40px), not dashes.
+      .map(([d, dy, w], i) => {
+        const wisp = (oy: number, dash: string, sw: number, op: number, delay: number) =>
+          `<path class="water" style="animation-delay:-${r1(delay)}s" d="M${X(d)} ${c.y + dy + oy} q${r1((c.side * w) / 2)} -4 ${c.side * w} 0" stroke="${DUNE.hi}" stroke-width="${sw}" fill="none" stroke-dasharray="${dash}" stroke-linecap="round" opacity="${op}"/>`;
+        return wisp(0, "18 22", 1.3, 0.7, i * 0.8) + wisp(3.5, "9 31", 1, 0.5, i * 0.8 + 0.9);
+      })
       .join("");
     return (
       column(cA, c.y - 20, 40, false) +

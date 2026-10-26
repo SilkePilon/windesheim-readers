@@ -9,6 +9,7 @@ import {
   definePiece,
   duneGrass,
   facing,
+  fit,
   glow,
   gull,
   house,
@@ -79,7 +80,7 @@ const lighthouse = definePiece({
       `<rect x="${tx - 6}" y="${top - 13}" width="12" height="10" rx="1.5" fill="${C.yellowL}"/><rect x="${tx + 1}" y="${top - 13}" width="5" height="10" fill="${C.yellow}"/>` +
       `<path d="M${tx - 8} ${top - 13} Q${tx} ${top - 23} ${tx + 8} ${top - 13}Z" fill="#F0506E"/><path d="M${tx} ${top - 21} Q${tx + 6} ${top - 18} ${tx + 8} ${top - 13} L${tx + 1} ${top - 13}Z" fill="#C8385A"/>` +
       glow(tx, top - 8, 22) +
-      `<g transform="translate(${tx} ${top - 8})"><g class="beam"><path d="M0 0 L46 -10 L46 10Z" fill="${C.yellowL}" opacity=".55"/></g></g>`;
+      `<g transform="translate(${tx} ${top - 8})"><g class="beam"><path d="M0 0 L34 -8 L34 8Z" fill="${C.yellowL}" opacity=".55"/></g></g>`;
     return (
       house(X(26), c.y + 2, 0.62, { roof: "#3F8FE0", roofD: "#2A6DB5", alive: true }) +
       sh(tx, c.y, 22, 5) +
@@ -180,7 +181,7 @@ const fishingQuay = definePiece({
   render: (c, X) => {
     const L = Math.min(X(-54), X(54));
     const water = (alive: boolean) => basin(L, c.y - 20, 108, 30, alive);
-    const sx = X(-28) - 4;
+    const sx = fit(c, X(-28) - 4, 18, 37);
     const sy = c.y - 30;
     if (c.stage === 0) return water(false) + [X(-30), X(-6), X(18), X(40)].map((px, i) => pile(px, c.y - 4 + (i % 2) * 6)).join("") + plot(sx + 2, sy, 0.7) + fishBox(X(24), c.y - 30);
     if (c.stage === 1)
@@ -357,7 +358,7 @@ const beachHuts = definePiece({
   below: 12,
   render: (c, X) => {
     const spots: [number, number][] = [[-44, -48], [-24, -38], [-4, -28], [16, -18]];
-    const pos = spots.map(([d, dy]) => [X(d) - (c.side === 1 ? 0 : 10), c.y + dy] as const);
+    const pos = spots.map(([d, dy]) => [X(d) - (c.side === 1 ? 0 : 14), c.y + dy] as const);
     if (c.stage === 0)
       return (
         pos.map(([hx, hy]) => `<path d="M${hx - 8} ${hy} V${hy - 6} M${hx + 8} ${hy} V${hy - 6}" stroke="${C.woodL}" stroke-width="1.6" stroke-linecap="round"/><path d="M${hx - 9} ${hy - 4} H${hx + 9}" stroke="${C.orange}" stroke-width=".9" stroke-dasharray="2 1.6"/>`).join("") +
@@ -472,7 +473,7 @@ const fishMarket = definePiece({
   h: 76,
   below: 12,
   render: (c, X) => {
-    const hx = X(-23);
+    const hx = fit(c, X(-23), 26, 41);
     const hy = c.y - 12;
     const s = 0.95;
     const paving = `<ellipse cx="${X(2)}" cy="${c.y - 4}" rx="50" ry="12" fill="#E4E1EE"/><ellipse cx="${X(0)}" cy="${c.y - 5}" rx="40" ry="8" fill="#F1EFF7"/>`;

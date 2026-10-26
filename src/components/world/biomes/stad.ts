@@ -10,6 +10,7 @@ import {
   definePiece,
   facing,
   fairyLights,
+  fit,
   flowers,
   glow,
   lamp,
@@ -92,7 +93,7 @@ const canalHouses = definePiece({
       );
     if (c.stage === 1)
       return (
-        sh(c.x + 6, base, 40, 6) +
+        sh(c.x + 2, base, 40, 6) +
         facade(x0, base, 22, 52, cols[0], false, "step") +
         facade(x0 + 22, base, 22, 60, cols[1], false, "bell") +
         `<rect x="${x0 + 44}" y="${base - 22}" width="22" height="22" fill="${cols[2][0]}"/>` +
@@ -102,7 +103,7 @@ const canalHouses = definePiece({
       );
     const boat = `<g transform="translate(${X(26)} ${c.y + 8})"><g class="bob"><path d="M-11 -2 H11 Q9 3 0 3 Q-9 3 -11 -2Z" fill="${C.pink}"/><path d="M-11 -2 H11 L10 0 H-10Z" fill="${C.pinkD}"/><rect x="-4" y="-7" width="7" height="5" rx="1" fill="${C.cream}"/></g></g>`;
     return (
-      sh(c.x + 6, base, 42, 6) +
+      sh(c.x + 2, base, 40, 6) +
       side +
       facade(x0, base, 22, 52, cols[0], false, "step") +
       facade(x0 + 22, base, 22, 60, cols[1], false, "bell") +
@@ -256,7 +257,7 @@ const gatePiece = definePiece({
   below: 12,
   render: (c, X) => {
     const s = 0.88;
-    const gx = X(-10);
+    const gx = fit(c, X(-10), 30, 47, 53);
     const gy = c.y - 10;
     const street =
       `<path d="M${r1(gx - 7)} ${gy} L${r1(gx + 7)} ${gy} L${r1(gx + 15)} ${c.y + 10} L${r1(gx - 15)} ${c.y + 10}Z" fill="#D3CCE8"/><path d="M${r1(gx - 4)} ${gy} L${r1(gx + 4)} ${gy} L${r1(gx + 9)} ${c.y + 10} L${r1(gx - 9)} ${c.y + 10}Z" fill="#ECE8F7"/>` +
@@ -332,7 +333,7 @@ const market = definePiece({
   render: (c, X) => {
     const sq = cobbles(X(0), c.y - 16, 54, 22);
     const S: [number, number, [string, string], Goods][] = [
-      [X(-30), c.y - 30, [C.pink, C.pinkD], "veg"],
+      [fit(c, X(-30), 20, 32), c.y - 30, [C.pink, C.pinkD], "veg"],
       [X(10), c.y - 34, ["#3F8FE0", "#2A6DB5"], "flowers"],
       [X(-8), c.y - 2, [C.greenM, C.green], "cheese"],
     ];
@@ -500,7 +501,7 @@ const cafe = definePiece({
       cafeHouse(hx, c.y - 2, true) +
       terrace +
       `<rect x="${poleX - 0.8}" y="${c.y - 36}" width="1.6" height="34" fill="#3A3266"/>` +
-      planter(X(46), c.y - 16, 0.66) +
+      planter(fit(c, X(46), 10, 13), c.y - 16, 0.66) +
       parasol(X(18), c.y - 14, [C.pink, C.pinkD], true, 0) +
       parasol(X(38), c.y + 2, [C.yellow, "#D9A12A"], true, 1) +
       fairyLights([[corner, c.y - 38], [poleX, c.y - 36]], true) +

@@ -15,6 +15,7 @@ import {
   glow,
   house,
   logPile,
+  mp,
   person,
   place,
   plot,
@@ -486,7 +487,7 @@ const mountainHut = definePiece({
 
 const RHB = { red: "#D7263D", redD: "#A81C30", roof: "#6E6A8F" };
 
-/** Red Rhaetian train (loco + coach) facing +x, rear at x = 0 (unmirrored, 27px long). */
+/** Red Rhaetian railcar facing +x, rear at x = 0 (unmirrored, 20px long, 16px tall incl. pantograph). */
 const redTrain = () => {
   const car = (x0: number, w: number, nose: boolean) =>
     `<path d="M${x0} 0 V-9 Q${x0} -11 ${x0 + 2} -11 H${x0 + w - (nose ? 4 : 2)} Q${x0 + w} -11 ${x0 + w} ${nose ? -7 : -9} V0Z" fill="${RHB.red}"/>` +
@@ -494,12 +495,11 @@ const redTrain = () => {
     Array.from({ length: Math.floor((w - 3) / 4) }, (_, i) => win(x0 + 1.6 + i * 4, -9, 2.8, 3, false, 0.6)).join("") +
     `<path d="M${x0 + 0.6} -10 H${x0 + w - 2}" stroke="#fff" stroke-width=".6" opacity=".55"/>`;
   return (
-    `<ellipse cx="14" cy="1" rx="14" ry="1.6" fill="${C.shadow}" opacity=".18"/>` +
-    car(0, 13, false) +
-    car(14, 13, true) +
-    `<path d="M20 -12.2 L23 -15 L26 -12.2 M21.5 -15 H24.5" stroke="#3A3266" stroke-width=".7" fill="none"/>` +
-    `<circle cx="26.6" cy="-3.6" r=".9" fill="${C.yellowL}"/>` +
-    [3, 10, 17, 24].map((wx) => `<circle cx="${wx}" cy=".4" r="1.2" fill="#3A3266"/>`).join("")
+    `<ellipse cx="10" cy="1" rx="10" ry="1.6" fill="${C.shadow}" opacity=".18"/>` +
+    car(0, 20, true) +
+    `<path d="M7 -12.2 L10 -15 L13 -12.2 M8.5 -15 H11.5" stroke="#3A3266" stroke-width=".7" fill="none"/>` +
+    `<circle cx="19.6" cy="-3.6" r=".9" fill="${C.yellowL}"/>` +
+    [3, 7.4, 12.6, 17].map((wx) => `<circle cx="${wx}" cy=".4" r="1.2" fill="#3A3266"/>`).join("")
   );
 };
 
@@ -513,6 +513,15 @@ const tunnel = definePiece({
     const mL = (col = ROCK) => peak(c.x - 34, c.y + 2, 22, 82, 0.34, col);
     const mR = (col = ROCK) => peak(c.x + 34, c.y + 2, 22, 64, 0.3, col);
     const far = peak(c.x + 2, c.y - 30, 26, 64, 0.5, FAR);
+    // Rock shoulders at the feet of the peaks: they hold the tunnel mouths and fully cover the rail band
+    // (y = ty−19 … ground) from the mouths out to ±54, so the train is hidden at both ends of its run.
+    const shoulders =
+      `<path d="${mp("M-54 4 L-54 -36 Q-53 -47 -44 -47 L-38 -47 Q-31 -47 -31 -40 L-31 4Z", (d) => r1(c.x + d), c.y)}" fill="${ROCK.lit}"/>` +
+      `<path d="${mp("M-38 -47 Q-31 -47 -31 -40 L-31 4 L-36 4 L-36 -36 Q-36 -44 -38 -47Z", (d) => r1(c.x + d), c.y)}" fill="${ROCK.shade}"/>` +
+      `<path d="${mp("M31 4 L31 -40 Q31 -47 38 -47 L44 -47 Q53 -47 54 -36 L54 4Z", (d) => r1(c.x + d), c.y)}" fill="${ROCK.lit}"/>` +
+      `<path d="${mp("M46 -47 Q53 -47 54 -36 L54 4 L46 4 L47 -20 L45 -36Z", (d) => r1(c.x + d), c.y)}" fill="${ROCK.shade}"/>` +
+      `<path d="${mp("M-52 -36 Q-51 -45 -44 -45 M31 -40 Q32 -45 38 -45", (d) => r1(c.x + d), c.y)}" stroke="${ROCK.hi}" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+      `<path d="${mp("M-48 -10 L-44 -18 L-45 -26 M-40 -6 L-42 -14 M38 -8 L41 -16 L40 -24 M48 -12 L46 -20", (d) => r1(c.x + d), c.y)}" stroke="${ROCK.shade}" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".7"/>`;
     // Portals: dark mouths on the facing flanks, with a stone ring.
     const mouth = (x: number) => `<path d="M${x - 7} ${ty + 1} V${ty - 11} Q${x - 7} ${ty - 18} ${x} ${ty - 18} Q${x + 7} ${ty - 18} ${x + 7} ${ty - 11} V${ty + 1}Z" fill="#2B2442"/>`;
     const ring = (x: number) =>
@@ -528,12 +537,13 @@ const tunnel = definePiece({
       Array.from({ length: 9 }, (_, i) => `<path d="M${pL - 2 + i * 5} ${ty + 1.2} v-1.6" stroke="${C.woodD}" stroke-width="1.6"/>`).join("");
     const valley = `<path d="M${pL - 4} ${c.y + 6} Q${c.x} ${c.y - 2} ${pR + 4} ${c.y + 6}Z" fill="${MEADOW.shade}"/><path d="M${c.x - 4} ${c.y + 6} Q${c.x} ${c.y + 1} ${c.x + 6} ${c.y + 6}" stroke="${CREEK.water}" stroke-width="2.6" fill="none"/>`;
     if (c.stage === 0)
-      return far + mL() + mR() + valley + stake(pL - 2, ty + 4) + stake(pR + 2, ty + 6) + place(c.x - 2, c.y + 4, 1, `${sh(1, 0, 12, 2)}<path d="M-12 -2 H12 M-12 -4.6 H12" stroke="#8C82B5" stroke-width="1.4"/><path d="M-9 -5.6 v4 M-3 -5.6 v4 M3 -5.6 v4 M9 -5.6 v4" stroke="${C.woodL}" stroke-width="1.6"/>`) + plot(X(26), c.y + 4, 0.5);
+      return far + mL() + mR() + shoulders + valley + stake(pL - 2, ty + 4) + stake(pR + 2, ty + 6) + place(c.x - 2, c.y + 4, 1, `${sh(1, 0, 12, 2)}<path d="M-12 -2 H12 M-12 -4.6 H12" stroke="#8C82B5" stroke-width="1.4"/><path d="M-9 -5.6 v4 M-3 -5.6 v4 M3 -5.6 v4 M9 -5.6 v4" stroke="${C.woodL}" stroke-width="1.6"/>`) + plot(X(26), c.y + 4, 0.5);
     if (c.stage === 1)
       return (
         far +
         mL() +
         mR() +
+        shoulders +
         valley +
         mouth(pL - 6) +
         ring(pL - 6) +
@@ -543,14 +553,16 @@ const tunnel = definePiece({
         person(X(36), c.y + 6, C.orange, 2) +
         place(X(36) + 8, c.y + 6, 1, `${sh(0, 0, 6, 1.6)}<path d="M-5 0 L-6 -6 H6 L5 0Z" fill="#6E6A8F"/><path d="M-6 -6 L6 -6" stroke="#9A96B8" stroke-width="1.2"/>`)
       );
-    // The train runs left to right; the mountains are drawn again on top to hide it at both ends.
-    const train = `<g transform="translate(${c.x - 13.5} ${ty - 1})"><g class="train">${redTrain()}</g></g>`;
+    // The train runs left to right (rear from c.x−52 to c.x+32, `.train` = ±42px around c.x−10); the
+    // mountains and shoulders are drawn again on top, so at both ends it is fully inside a tunnel.
+    const train = `<g transform="translate(${c.x - 10} ${ty - 1})"><g class="train">${redTrain()}</g></g>`;
     // The train is in shadow inside the mouths.
     const dim = (x: number) => mouth(x).replace('fill="#2B2442"', 'fill="#2B2442" opacity=".45"');
     return (
       far +
       mL() +
       mR() +
+      shoulders +
       valley +
       viaduct +
       mouth(pL - 6) +
@@ -558,6 +570,7 @@ const tunnel = definePiece({
       train +
       mL() +
       mR() +
+      shoulders +
       dim(pL - 6) +
       dim(pR + 6) +
       ring(pL - 6) +

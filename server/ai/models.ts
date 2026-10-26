@@ -21,6 +21,9 @@ export class ProviderError extends Error {
   }
 }
 
+/** Error code for "no key saved or typed"; the admin UI translates it. */
+export const NO_API_KEY = "NO_API_KEY";
+
 /** Thrown on 401/403: the key is invalid. */
 export class ProviderAuthError extends ProviderError {
   constructor(message: string, status?: number) {
@@ -111,10 +114,11 @@ async function getJson(url: string, headers: Record<string, string>, f: typeof f
     throw new ProviderError(timeout ? "Request timed out" : e instanceof Error ? e.message : String(e));
   }
   if (!res.ok) {
-    const body = (await res.text().catch(() => "")).slice(0, 300);
-    const msg = `HTTP ${res.status}${body ? `: ${body}` : ""}`;
-    // Google answers a bad key with 400 API_KEY_INVALID instead of 401.
-    if (res.status === 401 || res.status === 403 || body.includes("API_KEY_INVALID")) throw new ProviderAuthError(msg, res.status);
+    const body = await res.text().catch(() => "");
+    const msg = `HTTP ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}`;
+    // Google answers a bad or expired key with 400 API_KEY_INVALID / API_KEY_EXPIRED instead of 401
+    // (the reason can sit deep in the error details, so search the whole body).
+    if (res.status === 401 || res.status === 403 || /API_KEY_(INVALID|EXPIRED)/.test(body)) throw new ProviderAuthError(msg, res.status);
     throw new ProviderError(msg, res.status);
   }
   try {
@@ -127,7 +131,7 @@ async function getJson(url: string, headers: Record<string, string>, f: typeof f
 const MAX_PAGES = 20;
 
 async function fetchAll(provider: ProviderId, apiKey: string | undefined, f: typeof fetch): Promise<ModelInfo[]> {
-  if (provider !== "openrouter" && !apiKey) throw new ProviderAuthError("No API key");
+  if (provider !== "openrouter" && !apiKey) throw new ProviderAuthError(NO_API_KEY);
   switch (provider) {
     case "google": {
       const raw: Json[] = [];
@@ -178,7 +182,7 @@ export type ValidateResult = { ok: true; modelCount: number } | { ok: false; inv
 export async function validateKey(provider: ProviderId, apiKey: string | undefined, opts: Opts = {}): Promise<ValidateResult> {
   try {
     if (provider === "openrouter") {
-      if (!apiKey) throw new ProviderAuthError("No API key");
+      if (!apiKey) throw new ProviderAuthError(NO_API_KEY);
       await getJson("https://openrouter.ai/api/v1/key", { Authorization: `Bearer ${apiKey}` }, opts.fetchImpl ?? fetch);
       const models = await listModels(provider, undefined, opts).catch(() => []);
       return { ok: true, modelCount: models.length };

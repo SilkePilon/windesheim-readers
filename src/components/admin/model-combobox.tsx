@@ -87,6 +87,8 @@ export function ModelCombobox({
   const [search, setSearch] = useState("");
   const { data: models, isFetching, error, refresh, refreshing } = useModels(provider, apiKey);
 
+  // NO_API_KEY is the server's code for "no key saved or typed" (server/ai/models.ts).
+  const errorText = !error ? "" : error.message === "NO_API_KEY" ? t("admin.ai.modelsNoKey") : t("admin.ai.modelsError", { error: error.message });
   const selected = models?.find((m) => m.id === value);
   const term = search.trim();
   const filtered = useMemo(() => {
@@ -165,8 +167,8 @@ export function ModelCombobox({
                   <Spinner /> {t("admin.ai.loadingModels")}
                 </div>
               ) : error && !models ? (
-                <p title={error.message} className="line-clamp-4 px-3 py-3 text-xs break-words text-danger-shade dark:text-danger">
-                  {t("admin.ai.modelsError", { error: error.message })}
+                <p title={errorText} className="line-clamp-4 px-3 py-3 text-xs break-words text-danger-shade dark:text-danger">
+                  {errorText}
                 </p>
               ) : (
                 !filtered.length && !offerCustom && <CommandEmpty>{t("admin.ai.noModels")}</CommandEmpty>
@@ -218,8 +220,8 @@ export function ModelCombobox({
       {error && !open && (
         <p className="flex items-start gap-1.5 text-xs break-words text-danger-shade dark:text-danger">
           <TriangleAlert className="mt-px size-3.5 shrink-0" />
-          <span title={error.message} className="line-clamp-3 min-w-0">
-            {t("admin.ai.modelsError", { error: error.message })}
+          <span title={errorText} className="line-clamp-3 min-w-0">
+            {errorText}
           </span>
         </p>
       )}

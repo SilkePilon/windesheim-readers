@@ -18,8 +18,9 @@
       // Apply the saved theme before first paint (next-themes takes over once React mounts).
       try {
         var t = localStorage.getItem("theme");
-        if (t === "dark" || ((!t || t === "system") && matchMedia("(prefers-color-scheme: dark)").matches))
-          document.documentElement.classList.add("dark");
+        var dark = t === "dark" || ((!t || t === "system") && matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
       } catch (e) {}
     </script>
   </head>

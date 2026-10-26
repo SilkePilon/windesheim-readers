@@ -75,9 +75,9 @@ export const BADGES = {
 
 export type BadgeId = keyof typeof BADGES;
 
-/** mastery 0..1 for a lesson */
 export const MASTERY_WEIGHTS = { quiz: 0.4, cards: 0.3, explain: 0.2, read: 0.1 } as const;
 
+/** mastery 0..1 for a lesson */
 export function computeMastery(p: { bestQuiz: number; bestExplain: number; summaryRead: boolean; cardMastery: number }) {
   return (
     MASTERY_WEIGHTS.quiz * p.bestQuiz +

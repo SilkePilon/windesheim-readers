@@ -19,7 +19,7 @@ export const auth = betterAuth({
       role: { type: "string", defaultValue: "user", input: false },
       nickname: { type: "string", required: false },
       showOnLeaderboard: { type: "boolean", defaultValue: true },
-      locale: { type: "string", defaultValue: "nl" },
+      locale: { type: "string", required: false, defaultValue: null },
     },
   },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },

@@ -58,6 +58,7 @@ describe("graceful degradation", () => {
   test("locale lookup: en is kept, unknown users and values become nl", async () => {
     expect(await resolveLocale(async () => "en", "a@x")).toBe("en");
     expect(await resolveLocale(async () => undefined, "a@x")).toBe("nl");
+    expect(await resolveLocale(async () => null, "a@x")).toBe("nl"); // locale never chosen
     expect(await resolveLocale(async () => "de", "a@x")).toBe("nl");
   });
 });

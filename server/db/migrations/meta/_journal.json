@@ -15,6 +15,13 @@
       "when": 1793022859729,
       "tag": "0001_daily_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793035805061,
+      "tag": "0002_nullable_user_locale",
+      "breakpoints": true
     }
   ]
 }

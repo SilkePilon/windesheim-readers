@@ -10,7 +10,7 @@ export interface Me {
     displayName: string;
     role: "user" | "admin";
     showOnLeaderboard: boolean;
-    locale: "nl" | "en";
+    locale: "nl" | "en" | null; // null = never chosen; the UI keeps the device/browser language
   };
   stats: {
     xp: number;

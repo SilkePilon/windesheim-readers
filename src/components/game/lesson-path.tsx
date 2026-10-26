@@ -57,7 +57,11 @@ export function LessonPath({ groups, onOpen }: { groups: PathGroup[]; onOpen: (i
                     ref={current ? currentRef : undefined}
                     type="button"
                     onClick={() => onOpen(n.id)}
-                    aria-label={label}
+                    aria-label={t("home.lessonAria", {
+                      code: n.code,
+                      title: n.title,
+                      state: t(`home.lessonState.${n.state === "current" ? (n.mastery > 0 ? "started" : "new") : n.state}`),
+                    })}
                     aria-current={current ? "step" : undefined}
                     title={label}
                     data-state={n.state}

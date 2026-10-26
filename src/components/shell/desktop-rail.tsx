@@ -29,6 +29,7 @@ export function DesktopRail({ items }: { items: NavItem[] }) {
       {items.map((item) => {
         const active = isNavActive(item.to, pathname);
         const label = t(`nav.${item.key}`);
+        const ariaLabel = item.badge ? t("nav.withDue", { label, count: item.badge }) : label;
         const Icon = item.icon;
         return (
           <Fragment key={item.to}>
@@ -37,7 +38,7 @@ export function DesktopRail({ items }: { items: NavItem[] }) {
               <TooltipTrigger asChild>
                 <Link
                   to={item.to}
-                  aria-label={label}
+                  aria-label={ariaLabel}
                   aria-current={active ? "page" : undefined}
                   data-rail-cell
                   className={cn(

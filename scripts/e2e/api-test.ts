@@ -22,6 +22,9 @@ const admin = await login("admin@windesheim.nl");
 const student = await login("s1234567@student.windesheim.nl");
 const bob = await login("bob@student.windesheim.nl");
 console.log("student me:", (await j(student, "GET", "/me"))[1].user.role);
+ok((await j(bob, "GET", "/me"))[1].user.locale === null, "a fresh user's locale is null (never chosen)");
+ok((await j(bob, "PATCH", "/me", { locale: "en" }))[0] === 200, "PATCH /me locale en");
+ok((await j(bob, "GET", "/me"))[1].user.locale === "en", "PATCH /me locale persists");
 ok((await j(student, "GET", "/admin/readers"))[0] === 403, "students cannot access admin");
 // AI key validation + model list (real network calls; bogus key must be rejected)
 const [, val] = await j(admin, "POST", "/admin/settings/ai/validate", { provider: "google", apiKey: "bogus" });
@@ -56,6 +59,15 @@ console.log("read:", (await j(student, "POST", `/lessons/${lesson.id}/read`))[1]
 const [, queue] = await j(student, "GET", `/review/queue?lessonId=${lesson.id}`);
 ok(queue.length > 0 && queue.every((c: any) => ["again", "good", "easy"].every((k) => typeof c.intervals?.[k] === "number") && c.intervals.again < c.intervals.good && c.intervals.good < c.intervals.easy), "queue cards have intervals again < good < easy (ms)");
 ok((await j(admin, "POST", "/admin/readers/e2e-reader/retry"))[1].action === "none", "retry on a healthy ready reader is a no-op");
+{
+  // A failed, unpublished, lesson-less reader (oldest, so it never becomes readers[0]): retry would re-extract.
+  const { Database } = await import("bun:sqlite");
+  const sdb = new Database(LOG.replace(/[^/]+$/, "app.db"));
+  sdb.run("insert into reader (id, title, file_name, status, error, created_at) values ('e2e-broken', 'Broken', 'x.pdf', 'error', 'boom', 0)");
+  sdb.close();
+  const both = await Promise.all([1, 2].map(() => j(admin, "POST", "/admin/readers/e2e-broken/retry")));
+  ok(both.map(([, b]) => b.action).sort().join() === "extract,none", "two simultaneous retries start exactly one job");
+}
 for (const c of queue) await j(student, "POST", "/review", { flashcardId: c.id, rating: 3 });
 console.log("reviewed", queue.length, "due now:", (await j(student, "GET", "/review/queue"))[1].length);
 const [, me] = await j(student, "GET", "/me");

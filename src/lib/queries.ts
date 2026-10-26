@@ -26,7 +26,7 @@ export function useMe() {
   });
 }
 
-/** Once logged in, the UI follows the saved user locale instead of the browser. */
+/** Once logged in, the UI follows the saved user locale; a null locale (never chosen) keeps the device/browser language. */
 export function useSavedLocale() {
   const { data: me } = useMe();
   const locale = me?.user.locale;

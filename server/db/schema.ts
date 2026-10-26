@@ -17,7 +17,7 @@ export const user = sqliteTable("user", {
   role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
   nickname: text("nickname"),
   showOnLeaderboard: integer("show_on_leaderboard", { mode: "boolean" }).notNull().default(true),
-  locale: text("locale").notNull().default("nl"),
+  locale: text("locale", { enum: ["nl", "en"] }), // null = never chosen (UI follows the browser)
 });
 
 export const session = sqliteTable("session", {

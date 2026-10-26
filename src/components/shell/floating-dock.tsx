@@ -97,6 +97,7 @@ export function FloatingDock({ items }: { items: NavItem[] }) {
         {items.map((item, i) => {
           const active = i === activeIndex;
           const label = t(`nav.${item.key}`);
+          const ariaLabel = item.badge ? t("nav.withDue", { label, count: item.badge }) : label;
           const Icon = item.icon;
           return (
             <Link
@@ -105,7 +106,7 @@ export function FloatingDock({ items }: { items: NavItem[] }) {
                 itemRefs.current[i] = el;
               }}
               to={item.to}
-              aria-label={label}
+              aria-label={ariaLabel}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative z-10 flex h-11 shrink-0 items-center justify-center rounded-[18px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",

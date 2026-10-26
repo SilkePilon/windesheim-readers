@@ -20,7 +20,8 @@ import {
   xpSince,
 } from "../lib/game";
 import { getQuests, recordQuestEvent } from "../lib/quests";
-import type { QuestEvent, QuestId } from "../../shared/quests";
+import { awardWithQuests } from "../lib/award";
+import type { QuestEvent } from "../../shared/quests";
 import { computeMastery, levelFromXp, quizXpFactor, quizXpPerCorrect, XP, type BadgeId } from "../../shared/game";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
@@ -62,14 +63,9 @@ function createQuizSession(userId: string, lessonId: string, questionIds: string
 }
 const NEW_CARDS_PER_SESSION = 15;
 
-/** Award XP, then feed the action's quest events (plus the xp itself) to the daily quests. */
-async function award(userId: string, amount: number, reason: string, events: QuestEvent[] = []) {
-  const res = await awardXp(userId, amount, reason);
-  const quests = new Set<QuestId>();
-  for (const e of [...events, { kind: "xp", amount: res.gained, reason } as const])
-    for (const q of (await recordQuestEvent(userId, e)).completed) quests.add(q);
-  return quests.size ? { ...res, quests: [...quests] } : res;
-}
+/** Award XP and advance the daily quests (see awardWithQuests). */
+const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = []) =>
+  awardWithQuests({ awardXp, recordQuestEvent }, userId, amount, reason, events);
 
 /** Lessons visible to this user: from published readers (admins see all). */
 async function visibleLesson(lessonId: string, isAdmin: boolean) {
@@ -150,7 +146,7 @@ export const learn = new Hono<AppEnv>()
         displayName: displayName({ nickname: u.nickname ?? null, name: u.name, email: u.email }),
         role: u.role,
         showOnLeaderboard: u.showOnLeaderboard ?? true,
-        locale: u.locale ?? "nl",
+        locale: u.locale === "nl" || u.locale === "en" ? u.locale : null,
       },
       stats: {
         xp,

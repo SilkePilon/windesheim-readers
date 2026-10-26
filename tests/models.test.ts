@@ -61,6 +61,16 @@ describe("listModels / validateKey", () => {
     expect(await validateKey("google", "bogus", { fetchImpl: f })).toMatchObject({ ok: false, invalid: true });
   });
 
+  test("google API_KEY_EXPIRED and a reason past the first 300 chars count as invalid", async () => {
+    const body = (reason: string) =>
+      JSON.stringify({ error: { code: 400, message: "x".repeat(400), status: "INVALID_ARGUMENT", details: [{ reason }] } });
+    const resp = (b: string) => (async () => new Response(b, { status: 400 })) as unknown as typeof fetch;
+    expect(body("API_KEY_INVALID").indexOf("API_KEY_INVALID")).toBeGreaterThan(300);
+    expect(await validateKey("google", "k", { fetchImpl: resp(body("API_KEY_INVALID")) })).toMatchObject({ ok: false, invalid: true });
+    expect(await validateKey("google", "k", { fetchImpl: resp(body("API_KEY_EXPIRED")) })).toMatchObject({ ok: false, invalid: true });
+    expect(await validateKey("google", "k", { fetchImpl: resp(body("SOMETHING_ELSE")) })).toMatchObject({ ok: false, invalid: false });
+  });
+
   test("openrouter validation uses /key", async () => {
     const urls: string[] = [];
     const f = (async (u: any) => {

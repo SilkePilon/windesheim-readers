@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, desc, eq, inArray, notInArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { generateText } from "ai";
 import { mkdir, unlink } from "node:fs/promises";
@@ -160,8 +160,22 @@ export const admin = new Hono<AppEnv>()
       .from(schema.lesson)
       .where(eq(schema.lesson.readerId, id));
     const action = retryAction(r, lessons);
+    if (action.kind === "none") return c.json({ action: action.kind });
+    // Claim atomically: only the request that still sees the state we decided on starts a job,
+    // so two simultaneous retries can't both run.
+    const claimed = await db
+      .update(schema.reader)
+      .set({ status: action.kind === "extract" ? "extracting" : "generating", error: null })
+      .where(
+        and(
+          eq(schema.reader.id, id),
+          eq(schema.reader.status, r.status),
+          r.error === null ? isNull(schema.reader.error) : eq(schema.reader.error, r.error),
+        ),
+      )
+      .returning({ id: schema.reader.id });
+    if (!claimed.length) return c.json({ action: "none" });
     if (action.kind === "extract") {
-      await db.update(schema.reader).set({ status: "extracting", error: null }).where(eq(schema.reader.id, id));
       void extractAndStructure(id).catch(async (e) => {
         await db
           .update(schema.reader)

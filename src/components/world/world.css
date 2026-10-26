@@ -1,4 +1,4 @@
-/* Lesson world: kit animations, night variants, pausing. Scoped to .world-svg. */
+/* Lesson world: kit animations, layers, evening grade, pausing. Scoped to .world (render.ts output). */
 @keyframes wk-sail { to { transform: rotate(360deg); } }
 @keyframes wk-puff {
   0% { transform: translateY(0) scale(0.6); opacity: 0; }
@@ -14,35 +14,58 @@
 @keyframes wk-flicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.9, 1.12); } 60% { transform: scale(1.08, 0.92); } }
 @keyframes wk-beam { 0%, 100% { transform: scaleX(1); opacity: 0.9; } 50% { transform: scaleX(-1); opacity: 0.5; } }
 
-.world-svg .sails { animation: wk-sail 9s linear infinite; transform-box: fill-box; transform-origin: center; }
-.world-svg .smoke { animation: wk-puff 3.2s ease-out infinite; transform-box: fill-box; transform-origin: center bottom; }
-.world-svg .bob { animation: wk-bob 1.8s ease-in-out infinite; }
-.world-svg .flag { animation: wk-flap 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: left center; }
-.world-svg .spark { animation: wk-twinkle 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.world-svg .fog { animation: wk-drift 7s ease-in-out infinite alternate; }
-.world-svg .water { animation: wk-flow 2.4s linear infinite; }
+.world .sails { animation: wk-sail 9s linear infinite; transform-box: fill-box; transform-origin: center; }
+.world .smoke { animation: wk-puff 3.2s ease-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.world .bob { animation: wk-bob 1.8s ease-in-out infinite; }
+.world .flag { animation: wk-flap 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: left center; }
+.world .spark { animation: wk-twinkle 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.world .fog { animation: wk-drift 7s ease-in-out infinite alternate; }
+.world .water { animation: wk-flow 2.4s linear infinite; }
 /* Palm crowns and flames: origin at the element's own (0,0), the crown/flame base. */
-.world-svg .sway { animation: wk-sway 3.6s ease-in-out infinite; transform-origin: 0 0; }
-.world-svg .flicker { animation: wk-flicker 0.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
-.world-svg .beam { animation: wk-beam 4s ease-in-out infinite; transform-origin: 0 0; }
+.world .sway { animation: wk-sway 3.6s ease-in-out infinite; transform-origin: 0 0; }
+.world .flicker { animation: wk-flicker 0.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.world .beam { animation: wk-beam 4s ease-in-out infinite; transform-origin: 0 0; }
 
 /* Off-screen segments: freeze (IntersectionObserver toggles .paused). */
-.world-svg .paused,
-.world-svg .paused * { animation-play-state: paused !important; }
+.world .paused,
+.world .paused * { animation-play-state: paused !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .world-svg * { animation: none !important; }
+  .world * { animation: none !important; }
 }
 
-/* Night: lamps/windows on and the dusk grade, in dark mode (or forced with .wl-dark). */
-.world-svg .wl-on,
-.world-svg .wl-dusk { display: none; }
-.dark .world-svg .wl-on,
-.dark .world-svg .wl-dusk,
-.world-svg.wl-dark .wl-on,
-.world-svg.wl-dark .wl-dusk { display: inline; }
-.dark .world-svg .wl-off,
-.world-svg.wl-dark .wl-off { display: none; }
+/* Layers: art, light halos (screen), text. The art svg sizes the box. */
+.world { position: relative; height: 100%; }
+.world > svg { display: block; width: 100%; height: 100%; }
+.world > svg + svg { position: absolute; inset: 0; pointer-events: none; }
+.world > .world-lights { mix-blend-mode: screen; }
+
+/* Evening grade in dark mode (or forced with .wl-dark): the dusk wash, lit windows and lamp halos.
+   Campus halos (.wl-always) glow in both themes. */
+.world .wl-on,
+.world .wl-dusk,
+.world .wl-light { display: none; }
+.world .wl-light.wl-always,
+.dark .world .wl-on,
+.dark .world .wl-dusk,
+.dark .world .wl-light,
+.world.wl-dark .wl-on,
+.world.wl-dark .wl-dusk,
+.world.wl-dark .wl-light { display: inline; }
+.dark .world .wl-off,
+.world.wl-dark .wl-off { display: none; }
+/* The wash (render.ts DUSK) shifts everything blue; saturate keeps colours vivid instead of
+   murky, a soft vignette frames it. One filter on the whole art layer, never per prop. */
+.dark .world > .world-svg,
+.world.wl-dark > .world-svg { filter: saturate(1.3); }
+.dark .world::after,
+.world.wl-dark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 80px 8px rgb(16 10 48 / 0.45);
+}
 
 /* The current node bobs gently (spec: "bobbing node"). */
 @keyframes wk-node-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }

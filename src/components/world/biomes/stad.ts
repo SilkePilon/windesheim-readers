@@ -1,4 +1,4 @@
-import { C, bench, crane, definePiece, lamp, planeTree, planter, plot, r1, scaffold, sh, win, type WorldBiome } from "../kit";
+import { C, bench, crane, definePiece, glow, lamp, planeTree, planter, plot, r1, scaffold, sh, win, type WorldBiome } from "../kit";
 import type { Rng } from "@/lib/world/rng";
 
 const FACADES: [string, string][] = [
@@ -22,7 +22,8 @@ function facade(x: number, y: number, w: number, h: number, col: [string, string
     `<rect x="${x}" y="${top}" width="${w}" height="${h}" fill="${col[0]}"/>${gab}` +
     `<rect x="${x + w - 2}" y="${r1(top - 2)}" width="2" height="${h + 2}" fill="${col[1]}" opacity=".7"/>` +
     wins +
-    `<rect x="${r1(x + w / 2 - 3)}" y="${y - 9}" width="6" height="9" rx="2.5" fill="${C.wood}"/><circle cx="${r1(x + w / 2)}" cy="${r1(top - 6)}" r="1.4" fill="#fff" opacity=".8"/>`
+    `<rect x="${r1(x + w / 2 - 3)}" y="${y - 9}" width="6" height="9" rx="2.5" fill="${C.wood}"/><circle cx="${r1(x + w / 2)}" cy="${r1(top - 6)}" r="1.4" fill="#fff" opacity=".8"/>` +
+    glow(x + w / 2, top + h * 0.4, w * 0.75, lit)
   );
 }
 

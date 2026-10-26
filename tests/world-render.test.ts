@@ -31,7 +31,8 @@ describe("renderWorldSvg", () => {
     for (const dark of [false, true]) {
       const svg = renderWorldSvg(w, { dark });
       clean(svg);
-      expect(svg.startsWith("<svg")).toBe(true);
+      expect(svg.startsWith('<div class="world')).toBe(true);
+      expect(svg).toContain('class="world-lights"');
       for (const b of BIOMES) expect(svg).toContain(`data-biome="${b}"`);
     }
   });

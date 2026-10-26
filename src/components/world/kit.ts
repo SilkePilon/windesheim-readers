@@ -64,9 +64,14 @@ export function win(x: number, y: number, w: number, h: number, lit = false, rx 
   return `${base}<rect class="wl-on" x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" rx="${rx}" fill="${C.yellowL}"/>`;
 }
 
-/** Soft halo for lamps/windows. `always`: also in light mode (campus is night in both). */
+/**
+ * Warm halo around a light source, in absolute world coordinates (never inside a transformed
+ * group). The renderer lifts every halo out of the art into one light layer above the evening
+ * grade, blended with `screen`, so lights glow instead of being dimmed. Shown in dark mode;
+ * `always` also in light mode (campus is night in both).
+ */
 export const glow = (x: number, y: number, r: number, always = false) =>
-  `<circle${always ? "" : ` class="wl-on"`} cx="${r1(x)}" cy="${r1(y)}" r="${r1(r)}" fill="url(#wk-glow)"/>`;
+  `<circle class="wl-light${always ? " wl-always" : ""}" cx="${r1(x)}" cy="${r1(y)}" r="${r1(r)}" fill="url(#wk-glow)"/>`;
 
 // ---------------------------------------------------------------- trees & plants
 
@@ -408,7 +413,10 @@ export function house(x: number, y: number, s = 1, o: HouseOpts = {}) {
       `<rect x="14" y="-52" width="7" height="12" fill="${C.woodL}"/>${smoke}<rect x="-13" y="-13" width="7" height="13" rx="1.5" fill="${o.door || C.wood}"/>` +
       win(-3, -18, 7, 7, o.alive) +
       `<g transform="skewY(-12)">${win(11, -21, 7, 7, o.alive)}</g>`,
-  );
+  ) +
+    // Window halos (house-local window centres, skewY(-12) for the side window).
+    glow(x + 0.5 * s, y - 14.5 * s, 11 * s) +
+    glow(x + 14.5 * s, y - 20.6 * s, 11 * s);
 }
 
 /** Three rising smoke puffs. */
@@ -429,7 +437,7 @@ export function windmill(x: number, y: number, s = 1, alive = true, sails = true
       (sails
         ? `<g transform="translate(0 -58)"><g class="${alive ? "sails" : ""}">${[0, 90, 180, 270].map(sail).join("")}</g><circle r="4" fill="${C.grapeD}"/></g>`
         : `<circle cy="-58" r="4" fill="${C.grapeD}"/>`),
-  );
+  ) + glow(x - 0.5 * s, y - 39 * s, 9 * s);
 }
 
 /** Building plot (not started): pegs, rope, and a sign. */
@@ -519,6 +527,7 @@ export function pond(x: number, y: number, rx: number, ry: number, alive = false
 
 /** Torch flame that flickers when alive. */
 export const torch = (x: number, y: number, alive = false) =>
+  glow(x, y - 19, 12) +
   `<g transform="${T(x, y)}"><rect x="-1.2" y="-14" width="2.4" height="14" fill="${C.wood}"/><g${alive ? ` class="flicker"` : ""}><path d="M0 -24 Q4 -18 2.5 -15 Q0 -13 -2.5 -15 Q-4 -18 0 -24Z" fill="${C.orange}"/><path d="M0 -20 Q2 -17 1 -15.5 Q0 -15 -1 -15.5 Q-2 -17 0 -20Z" fill="${C.yellowL}"/></g></g>`;
 
 // ---------------------------------------------------------------- set-piece helpers

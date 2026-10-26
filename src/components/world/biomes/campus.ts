@@ -1,4 +1,4 @@
-import { C, bikeRack, crane, definePiece, flag, lamp, plot, r1, scaffold, sh, star, tree, win, type WorldBiome } from "../kit";
+import { C, bikeRack, crane, definePiece, flag, glow, lamp, plot, r1, scaffold, sh, star, tree, win, type WorldBiome } from "../kit";
 
 const FRONT = "#E9E2FF";
 const SIDE = "#B9AEE6";
@@ -13,7 +13,9 @@ function block(x: number, y: number, w: number, h: number, floors: number, d = 1
     `<path d="M${x + w} ${y} L${x + w + d} ${y - d * 0.5} L${x + w + d} ${y - h - d * 0.5} L${x + w} ${y - h}Z" fill="${SIDE}"/>` +
     `<rect x="${x}" y="${y - h}" width="${w}" height="${h}" fill="${FRONT}"/>` +
     `<path d="M${x - 2} ${y - h} L${x + d - 2} ${y - h - d * 0.5} L${x + w + d + 1} ${y - h - d * 0.5} L${x + w + 1} ${y - h}Z" fill="${ROOF}"/><rect x="${x - 2}" y="${y - h}" width="${w + 3}" height="3" fill="${C.grapeD}"/>` +
-    wins
+    wins +
+    // Lit windows: one wide halo per floor (campus is night in both themes).
+    Array.from({ length: floors }, (_, f) => glow(x + w / 2, y - h + 10 + f * 13, w * 0.42, true)).join("")
   );
 }
 

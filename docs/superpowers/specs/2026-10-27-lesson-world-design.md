@@ -142,8 +142,17 @@ Road: paved below the current lesson, dirt track above it, as in the mockup.
 
 ### Dark mode
 
-The same art with an evening grade: a dusk overlay on the world (multiply), lit windows and
-lamp posts switched on. The campus biome is night in both modes. This is my call.
+The same art with an evening grade, chosen after comparing options side by side (a flat 35%
+`#1B1536` multiply read grey and murky; a brightness/saturate filter alone stayed grey):
+- one multiply wash over the art: a vertical gradient from `#5246D0` at 42% at the bottom to
+  `#2E2496` at 56% at the top, so the night deepens as you climb;
+- `saturate(1.3)` on the art layer (one CSS filter on the whole layer), so colours stay vivid;
+- a soft inset vignette;
+- lit windows and lamps: warm halos are lifted into a separate light layer above the wash,
+  blended with `screen`, so they glow instead of being dimmed. Fogged (unexplored) lights stay off.
+
+Nodes, the bubble and the level bars are HTML, and the banners sit in their own text layer, so
+both stay crisp. The campus biome is night in both modes: its halos are on in light mode too.
 
 ### Accessibility
 

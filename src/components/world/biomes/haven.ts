@@ -1,4 +1,4 @@
-import { C, bollard, crane, crate, definePiece, duneGrass, gull, house, plot, r1, rock, scaffold, sh, type WorldBiome } from "../kit";
+import { C, bollard, crane, crate, definePiece, duneGrass, glow, gull, house, plot, r1, rock, scaffold, sh, type WorldBiome } from "../kit";
 
 const STONE: [string, string] = ["#9C98B8", "#CFCBE3"];
 
@@ -50,6 +50,7 @@ const lighthouse = definePiece({
       `<rect x="${tx - 10}" y="${top - 3}" width="20" height="3" rx="1" fill="${C.ink}"/>` +
       `<rect x="${tx - 6}" y="${top - 13}" width="12" height="10" rx="1.5" fill="${C.yellowL}"/><rect x="${tx + 1}" y="${top - 13}" width="5" height="10" fill="${C.yellow}"/>` +
       `<path d="M${tx - 8} ${top - 13} Q${tx} ${top - 23} ${tx + 8} ${top - 13}Z" fill="#F0506E"/><path d="M${tx} ${top - 21} Q${tx + 6} ${top - 18} ${tx + 8} ${top - 13} L${tx + 1} ${top - 13}Z" fill="#C8385A"/>` +
+      glow(tx, top - 8, 22) +
       `<g transform="translate(${tx} ${top - 8})"><g class="beam"><path d="M0 0 L46 -10 L46 10Z" fill="${C.yellowL}" opacity=".55"/></g></g>`;
     return (
       house(X(26), c.y + 2, 0.62, { roof: "#3F8FE0", roofD: "#2A6DB5", alive: true }) +

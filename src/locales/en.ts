@@ -249,6 +249,11 @@ const en: Messages = {
     send: "Send",
     stop: "Stop",
     disclaimer: "AI can make mistakes. Check important info in the reader.",
+    remaining_one: "{{count}} question left today",
+    remaining_other: "{{count}} questions left today",
+    limitTitle: "You've used today's tutor questions",
+    limitText: "You can carry on tomorrow.",
+    limitPlaceholder: "You can ask again tomorrow",
   },
   review: {
     backHome: "Back to your path",
@@ -632,6 +637,11 @@ const en: Messages = {
       kind: { hook: "Opening", roadmap: "Overview", idea: "Key idea", recap: "Recap", quiz: "Test yourself" } as Record<string, string>,
     },
     ai: {
+      limits: "Limits",
+      limitsHint: "Keep AI costs in check. Admins have no limit.",
+      tutorLimit: "Tutor messages per student per day",
+      tutorLimitHint: "0 = unlimited. The count starts over every night at midnight (Amsterdam).",
+      tutorLimitInvalid: "Enter a whole number from 0 to 1000.",
       title: "AI settings",
       intro: "Choose which provider and model to use. API keys are stored encrypted.",
       generation: "Content creation",

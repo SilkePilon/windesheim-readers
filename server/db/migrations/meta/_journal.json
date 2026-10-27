@@ -43,6 +43,13 @@
       "when": 1793092541185,
       "tag": "0005_email_send_log",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793093577567,
+      "tag": "0006_ai_usage",
+      "breakpoints": true
     }
   ]
 }

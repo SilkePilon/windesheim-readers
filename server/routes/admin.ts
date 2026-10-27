@@ -7,6 +7,7 @@ import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, schema } from "../db";
 import { limits } from "../limits";
+import { getTutorDailyLimit, setTutorDailyLimit, TUTOR_DAILY_LIMIT_MAX } from "../lib/tutor-quota";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
@@ -22,6 +23,9 @@ const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
 
 const providerEnum = z.enum(PROVIDERS);
+
+/** AI settings for the admin page, plus the usage limits that live next to them. */
+const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), tutorDailyLimit: getTutorDailyLimit() });
 const modelChoice = z.object({ provider: providerEnum, model: z.string().min(1) });
 const voiceChoice = z.object({
   provider: z.enum(VOICE_PROVIDERS),
@@ -353,7 +357,7 @@ export const admin = new Hono<AppEnv>()
   })
 
   // ----- AI settings -----
-  .get("/settings/ai", async (c) => c.json(await getAiSettingsPublic()))
+  .get("/settings/ai", async (c) => c.json(await aiSettingsView()))
   .put("/settings/ai", async (c) => {
     const body = z
       .object({
@@ -361,12 +365,16 @@ export const admin = new Hono<AppEnv>()
         fast: modelChoice.optional(),
         voice: voiceChoice.optional(),
         keys: z.partialRecord(providerEnum, z.string().nullable()).optional(),
+        /** Tutor messages per student per day; 0 = unlimited. */
+        tutorDailyLimit: z.number().int().min(0).max(TUTOR_DAILY_LIMIT_MAX).optional(),
       })
       .parse(await c.req.json());
     const bad = body.voice && voiceProblem(body.voice);
     if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.voice!.provider, body.voice!.model).map((v) => v.id) }, 400);
-    await updateAiSettings(body);
-    return c.json(await getAiSettingsPublic());
+    const { tutorDailyLimit, ...ai } = body;
+    await updateAiSettings(ai);
+    if (tutorDailyLimit !== undefined) setTutorDailyLimit(tutorDailyLimit);
+    return c.json(await aiSettingsView());
   })
   .post("/settings/ai/validate", limits.adminAi, async (c) => {
     const body = z.object({ provider: providerEnum, apiKey: z.string().optional() }).parse(await c.req.json());

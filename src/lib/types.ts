@@ -219,6 +219,14 @@ export interface AiSettings {
   /** The "Stem" (TTS) role: stored choice or the default. */
   voice: VoiceChoice;
   voiceDefaults: Record<VoiceProviderId, VoiceChoice>;
+  /** Tutor messages per student per day; 0 = unlimited. */
+  tutorDailyLimit: number;
+}
+/** Today's tutor messages for the signed-in student; null when unlimited (or an admin). */
+export interface TutorQuota {
+  limit: number;
+  used: number;
+  remaining: number;
 }
 export type VoiceProviderId = "google" | "openai";
 export interface VoiceChoice {

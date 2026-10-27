@@ -3,13 +3,13 @@ import { useBlocker } from "react-router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { notify } from "@/lib/notify";
-import { ExternalLink, KeyRound, Trash2, TriangleAlert, Zap } from "lucide-react";
+import { ExternalLink, Gauge, KeyRound, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -193,6 +193,8 @@ export default function AdminSettingsPage() {
   const [draft, setDraft] = useState<Partial<Record<Role, ModelChoice>>>({});
   const [voiceDraft, setVoiceDraft] = useState<VoiceChoice | null>(null);
   const [voiceError, setVoiceError] = useState<VoiceError | null>(null);
+  // The tutor limit as typed (a string, so the field can be empty while editing).
+  const [limitDraft, setLimitDraft] = useState<string | null>(null);
   const [typed, setTyped] = useState<Keys>({});
   const [checked, setChecked] = useState<Keys>({});
   const [saving, setSaving] = useState(false);
@@ -221,7 +223,10 @@ export default function AdminSettingsPage() {
   const keysDirty = PROVIDERS.some((p) => key(p.id) !== "");
   const voice = voiceDraft ?? data?.voice;
   const voiceDirty = !!data && !!voiceDraft && !sameVoice(voiceDraft, data.voice);
-  const dirty = rolesDirty || keysDirty || voiceDirty;
+  const limitValue = limitDraft === null ? null : Number(limitDraft);
+  const limitValid = limitValue === null || (limitDraft!.trim() !== "" && Number.isInteger(limitValue) && limitValue >= 0 && limitValue <= 1000);
+  const limitDirty = !!data && limitValue !== null && limitValue !== data.tutorDailyLimit;
+  const dirty = rolesDirty || keysDirty || voiceDirty || limitDirty;
 
   // Guard unsaved edits on in-app navigation and reload, like the structure editor.
   const leaving = useRef(false);
@@ -239,7 +244,13 @@ export default function AdminSettingsPage() {
 
   if (isLoading || !data) return <PageSpinner />;
 
-  const put = async (body: { generation?: ModelChoice; fast?: ModelChoice; voice?: VoiceChoice; keys?: Partial<Record<ProviderId, string | null>> }) => {
+  const put = async (body: {
+    generation?: ModelChoice;
+    fast?: ModelChoice;
+    voice?: VoiceChoice;
+    keys?: Partial<Record<ProviderId, string | null>>;
+    tutorDailyLimit?: number;
+  }) => {
     const res = await api.put<AiSettings>("/admin/settings/ai", body);
     qc.setQueryData(SETTINGS_KEY, res);
     // Saved keys changed: re-check them and reload model lists that used the saved key.
@@ -254,6 +265,7 @@ export default function AdminSettingsPage() {
   const save = async (force = false) => {
     const keys: Partial<Record<ProviderId, string>> = {};
     for (const p of PROVIDERS) if (key(p.id)) keys[p.id] = key(p.id);
+    if (!limitValid) return notify.error(t("admin.ai.tutorLimitInvalid"));
     setSaving(true);
     try {
       if (!force) {
@@ -279,8 +291,10 @@ export default function AdminSettingsPage() {
         // Only a changed voice is sent, so an untouched default stays "unset" (and follows the keys).
         voice: voiceDirty && voice ? { ...voice, instructions: voice.instructions?.trim() || undefined } : undefined,
         keys: Object.keys(keys).length ? keys : undefined,
+        tutorDailyLimit: limitDirty ? limitValue! : undefined,
       });
       setDraft({});
+      setLimitDraft(null);
       setVoiceDraft(null);
       setVoiceError(null);
       setTyped({});
@@ -310,6 +324,7 @@ export default function AdminSettingsPage() {
     setDraft({});
     setVoiceDraft(null);
     setVoiceError(null);
+    setLimitDraft(null);
     setTyped({});
     setChecked({});
   };
@@ -371,6 +386,7 @@ export default function AdminSettingsPage() {
           )}
         </div>
 
+        <div className="grid gap-4">
         <Card variant="flat">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -422,6 +438,41 @@ export default function AdminSettingsPage() {
             })}
           </CardContent>
         </Card>
+
+        <Card variant="flat">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gauge className="size-4 text-muted-foreground" /> {t("admin.ai.limits")}
+            </CardTitle>
+            <CardDescription className="text-xs">{t("admin.ai.limitsHint")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Field className="gap-1.5" data-invalid={!limitValid || undefined}>
+              <FieldLabel htmlFor="tutor-limit">{t("admin.ai.tutorLimit")}</FieldLabel>
+              <div>
+                <Input
+                  id="tutor-limit"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  value={limitDraft ?? String(data.tutorDailyLimit)}
+                  disabled={saving}
+                  aria-invalid={!limitValid}
+                  onChange={(e) => setLimitDraft(e.target.value)}
+                  className="w-32 tabular-nums"
+                />
+              </div>
+              {limitValid ? (
+                <FieldDescription className="text-xs">{t("admin.ai.tutorLimitHint")}</FieldDescription>
+              ) : (
+                <FieldError>{t("admin.ai.tutorLimitInvalid")}</FieldError>
+              )}
+            </Field>
+          </CardContent>
+        </Card>
+        </div>
       </div>
 
       {/* Room for the save bar so it never covers the last card. */}

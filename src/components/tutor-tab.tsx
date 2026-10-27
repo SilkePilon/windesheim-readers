@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport } from "ai";
 import { useTranslation } from "react-i18next";
 import { Bot, Eraser, Send, Square } from "lucide-react";
@@ -9,6 +10,17 @@ import { Markdown } from "@/components/markdown";
 import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
 import { rateLimitText } from "@/lib/error-text";
+import { api } from "@/lib/api";
+import type { TutorQuota } from "@/lib/types";
+
+const QUOTA_KEY = ["me", "tutor-quota"];
+/** The remaining-questions counter only shows once it gets this low. */
+const SHOW_REMAINING_AT = 10;
+
+/** True when a chat request failed on the daily tutor limit (the error message is the JSON body). */
+export function isTutorLimitError(e: unknown) {
+  return e instanceof Error && e.message.includes('"TUTOR_DAILY_LIMIT"');
+}
 
 export function TutorTab({ lessonId, code }: { lessonId: string; code: string }) {
   const { t } = useTranslation();
@@ -16,11 +28,23 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   const listRef = useRef<HTMLDivElement>(null);
   // Follow new tutor output only while the student is at the bottom; scrolling up to re-read pauses it.
   const follow = useRef(true);
+  const qc = useQueryClient();
+  // Today's quota; null when unlimited (or for admins).
+  const { data: quotaData } = useQuery({
+    queryKey: QUOTA_KEY,
+    queryFn: () => api.get<{ tutor: TutorQuota | null }>("/me/tutor-quota"),
+  });
+  const quota = quotaData?.tutor ?? null;
+  const refreshQuota = () => void qc.invalidateQueries({ queryKey: QUOTA_KEY });
   const { messages, sendMessage, regenerate, status, stop, setMessages, error } = useChat({
     id: `tutor-${lessonId}`,
     transport: new DefaultChatTransport({ api: `/api/lessons/${lessonId}/chat`, credentials: "include" }),
+    onFinish: refreshQuota,
+    onError: refreshQuota,
   });
   const busy = status === "submitted" || status === "streaming";
+  const limitReached = isTutorLimitError(error) || quota?.remaining === 0;
+  const showRemaining = !!quota && !limitReached && quota.remaining <= SHOW_REMAINING_AT;
 
   useEffect(() => {
     const page = () => document.scrollingElement ?? document.documentElement;
@@ -44,8 +68,10 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   }, []);
 
   const send = (text: string) => {
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || limitReached) return;
     follow.current = true;
+    // Count the question right away; the server's number replaces it when the answer is done.
+    if (quota) qc.setQueryData(QUOTA_KEY, { tutor: { ...quota, used: quota.used + 1, remaining: Math.max(0, quota.remaining - 1) } });
     void sendMessage({ text });
     setInput("");
   };
@@ -66,7 +92,8 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="rounded-[18px] bg-card px-4 py-3 text-left text-sm font-bold shadow-[0_4px_0_var(--chunky)] transition-[translate,box-shadow] duration-100 outline-none hover:brightness-[1.03] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[4px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0 motion-reduce:active:shadow-[0_4px_0_var(--chunky)]"
+                  disabled={limitReached}
+                  className="rounded-[18px] bg-card px-4 py-3 text-left text-sm font-bold shadow-[0_4px_0_var(--chunky)] transition-[translate,box-shadow] duration-100 outline-none hover:brightness-[1.03] disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[4px] active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0 motion-reduce:active:shadow-[0_4px_0_var(--chunky)]"
                 >
                   {s}
                 </button>
@@ -103,7 +130,9 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
             ))}
           </div>
         )}
-        {error && (
+        {limitReached ? (
+          <Notice tone="info" title={t("tutor.limitTitle")} description={t("tutor.limitText")} />
+        ) : error && (
           <Notice
             title={t("tutor.failed")}
             description={rateLimitText(error, t) ?? t("common.errorHint")}
@@ -139,7 +168,8 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
                 send(input);
               }
             }}
-            placeholder={t("tutor.placeholder")}
+            placeholder={limitReached ? t("tutor.limitPlaceholder") : t("tutor.placeholder")}
+            disabled={limitReached}
             rows={1}
             className="max-h-32 min-h-10 flex-1 resize-none border-0 bg-transparent text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
@@ -148,12 +178,19 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
               <Square />
             </Button>
           ) : (
-            <Button type="submit" size="icon-lg" variant="chunky" className="rounded-[12px] [--press:3px]" disabled={!input.trim()} aria-label={t("tutor.send")}>
+            <Button type="submit" size="icon-lg" variant="chunky" className="rounded-[12px] [--press:3px]" disabled={!input.trim() || limitReached} aria-label={t("tutor.send")}>
               <Send />
             </Button>
           )}
         </form>
-        <p className="px-2 pt-1 text-[11px] text-muted-foreground">{t("tutor.disclaimer")}</p>
+        <p className="flex justify-between gap-2 px-2 pt-1 text-[11px] text-muted-foreground">
+          <span>{t("tutor.disclaimer")}</span>
+          {showRemaining && (
+            <span className="shrink-0 font-bold text-foreground/70 tabular-nums" aria-live="polite">
+              {t("tutor.remaining", { count: quota.remaining })}
+            </span>
+          )}
+        </p>
       </div>
     </div>
   );

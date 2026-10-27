@@ -47,6 +47,29 @@ const [, readers] = await j(student, "GET", "/readers");
 const lesson = readers[0].lessons[0];
 ok(readers[0].lastStudiedLessonId === null, "/readers: lastStudiedLessonId is null before studying");
 console.log("lessons visible:", readers[0].lessons.length, lesson.code);
+{
+  // Daily tutor limit: an admin setting, persisted per Amsterdam day (AI_STUB=1 answers the chat).
+  const chat = async (cookie: string) => {
+    const body = JSON.stringify({ messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Hoi" }] }] });
+    const r = await fetch(`${base}/lessons/${lesson.id}/chat`, { method: "POST", headers: { ...H, cookie }, body });
+    return [r.status, await r.text(), r.headers.get("Retry-After")] as const;
+  };
+  ok((await j(admin, "GET", "/admin/settings/ai"))[1].tutorDailyLimit === 30, "tutor limit defaults to 30");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 1001 }))[0] === 400, "tutor limit above 1000 is rejected");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 2.5 }))[0] === 400, "fractional tutor limit is rejected");
+  ok((await j(student, "PUT", "/admin/settings/ai", { tutorDailyLimit: 500 }))[0] === 403, "students cannot change the tutor limit");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 2 }))[1].tutorDailyLimit === 2, "admin sets the tutor limit");
+  const [s1, b1] = await chat(bob);
+  ok(s1 === 200 && b1.includes("Stub-tutor"), "stub tutor answers");
+  ok(JSON.stringify((await j(bob, "GET", "/me/tutor-quota"))[1].tutor) === JSON.stringify({ limit: 2, used: 1, remaining: 1 }), "tutor quota counts the message");
+  ok((await chat(bob))[0] === 200, "second tutor message allowed");
+  const [s3, b3, ra] = await chat(bob);
+  const body3 = JSON.parse(b3);
+  ok(s3 === 429 && body3.error === "TUTOR_DAILY_LIMIT" && body3.limit === 2 && body3.retryAfter > 0 && ra === String(body3.retryAfter), "third tutor message: 429 TUTOR_DAILY_LIMIT until midnight");
+  ok((await chat(admin))[0] === 200 && (await j(admin, "GET", "/me/tutor-quota"))[1].tutor === null, "admins have no tutor limit");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 0 }))[0] === 200 && (await chat(bob))[0] === 200, "0 = unlimited");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 30 }))[1].tutorDailyLimit === 30, "tutor limit back to 30");
+}
 const [, detail] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("detail:", detail.quizCount, detail.flashcardCount, detail.openCount);
 // quiz (server-side sessions; only the first check counts)

@@ -299,3 +299,15 @@ export const emailSendLog = sqliteTable(
     index("email_send_log_created_idx").on(t.createdAt),
   ],
 );
+
+/** Daily usage counters per user (Amsterdam day), e.g. tutor messages for the daily limit. */
+export const aiUsage = sqliteTable(
+  "ai_usage",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    day: text("day").notNull(), // YYYY-MM-DD (Europe/Amsterdam)
+    kind: text("kind", { enum: ["tutor"] }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
+);

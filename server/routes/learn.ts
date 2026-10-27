@@ -6,6 +6,7 @@ import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUI
 import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
 import { db, schema } from "../db";
 import { limits } from "../limits";
+import { consumeTutorMessage, tutorQuota } from "../lib/tutor-quota";
 import { displayName, requireUser, type AppEnv } from "../middleware";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import {
@@ -27,6 +28,8 @@ import { isBadgeId } from "../../shared/badges";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
 import { getModel } from "../ai/providers";
+import { stubChatModel } from "../ai/chat-stub";
+import { aiStubEnabled } from "../ai/speech";
 import { chapterPath, PUBLIC_AUDIO_COLUMNS, publicAudio } from "../ai/audio";
 import { parseRange } from "../lib/audio-codec";
 
@@ -199,6 +202,8 @@ export const learn = new Hono<AppEnv>()
   })
 
   /** Every badge in catalogue order: earnedAt (or null) and, for locked counted ones, progress. */
+  /** Today's tutor messages left; null when unlimited (or for admins). */
+  .get("/me/tutor-quota", (c) => c.json({ tutor: tutorQuota(c.get("user")) }))
   .get("/me/badges", async (c) => c.json(await badgeOverview(c.get("user").id)))
 
   .patch("/me", limits.writes, async (c) => {
@@ -579,9 +584,15 @@ export const learn = new Hono<AppEnv>()
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     const { messages } = (await c.req.json()) as { messages: UIMessage[] };
+    // Daily tutor quota (admin setting), checked and counted before the model is called.
+    const quota = consumeTutorMessage(u);
+    if (!quota.ok) {
+      c.header("Retry-After", String(quota.retryAfter));
+      return c.json({ error: "TUTOR_DAILY_LIMIT", limit: quota.limit, retryAfter: quota.retryAfter }, 429);
+    }
     const source = await getPageText(row.lesson.readerId, row.lesson.startPage, row.lesson.endPage);
     const result = streamText({
-      model: await getModel("fast"),
+      model: aiStubEnabled() ? stubChatModel() : await getModel("fast"),
       instructions: tutorInstructions({ lessonCode: row.lesson.code, lessonTitle: row.lesson.title, source, locale: u.locale ?? "nl" }),
       messages: await convertToModelMessages(messages.slice(-20)),
       maxOutputTokens: 1200,

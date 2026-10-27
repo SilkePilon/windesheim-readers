@@ -247,6 +247,11 @@ const nl = {
     send: "Versturen",
     stop: "Stoppen",
     disclaimer: "AI kan fouten maken. Controleer belangrijke info in de reader.",
+    remaining_one: "Nog {{count}} vraag vandaag",
+    remaining_other: "Nog {{count}} vragen vandaag",
+    limitTitle: "Je dagelijkse tutorvragen zijn op",
+    limitText: "Morgen kun je weer verder.",
+    limitPlaceholder: "Morgen kun je weer vragen stellen",
   },
   review: {
     backHome: "Terug naar je pad",
@@ -630,6 +635,11 @@ const nl = {
       kind: { hook: "Opening", roadmap: "Overzicht", idea: "Kernidee", recap: "Samenvatting", quiz: "Test jezelf" } as Record<string, string>,
     },
     ai: {
+      limits: "Limieten",
+      limitsHint: "Houd de AI-kosten in de hand. Beheerders hebben geen limiet.",
+      tutorLimit: "Tutorberichten per student per dag",
+      tutorLimitHint: "0 = onbeperkt. De teller begint elke nacht om 00:00 opnieuw.",
+      tutorLimitInvalid: "Vul een heel getal van 0 tot en met 1000 in.",
       title: "AI-instellingen",
       intro: "Kies welke provider en welk model gebruikt worden. API-sleutels worden versleuteld opgeslagen.",
       generation: "Content maken",

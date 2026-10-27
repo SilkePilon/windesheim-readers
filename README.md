@@ -109,6 +109,8 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | Creating a battle | user | 10 per 10 minutes |
 | Joining a battle | user | 20 per minute |
 
+**AI tutor messages** also have a daily limit per student, set under **Admin → AI settings → Limits** (default 30, `0` = unlimited; admins have no limit). It is counted in the database per Amsterdam calendar day, so a restart doesn't reset it, and starts over at midnight. Over the limit the chat answers `429` with `{"error":"TUTOR_DAILY_LIMIT","limit":30,"retryAfter":<seconds until midnight>}`; the tutor tab shows how many questions are left once 10 or fewer remain. The `ai` burst limit above applies as well.
+
 better-auth's own limiter stays on as well (for example 3 sign-in requests per 10 seconds per IP).
 
 Set `CLIENT_IP_HEADER` when the app runs behind a proxy. Without it, every visitor looks like the proxy and shares one budget. Many students behind one campus NAT address also share the per-IP budgets; the per-user limits are not affected.

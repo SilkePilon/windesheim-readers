@@ -9,6 +9,7 @@ import { env } from "../server/env";
 import { resetEmailGate } from "../server/lib/email-gate";
 import { limits } from "../server/limits";
 import { messageGuard } from "../server/live/battle";
+import { setTutorDailyLimit, TUTOR_DAILY_LIMIT_DEFAULT } from "../server/lib/tutor-quota";
 
 runMigrations();
 const { app } = await import("../server/app");
@@ -58,10 +59,12 @@ const signIn = (email: string, headers: Record<string, string> = {}) =>
 
 async function login(email: string) {
   links.delete(email);
-  const r = await signIn(email, { "x-test-ip": `198.19.0.${++n % 250}` });
+  // A fresh IP per login, so better-auth's own (unresettable) limiter never gets in the way.
+  const loginIp = `198.19.${Math.floor(++n / 250)}.${n % 250}`;
+  const r = await signIn(email, { "x-test-ip": loginIp });
   expect(r.status).toBe(200);
   const url = new URL(links.get(email)!);
-  const v = await fetch(`${base}${url.pathname}${url.search}`, { redirect: "manual" });
+  const v = await fetch(`${base}${url.pathname}${url.search}`, { redirect: "manual", headers: { "x-test-ip": loginIp } });
   const cookie = v.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
   expect(cookie).toContain("session_token");
   return cookie;
@@ -228,5 +231,71 @@ describe("battle websocket", () => {
       expect(guard(ws)).toBe(true);
       t += 150;
     }
+  });
+});
+
+describe("tutor daily limit (persisted, admin setting)", () => {
+  const stub = process.env.AI_STUB;
+  beforeAll(() => {
+    process.env.AI_STUB = "1"; // the stub tutor model: never a real AI call
+    db.insert(schema.reader).values({ id: "tq-reader", title: "R", fileName: "r.pdf", status: "ready", published: true }).onConflictDoNothing().run();
+    db.insert(schema.lesson)
+      .values({ id: "tq-lesson", readerId: "tq-reader", code: "1.1A", title: "L", week: 1, position: 0, startPage: 1, endPage: 2, status: "ready" })
+      .onConflictDoNothing()
+      .run();
+  });
+  afterAll(() => {
+    if (stub === undefined) delete process.env.AI_STUB;
+    else process.env.AI_STUB = stub;
+    setTutorDailyLimit(TUTOR_DAILY_LIMIT_DEFAULT);
+  });
+
+  const chat = (cookie: string) =>
+    fetch(`${base}/api/lessons/tq-lesson/chat`, {
+      method: "POST",
+      headers: { ...H, cookie },
+      body: JSON.stringify({ messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Hoi" }] }] }),
+    });
+
+  test("atomic under concurrency: 12 parallel messages with a limit of 4 let exactly 4 through", async () => {
+    setTutorDailyLimit(4);
+    const cookie = await login("tq-race@student.windesheim.nl");
+    const rs = await Promise.all(Array.from({ length: 12 }, () => chat(cookie)));
+    const ok = rs.filter((r) => r.status === 200);
+    expect(ok).toHaveLength(4);
+    expect(await ok[0]!.text()).toContain("Stub-tutor");
+    const refused = rs.filter((r) => r.status === 429);
+    expect(refused).toHaveLength(8);
+    const body = (await refused[0]!.json()) as { error: string; limit: number; retryAfter: number };
+    expect(body.error).toBe("TUTOR_DAILY_LIMIT");
+    expect(body.limit).toBe(4);
+    expect(body.retryAfter).toBeGreaterThan(0);
+    expect(body.retryAfter).toBeLessThanOrEqual(25 * 3600);
+    expect(refused[0]!.headers.get("Retry-After")).toBe(String(body.retryAfter));
+    const quota = (await (await fetch(`${base}/api/me/tutor-quota`, { headers: { cookie } })).json()) as { tutor: unknown };
+    expect(quota.tutor).toEqual({ limit: 4, used: 4, remaining: 0 });
+  });
+
+  test("the settings endpoint validates the limit (integer 0-1000, admins only)", async () => {
+    const student = await login("tq-student@student.windesheim.nl");
+    const adminCookie = await login("tq-admin@windesheim.nl");
+    db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.email, "tq-admin@windesheim.nl")).run();
+    const put = (cookie: string, tutorDailyLimit: unknown) =>
+      fetch(`${base}/api/admin/settings/ai`, { method: "PUT", headers: { ...H, cookie }, body: JSON.stringify({ tutorDailyLimit }) });
+    for (const bad of [-1, 1001, 2.5, "5", null]) {
+      const r = await put(adminCookie, bad);
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as { error: string }).error).toBe("VALIDATION");
+    }
+    expect((await put(student, 5)).status).toBe(403);
+    const r = await put(adminCookie, 1000);
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { tutorDailyLimit: number }).tutorDailyLimit).toBe(1000);
+    const get = await fetch(`${base}/api/admin/settings/ai`, { headers: { cookie: adminCookie } });
+    expect(((await get.json()) as { tutorDailyLimit: number }).tutorDailyLimit).toBe(1000);
+    // Admins are exempt from the limit itself.
+    setTutorDailyLimit(1);
+    for (let i = 0; i < 3; i++) expect((await chat(adminCookie)).status).toBe(200);
+    expect(((await (await fetch(`${base}/api/me/tutor-quota`, { headers: { cookie: adminCookie } })).json()) as { tutor: unknown }).tutor).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,9 @@ const TONES = {
  * Duolingo-style answer feedback: a mint (correct) or pink (wrong) sheet that slides up
  * from the bottom with a title, an explanation and a full-width next button. It also
  * renders an in-flow spacer of its own height, so the content above can scroll clear of it.
+ *
+ * With `autoAdvanceMs` the next button fills from left to right and then presses itself.
+ * Tapping anywhere else on the sheet (to read the explanation) or leaving the tab stops it.
  */
 export function FeedbackSheet({
   tone,
@@ -30,6 +33,7 @@ export function FeedbackSheet({
   nextLabel,
   onNext,
   busy,
+  autoAdvanceMs,
 }: {
   tone: "success" | "danger";
   title: ReactNode;
@@ -37,10 +41,25 @@ export function FeedbackSheet({
   nextLabel: ReactNode;
   onNext: () => void;
   busy?: boolean;
+  autoAdvanceMs?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   const s = TONES[tone];
+  const [auto, setAuto] = useState(!!autoAdvanceMs);
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+
+  useEffect(() => {
+    if (!auto || !autoAdvanceMs) return;
+    const timer = window.setTimeout(() => onNextRef.current(), autoAdvanceMs);
+    const stop = () => document.hidden && setAuto(false);
+    document.addEventListener("visibilitychange", stop);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", stop);
+    };
+  }, [auto, autoAdvanceMs]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -60,6 +79,9 @@ export function FeedbackSheet({
         aria-live="polite"
         data-slot="feedback-sheet"
         data-tone={tone}
+        onPointerDown={(e) => {
+          if (!(e.target as HTMLElement).closest("button")) setAuto(false);
+        }}
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 rounded-t-[26px] duration-300 ease-out animate-in slide-in-from-bottom motion-reduce:animate-none",
           s.sheet,
@@ -74,10 +96,20 @@ export function FeedbackSheet({
             size="xl"
             onClick={onNext}
             disabled={busy}
-            className="mt-3 w-full disabled:opacity-80"
+            className="relative mt-3 w-full overflow-hidden disabled:opacity-80"
           >
-            {busy && <Spinner />}
-            {nextLabel}
+            {auto && autoAdvanceMs && (
+              <span
+                aria-hidden
+                data-slot="auto-advance"
+                className="pointer-events-none absolute inset-0 origin-right bg-white/40 motion-reduce:hidden"
+                style={{ animation: `unveil-x ${autoAdvanceMs}ms linear forwards` }}
+              />
+            )}
+            <span className="relative inline-flex items-center gap-2">
+              {busy && <Spinner />}
+              {nextLabel}
+            </span>
           </Button>
         </div>
       </div>

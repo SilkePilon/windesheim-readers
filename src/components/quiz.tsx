@@ -35,6 +35,11 @@ export function QuestionPrompt({ text, className }: { text: string; className?: 
 type QuizResult = XpResult & { correct: number; max: number };
 type Phase = "loading" | "playing" | "result" | "error";
 
+/** After checking, the next button fills and moves on by itself: quick when right, a little
+ * longer when wrong so the correct answer can be read. Tapping the sheet stops it. */
+const AUTO_NEXT_CORRECT_MS = 1000;
+const AUTO_NEXT_WRONG_MS = 2500;
+
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || (t instanceof HTMLElement && t.isContentEditable);
 
@@ -100,12 +105,14 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
   const q = questions[index];
   const isLast = index + 1 >= questions.length;
 
-  const check = useCallback(async () => {
-    if (!q || reveal || !isAnswered(q, value) || lock.current) return;
+  // `answer` lets a single tap (multiple choice / true-false) check straight away, before the
+  // `value` state has caught up.
+  const check = useCallback(async (answer: unknown = value) => {
+    if (!q || reveal || !isAnswered(q, answer) || lock.current) return;
     lock.current = true;
     setBusy(true);
     try {
-      const res = await api.post<CheckResult>(`/questions/${q.id}/check`, { sessionId, answer: value });
+      const res = await api.post<CheckResult>(`/questions/${q.id}/check`, { sessionId, answer });
       setReveal(res);
       setAnswers((a) => [...a, res.correct]);
       setCombo((c) => (res.correct ? c + 1 : 0));
@@ -142,6 +149,17 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
     }
   };
 
+  // One tap answers: multiple choice and true/false check on pick; typed and ordering
+  // questions keep the check button.
+  const tapToAnswer = q?.type === "mc" || q?.type === "tf";
+  const pick = useCallback(
+    (v: unknown) => {
+      setValue(v);
+      if (tapToAnswer) void check(v);
+    },
+    [tapToAnswer, check],
+  );
+
   // Keyboard: 1–n picks an option, Enter checks. After checking, the sheet's button has focus.
   useEffect(() => {
     if (phase !== "playing" || !q || reveal) return;
@@ -155,12 +173,12 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
       }
       const k = Number(e.key);
       if (!Number.isInteger(k) || k < 1) return;
-      if (q.type === "mc" && k <= q.options.length) setValue(k - 1);
-      else if (q.type === "tf" && k <= 2) setValue(k === 1);
+      if (q.type === "mc" && k <= q.options.length) pick(k - 1);
+      else if (q.type === "tf" && k <= 2) pick(k === 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, q, reveal, check]);
+  }, [phase, q, reveal, check, pick]);
 
   const progress =
     phase === "result" ? 1 : questions.length ? (index + (reveal ? 1 : 0)) / questions.length : 0;
@@ -218,7 +236,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
             </p>
             <QuestionPrompt text={q.prompt} />
           </div>
-          <QuestionInput key={q.id} question={q} value={value} onChange={setValue} reveal={reveal} onSubmit={() => void check()} />
+          <QuestionInput key={q.id} question={q} value={value} onChange={pick} reveal={reveal} disabled={busy} onSubmit={() => void check()} />
         </div>
 
         {reveal ? (
@@ -240,8 +258,9 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
             nextLabel={isLast ? t("quiz.result") : t("common.next")}
             onNext={() => void next()}
             busy={busy}
+            autoAdvanceMs={reveal.correct ? AUTO_NEXT_CORRECT_MS : AUTO_NEXT_WRONG_MS}
           />
-        ) : (
+        ) : tapToAnswer ? null : (
           <div className="sticky bottom-0 mt-auto bg-gradient-to-t from-background from-70% to-transparent pt-4 pb-[calc(4px+env(safe-area-inset-bottom))]">
             <Button variant="chunky" size="xl" className="w-full" onClick={() => void check()} disabled={!isAnswered(q, value) || busy}>
               {busy && <Spinner />} {t("quiz.check")}

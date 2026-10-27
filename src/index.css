@@ -355,6 +355,14 @@
   transform-origin: bottom;
   animation: eq-bob 900ms ease-in-out infinite alternate;
 }
+/* Auto-advance: the feedback sheet's next button fills from left to right (duration inline):
+   a pale veil anchored right shrinks away. Outside @theme: Tailwind only emits @theme
+   keyframes that an --animate-* token uses. */
+@keyframes unveil-x {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
 @keyframes eq-bob {
   0% { transform: scaleY(0.3); }
   50% { transform: scaleY(0.85); }

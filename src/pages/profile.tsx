@@ -51,7 +51,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <Page className="max-w-xl lg:max-w-4xl">
+    <Page className="max-w-xl md:max-w-3xl lg:max-w-4xl">
       <header className="flex items-center gap-3">
         <PlayerAvatar
           name={me.user.displayName}
@@ -72,11 +72,11 @@ export default function ProfilePage() {
         <StatTile value={num(s.longestStreak)} label={t("profile.longest")} />
       </div>
 
-      {/* Desktop: badges and settings side by side. */}
-      <div className="lg:mt-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
+      {/* Badges take the full width (more tiles per row from md up); settings follow. */}
+      <div>
         <BadgeSection />
 
-        <Card className="mt-6 gap-0 py-1 lg:mt-[58px]">
+        <Card className="mt-8 gap-0 py-1">
           <NicknameRow current={me.user.nickname ?? ""} placeholder={me.user.name} onSave={(v) => patch({ nickname: v || null })} />
           <SettingRow label={t("profile.showOnLeaderboard")} htmlFor="lb">
             <Switch id="lb" size="lg" checked={me.user.showOnLeaderboard} onCheckedChange={(v) => patch({ showOnLeaderboard: v })} />
@@ -157,7 +157,7 @@ function BadgeGroup({ title, list }: { title: string; list: BadgeStatus[] }) {
         <span>{title}</span>
         <span className="text-xs tabular-nums">{t("profile.badgeCount", { n: earned, total: list.length })}</span>
       </h3>
-      <div className="mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3">
+      <div className="mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3 md:grid-cols-6 lg:grid-cols-8">
         {list.map((b) => (
           <BadgeCell key={b.id} badge={b} />
         ))}

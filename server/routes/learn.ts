@@ -8,7 +8,7 @@ import { db, schema } from "../db";
 import { displayName, requireUser, type AppEnv } from "../middleware";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import {
-  awardXp,
+  awardXpOnly,
   cardMasteryByLesson,
   dayKey,
   getOrCreateProgress,
@@ -63,14 +63,22 @@ function createQuizSession(userId: string, lessonId: string, questionIds: string
 }
 const NEW_CARDS_PER_SESSION = 15;
 
-/** Award XP, advance the daily quests and check the badges the action can earn (see awardWithQuests). */
-const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = []) =>
+/**
+ * Award XP, advance the daily quests and check the badges the action can earn, with one
+ * badge check for the whole action (see awardWithQuests). `lessonId` scopes the mastery check.
+ */
+const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = [], lessonId?: string) =>
   awardWithQuests(
-    { awardXp, recordQuestEvent, checkBadges: (u, r) => checkBadges(u, eventsForReason(r)) },
+    {
+      awardXp: awardXpOnly,
+      recordQuestEvent,
+      checkBadges: (u, r, ctx) => checkBadges(u, [...(ctx.xp ? (["xp"] as const) : []), ...eventsForReason(r)], { ...ctx.xp, lessonId: ctx.lessonId }),
+    },
     userId,
     amount,
     reason,
     events,
+    lessonId ?? events.map((e) => ("lessonId" in e ? e.lessonId : undefined)).find(Boolean),
   );
 
 /** Lessons visible to this user: from published readers (admins see all). */
@@ -293,7 +301,7 @@ export const learn = new Hono<AppEnv>()
     const p = await getOrCreateProgress(u.id, row.lesson.id);
     if (p.summaryRead) return c.json({ gained: 0 });
     await updateProgress(u.id, row.lesson.id, { summaryRead: true });
-    return c.json(await award(u.id, XP.summaryRead, "summary"));
+    return c.json(await award(u.id, XP.summaryRead, "summary", [], row.lesson.id));
   })
 
   // ----- flashcards (FSRS spaced repetition) -----

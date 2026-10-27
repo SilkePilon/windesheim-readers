@@ -4,12 +4,14 @@ import { and, count, countDistinct, eq, gte, inArray, isNotNull, lt, max, sql } 
 import { db, schema } from "../db";
 import { BADGE_IDS, BADGE_LIST, BADGES, badgeProgress, badgesReached, isBadgeId, type BadgeId, type BadgeMetric } from "../../shared/badges";
 import { computeMastery } from "../../shared/game";
+import { DONE_MASTERY } from "../../shared/path";
 import {
   dayHistoryBadges,
   hasWinStreak,
   isComeback,
   isWeekendPair,
   masteryBadges,
+  MASTER_MASTERY,
   timeOfDayBadges,
   weeklyWinners,
   type BadgeEvent,
@@ -24,6 +26,8 @@ export interface BadgeContext {
   prevActiveDay?: string | null;
   /** The streak after this XP award. */
   streak?: number;
+  /** The lesson the action was on: mastery badges then only look at this lesson (see masteryCheck). */
+  lessonId?: string;
   /** End-of-battle facts for this player. */
   battle?: { perfect: boolean };
   now?: Date;
@@ -187,6 +191,45 @@ export async function lessonMasteries(u: string): Promise<LessonMastery[]> {
 
 // ---------- awarding ----------
 
+/** One lesson's mastery for this user in a single indexed query (flashcard_lesson_idx + PK lookups). */
+export async function lessonMastery(u: string, lessonId: string) {
+  const [row] = db.all<{ total: number; learned: number | null; quiz: number | null; explain: number | null; read: number | null }>(sql`
+    select
+      (select count(*) from ${schema.flashcard} where ${schema.flashcard.lessonId} = ${lessonId}) as total,
+      (select sum(case when r.state = 2 then 1.0 when r.state in (1, 3) then 0.5 else 0 end)
+         from ${schema.flashcard} f join card_review r on r.user_id = ${u} and r.flashcard_id = f.id
+         where f.lesson_id = ${lessonId}) as learned,
+      lp.best_quiz as quiz, lp.best_explain as explain, lp.summary_read as read
+    from (select 1) left join lesson_progress lp on lp.user_id = ${u} and lp.lesson_id = ${lessonId}`);
+  return computeMastery({
+    bestQuiz: row?.quiz ?? 0,
+    bestExplain: row?.explain ?? 0,
+    summaryRead: !!row?.read,
+    cardMastery: row?.total ? Number(row.learned ?? 0) / row.total : 0,
+  });
+}
+
+/** Last seen mastery band per user+lesson: 0 = below done (0.8), 1 = done, 2 = mastered (0.9). */
+const masteryBand = new Map<string, number>();
+const MAX_BANDS = 50_000;
+
+/**
+ * Whether the mastery/world badges need the (reader-wide) recompute: only when the touched
+ * lesson moves up into a band (done ≥ 0.8, mastered ≥ 0.9) not yet seen for it in this
+ * process. A lesson below 0.8 can't complete a week, world, reader or lesson badge, so the
+ * usual card review costs one cheap query here. Without a lesson, always recompute.
+ */
+export async function masteryCrossed(u: string, lessonId: string | undefined) {
+  if (!lessonId) return true;
+  const m = await lessonMastery(u, lessonId);
+  const band = m >= MASTER_MASTERY ? 2 : m >= DONE_MASTERY ? 1 : 0;
+  const key = `${u}:${lessonId}`;
+  const prev = masteryBand.get(key);
+  if (masteryBand.size >= MAX_BANDS) masteryBand.clear();
+  masteryBand.set(key, band);
+  return band > 0 && (prev === undefined || band > prev);
+}
+
 /**
  * Evaluate the badges `events` can affect and grant the ones now earned. Returns the newly
  * granted ids (for `XpResult.newBadges` → toast). Categories whose badges are all earned
@@ -217,7 +260,7 @@ export async function checkBadges(u: string, events: BadgeEvent[], ctx: BadgeCon
     if ((await bestExplain(u)) >= 0.9) hit.push("explain_master");
   }
   if (open("open")) await reached("openAnswers");
-  if (open("mastery")) {
+  if (open("mastery") && (await masteryCrossed(u, ctx.lessonId))) {
     const m = masteryBadges(await lessonMasteries(u));
     hit.push(...badgesReached("masteredLessons", m.mastered), ...m.badges);
   }
@@ -243,41 +286,62 @@ export async function checkBadges(u: string, events: BadgeEvent[], ctx: BadgeCon
 const weeklyKey = (weekStart: Date) => `badges.weekly.${dayKey(weekStart)}`;
 let weeklyCheckedFor: string | null = null;
 
-/** Last week's XP ranking, without users hidden from the leaderboard. */
-async function weekRanking(from: Date, to: Date) {
-  const rows = await db
-    .select({ userId: schema.xpEvent.userId, xp: sql<number>`sum(${schema.xpEvent.amount})`.as("week_xp") })
-    .from(schema.xpEvent)
-    .innerJoin(schema.user, eq(schema.user.id, schema.xpEvent.userId))
-    .where(and(gte(schema.xpEvent.createdAt, from), lt(schema.xpEvent.createdAt, to), eq(schema.user.showOnLeaderboard, true)))
-    .groupBy(schema.xpEvent.userId)
-    .orderBy(sql`week_xp desc`, schema.xpEvent.userId);
-  return rows.map((r) => ({ userId: r.userId, xp: Number(r.xp) }));
-}
+/** How many finished weeks the lazy check looks back for unranked (e.g. quiet) weeks. */
+const WEEKLY_LOOKBACK = 8;
 
-/** Claim a finished week once (a settings row is the lock); false when it was already done. */
-async function claimWeek(weekStart: Date) {
-  const rows = await db.insert(schema.setting).values({ key: weeklyKey(weekStart), value: "done" }).onConflictDoNothing().returning();
-  return rows.length > 0;
-}
-
-async function grantWeek(from: Date, to: Date) {
-  const out = new Map<string, BadgeId[]>();
-  for (const w of weeklyWinners(await weekRanking(from, to))) out.set(w.userId, await grantBadges(w.userId, w.badges));
-  return out;
+/**
+ * Rank a finished week and grant its top 3 / #1, in one synchronous SQLite transaction
+ * with the claim (a settings row): either the week is claimed and its badges granted, or
+ * nothing is written. Returns null when the week was already claimed (unless `force`).
+ */
+function awardWeek(from: Date, to: Date, { force = false } = {}): Map<string, BadgeId[]> | null {
+  return db.transaction((tx) => {
+    const claimed = tx.insert(schema.setting).values({ key: weeklyKey(from), value: "done" }).onConflictDoNothing().returning().all();
+    if (!claimed.length && !force) return null;
+    const ranked = tx
+      .select({ userId: schema.xpEvent.userId, xp: sql<number>`sum(${schema.xpEvent.amount})`.as("week_xp") })
+      .from(schema.xpEvent)
+      .innerJoin(schema.user, eq(schema.user.id, schema.xpEvent.userId))
+      .where(and(gte(schema.xpEvent.createdAt, from), lt(schema.xpEvent.createdAt, to), eq(schema.user.showOnLeaderboard, true)))
+      .groupBy(schema.xpEvent.userId)
+      .orderBy(sql`week_xp desc`, schema.xpEvent.userId)
+      .all();
+    const out = new Map<string, BadgeId[]>();
+    for (const w of weeklyWinners(ranked.map((r) => ({ userId: r.userId, xp: Number(r.xp) })))) {
+      const rows = tx
+        .insert(schema.userBadge)
+        .values(w.badges.map((badge) => ({ userId: w.userId, badge })))
+        .onConflictDoNothing()
+        .returning({ badge: schema.userBadge.badge })
+        .all();
+      out.set(w.userId, rows.map((r) => r.badge as BadgeId));
+    }
+    return out;
+  });
 }
 
 /**
- * On the first XP event of a new (Amsterdam) week, rank last week once and grant its top 3
- * / #1. Returns what this user got (others see theirs on their profile).
+ * On an XP event, rank every finished week that isn't ranked yet (newest first, stopping
+ * at the first ranked one; at most WEEKLY_LOOKBACK), so a week followed by a quiet week is
+ * still ranked. Returns what this user got (others see theirs on their profile). The
+ * in-memory key only skips the check once it succeeded for the current week.
  */
 export async function maybeAwardWeekly(u: string, now = new Date()): Promise<BadgeId[]> {
   const prev = startOfPreviousWeek(now);
   const key = weeklyKey(prev);
   if (weeklyCheckedFor === key) return [];
+  const mine: BadgeId[] = [];
+  let from = prev;
+  let to = startOfWeek(now);
+  for (let i = 0; i < WEEKLY_LOOKBACK; i++) {
+    const got = awardWeek(from, to);
+    if (!got) break;
+    mine.push(...(got.get(u) ?? []));
+    to = from;
+    from = startOfPreviousWeek(from);
+  }
   weeklyCheckedFor = key;
-  if (!(await claimWeek(prev))) return [];
-  return (await grantWeek(prev, startOfWeek(now))).get(u) ?? [];
+  return mine;
 }
 
 /** Tests: forget the in-memory "this week is done" shortcut. */
@@ -344,9 +408,8 @@ export async function backfillBadges({ force = false } = {}): Promise<{ users: n
     if (w < thisWeek) weeks.add(w);
   }
   for (const w of [...weeks].sort()) {
-    const from = new Date(w);
-    await claimWeek(from);
-    for (const got of (await grantWeek(from, startOfWeek(new Date(w + 8 * 864e5)))).values()) granted += got.length;
+    const got = awardWeek(new Date(w), startOfWeek(new Date(w + 8 * 864e5)), { force: true });
+    for (const ids of got?.values() ?? []) granted += ids.length;
   }
 
   await db

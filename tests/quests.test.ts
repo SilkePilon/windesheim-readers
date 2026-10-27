@@ -1,6 +1,6 @@
 import { expect, test, describe } from "bun:test";
 import { QUESTS, applyEvent, questsForDay } from "../shared/quests";
-import { dayKey } from "../server/lib/game";
+import { dayKey } from "../server/lib/time";
 
 describe("quests", () => {
   test("values", () => {

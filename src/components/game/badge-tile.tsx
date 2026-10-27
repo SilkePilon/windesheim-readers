@@ -81,7 +81,9 @@ export function BadgeCell({ badge }: { badge: BadgeStatus }) {
         />
         <span
           className={cn(
-            "line-clamp-2 w-full text-[11px] leading-tight font-bold break-words hyphens-auto",
+            // Names wrap between words only (no hyphenation, balanced lines); every name fits a
+            // 360px-wide phone's cell (checked in the P1 fix round).
+            "-mx-1 line-clamp-2 w-[calc(100%+0.5rem)] text-[10.5px] leading-tight font-bold text-balance hyphens-none",
             !earnedAt && "text-muted-foreground",
           )}
         >

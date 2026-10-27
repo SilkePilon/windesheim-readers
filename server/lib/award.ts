@@ -1,14 +1,15 @@
 // Pure, dependency-injected XP + quest award flow (no DB imports, so it's unit-testable).
 import type { QuestEvent, QuestId } from "../../shared/quests";
-import type { XpResult } from "./game";
+import type { XpBadgeContext, XpResult } from "./game";
 import type { QuestEventResult } from "./quests";
 import type { BadgeId } from "../../shared/badges";
 
 export interface AwardDeps {
-  awardXp: (userId: string, amount: number, reason: string) => Promise<XpResult>;
+  /** May leave the XP badges to `checkBadges` by returning `badgeCtx` (see awardXpOnly). */
+  awardXp: (userId: string, amount: number, reason: string) => Promise<XpResult & { badgeCtx?: XpBadgeContext }>;
   recordQuestEvent: (userId: string, e: QuestEvent) => Promise<QuestEventResult>;
-  /** Badges this action can earn (cards, quiz, mastery, ...); see server/lib/badges.ts. */
-  checkBadges?: (userId: string, reason: string) => Promise<BadgeId[]>;
+  /** One badge check for the whole action (XP + cards, quiz, mastery, ...); see server/lib/badges.ts. */
+  checkBadges?: (userId: string, reason: string, ctx: { xp?: XpBadgeContext; lessonId?: string }) => Promise<BadgeId[]>;
 }
 
 /**
@@ -23,8 +24,10 @@ export async function awardWithQuests(
   amount: number,
   reason: string,
   events: QuestEvent[] = [],
+  /** The lesson the action was on, so mastery badges only look at it. */
+  lessonId?: string,
 ): Promise<XpResult> {
-  const res = await deps.awardXp(userId, amount, reason);
+  const { badgeCtx, ...res } = await deps.awardXp(userId, amount, reason);
   let out = res;
   try {
     const quests = new Set<QuestId>();
@@ -44,7 +47,7 @@ export async function awardWithQuests(
   // Badges are a bonus too: a failing check never fails the (already written) action.
   if (deps.checkBadges) {
     try {
-      const extra = (await deps.checkBadges(userId, reason)).filter((b) => !out.newBadges.includes(b));
+      const extra = (await deps.checkBadges(userId, reason, { xp: badgeCtx, lessonId })).filter((b) => !out.newBadges.includes(b));
       if (extra.length) out = { ...out, newBadges: [...out.newBadges, ...extra] };
     } catch (err) {
       console.error("[badges] checking badges failed; returning the award without them", err);

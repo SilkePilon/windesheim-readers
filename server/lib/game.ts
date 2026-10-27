@@ -4,7 +4,6 @@ import { db, schema } from "../db";
 import type { BadgeId } from "../../shared/badges";
 import type { QuestId } from "../../shared/quests";
 import { dayKey, previousDay } from "./time";
-import { checkBadges } from "./badges";
 
 export { dayKey, startOfDay, startOfWeek } from "./time";
 export { grantBadge } from "./badges";
@@ -18,11 +17,22 @@ export interface XpResult {
   quests?: QuestId[];
 }
 
-/** Award XP, update the daily streak and check the XP-driven badges (streak, time of day, ...). */
-export async function awardXp(userId: string, amount: number, reason: string): Promise<XpResult> {
+/** What the XP badges (streak, comeback, weekend, ...) need to know about an award. */
+export interface XpBadgeContext {
+  /** user_stats.lastActiveDay before this award. */
+  prevActiveDay: string | null;
+  /** The streak after this award. */
+  streak: number;
+}
+
+/**
+ * Award XP and update the daily streak, without checking badges: the caller passes
+ * `badgeCtx` to one `checkBadges(userId, ["xp", ...])` for the whole action, so the earned
+ * set is read once.
+ */
+export async function awardXpOnly(userId: string, amount: number, reason: string): Promise<XpResult & { badgeCtx: XpBadgeContext }> {
   amount = Math.max(0, Math.round(amount));
   const today = dayKey();
-  const newBadges: BadgeId[] = [];
 
   const stats =
     (await db.query.userStats.findFirst({ where: eq(schema.userStats.userId, userId) })) ??
@@ -40,10 +50,7 @@ export async function awardXp(userId: string, amount: number, reason: string): P
 
   if (amount > 0) await db.insert(schema.xpEvent).values({ id: nanoid(), userId, amount, reason });
 
-  // Streak, time-of-day, comeback, weekend and the lazy weekly-leaderboard badges.
-  newBadges.push(...(await checkBadges(userId, ["xp"], { prevActiveDay: stats.lastActiveDay, streak })));
-
-  return { xp, gained: amount, streak, newBadges };
+  return { xp, gained: amount, streak, newBadges: [], badgeCtx: { prevActiveDay: stats.lastActiveDay, streak } };
 }
 
 export async function getOrCreateProgress(userId: string, lessonId: string) {

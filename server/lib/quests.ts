@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "../db";
-import { awardXp, dayKey } from "./game";
+import { awardXpOnly, dayKey } from "./game";
 import { checkBadges } from "./badges";
 import type { BadgeId } from "../../shared/game";
 import { QUESTS, applyEvent, questsForDay, type QuestEvent, type QuestId } from "../../shared/quests";
@@ -65,10 +65,10 @@ export async function recordQuestEvent(userId: string, e: QuestEvent): Promise<Q
     if (!claimed.length) continue;
     out.completed.push(q);
     const { reward } = QUESTS[q];
-    const res = await awardXp(userId, reward, "quest");
+    const res = await awardXpOnly(userId, reward, "quest");
     out.reward += res.gained;
     out.xp = res.xp;
-    out.newBadges.push(...res.newBadges, ...(await checkBadges(userId, ["quest"])));
+    out.newBadges.push(...(await checkBadges(userId, ["xp", "quest"], res.badgeCtx)));
     // Quest XP never advances quests (earn_xp ignores reason "quest"), but keep the event stream complete.
     const nested = await recordQuestEvent(userId, { kind: "xp", amount: reward, reason: "quest" });
     out.completed.push(...nested.completed);

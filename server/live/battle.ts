@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db, schema } from "../db";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
-import { awardXp } from "../lib/game";
+import { awardXpOnly } from "../lib/game";
 import { checkBadges } from "../lib/badges";
 import { recordQuestEvent } from "../lib/quests";
 import { displayName } from "../middleware";
@@ -220,12 +220,11 @@ async function end(r: Room) {
     const won = p.rank === 1 && r.players.size >= 3;
     const perfect = r.questions.length >= 5 && r.questions.every((_, i) => player?.answers.get(i)?.correct === true);
     const got = new Set<BadgeId>();
-    await awardXp(p.id, amount, won ? "battle_win" : "battle")
+    await awardXpOnly(p.id, amount, won ? "battle_win" : "battle")
       .then(async (res) => {
-        res.newBadges.forEach((b) => got.add(b));
         const q = await recordQuestEvent(p.id, { kind: "xp", amount, reason: "battle" });
         q.newBadges.forEach((b) => got.add(b));
-        (await checkBadges(p.id, ["battle"], { battle: { perfect } })).forEach((b) => got.add(b));
+        (await checkBadges(p.id, ["xp", "battle"], { ...res.badgeCtx, battle: { perfect } })).forEach((b) => got.add(b));
       })
       .catch((err) => console.error("[battle] awarding XP/badges failed", err));
     if (got.size) badgesById[p.id] = [...got];

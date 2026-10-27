@@ -16,6 +16,7 @@ import { magicLinkGate } from "./lib/email-gate";
 import { AUTH_IP_HEADER, clientIp } from "./lib/client-ip";
 import { magicLinkBody, publicIssues, updateUserBody } from "./lib/input";
 import { LIMITS } from "../shared/limits";
+import { og, spaShell } from "./og";
 
 /** The request for better-auth, carrying our resolved client IP (a client-sent value is overwritten). */
 function withClientIp(c: Context): Request {
@@ -115,6 +116,9 @@ app.route("/api/admin", admin);
 app.route("/api", learn);
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));
 
+// Link previews: dynamic battle invite images (the default card is the static public/og/*.png).
+app.route("/og", og);
+
 if (env.isProd) {
   // The app shell and service worker files must revalidate on every load, or clients get
   // stuck on an old build. Hashed /assets/* files are left to the default.
@@ -126,7 +130,11 @@ if (env.isProd) {
       c.res.headers.get("Content-Type")?.startsWith("text/html");
     if (noCache) c.header("Cache-Control", "no-cache");
   });
+  // The SPA shell, with link-preview meta for the path (crawlers don't run JS).
+  const shell = spaShell("./dist/index.html");
+  app.get("/", shell);
+  app.get("/index.html", shell);
   app.use("/*", serveStatic({ root: "./dist" }));
-  app.get("*", serveStatic({ path: "./dist/index.html" }));
+  app.get("*", shell);
 }
 

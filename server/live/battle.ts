@@ -471,3 +471,31 @@ export function battleConnection(user: SessionUser) {
     },
   };
 }
+
+/**
+ * Read-only snapshot of a live room for link previews (server/og). Counts and settings only:
+ * never player names, ids, scores or answers. `hostId` lets the caller look up the host's
+ * display name. Null when the code isn't a live room.
+ */
+export interface BattlePreview {
+  code: string;
+  status: "lobby" | "playing" | "ended";
+  hostId: string;
+  lessonIds: string[];
+  playerCount: number;
+  settings: Pick<BattleSettings, "count" | "questionSeconds" | "points" | "difficulty">;
+}
+
+export function battlePreview(code: string): BattlePreview | null {
+  const r = rooms.get(code);
+  if (!r) return null;
+  const { count, questionSeconds, points, difficulty } = r.settings;
+  return {
+    code: r.code,
+    status: r.state === "lobby" ? "lobby" : r.state === "ended" ? "ended" : "playing",
+    hostId: r.hostId,
+    lessonIds: [...r.lessonIds],
+    playerCount: r.players.size,
+    settings: { count, questionSeconds, points, difficulty },
+  };
+}

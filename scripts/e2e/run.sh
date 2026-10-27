@@ -5,7 +5,7 @@
 # hammers endpoints from one IP. tests/rate-limit-app.test.ts covers the app with limits on.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-DIR=/tmp/wr-e2e
+DIR=${E2E_DIR:-/tmp/wr-e2e}
 export E2E_PORT=${E2E_PORT:-3200} E2E_LOG=$DIR/srv.log
 rm -rf "$DIR" && mkdir -p "$DIR/uploads"
 env -u RESEND_API_KEY PORT=$E2E_PORT DATABASE_PATH=$DIR/app.db UPLOAD_DIR=$DIR/uploads \

@@ -38,6 +38,9 @@ export const limits = {
 
   /** Battle websocket upgrades per IP. */
   battleUpgrade: rateLimit({ name: "battle-ws", rules: [{ limit: 30, windowMs: MINUTE }], key: ipKey }),
+
+  /** Link-preview images (/og/battle/*) per IP: crawlers fetch a few, and it slows code guessing. */
+  og: rateLimit({ name: "og", rules: [{ limit: 60, windowMs: MINUTE }], key: ipKey }),
 };
 
 /** Battle websocket limits (applied in live/battle.ts). */

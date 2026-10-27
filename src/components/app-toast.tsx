@@ -63,7 +63,7 @@ function ToastCard({
       data-app-toast
       role={role}
       className={cn(
-        "flex w-full items-start gap-3 rounded-[20px] bg-card p-3.5 pr-2 text-left text-card-foreground shadow-[0_5px_0_var(--chunky)]",
+        "pointer-events-auto flex w-full items-start gap-3 rounded-[20px] bg-card p-3.5 pr-2 text-left text-card-foreground shadow-[0_5px_0_var(--chunky)]",
         className,
       )}
     >
@@ -120,10 +120,10 @@ export function AppToast({
 /** XP gain: a compact gold pill, centred on phones and right-aligned on wider screens. */
 export function XpToast({ gained }: { gained: number }) {
   return (
-    <div data-app-toast className="flex w-full justify-center md:justify-end">
+    <div data-app-toast className="pointer-events-none flex w-full justify-center md:justify-end">
       <p
         role="status"
-        className="inline-flex items-center gap-1.5 rounded-full bg-gold py-2 pr-4 pl-3 font-heading text-lg leading-none font-bold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]"
+        className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-gold py-2 pr-4 pl-3 font-heading text-lg leading-none font-bold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]"
       >
         <Sparkles aria-hidden className="size-5" strokeWidth={2.5} />
         <span className="tabular-nums">+{gained} XP</span>
@@ -150,7 +150,7 @@ export function LevelUpToast({ id, level, title }: { id: string | number; level:
         </span>
       }
     >
-      <p className="text-xs font-extrabold tracking-wide text-primary-foreground/80 uppercase">{t("celebrate.levelUpKicker")}</p>
+      <p className="text-sm font-extrabold">{t("celebrate.levelUpKicker")}</p>
       <p className="font-heading text-[28px] leading-tight font-bold">{t("celebrate.levelUpTitle", { n: level })}</p>
       <p className="font-sans text-base leading-snug font-bold">{title}</p>
     </ToastCard>
@@ -175,7 +175,7 @@ export function QuestToast({ id, name, xp }: { id: string | number; name: string
         </span>
       }
     >
-      <p className="text-xs font-extrabold tracking-wide uppercase opacity-80">{t("celebrate.questDone")}</p>
+      <p className="text-sm font-extrabold">{t("celebrate.questDone")}</p>
       <p className="font-heading text-base leading-snug font-semibold break-words">{name}</p>
       <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold px-2 py-0.5 text-xs font-extrabold text-gold-foreground tabular-nums">
         <Sparkles aria-hidden className="size-3" strokeWidth={2.8} />

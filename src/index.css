@@ -273,6 +273,12 @@
 [data-sonner-toaster] [data-sonner-toast] > * {
   transition: opacity 200ms ease;
 }
+/* Only the visible card/pill takes taps (it opts back in with pointer-events-auto); the
+   full-width list and <li> around it stay click-through so the header stays usable. */
+[data-sonner-toaster],
+[data-sonner-toaster] [data-sonner-toast] {
+  pointer-events: none;
+}
 /* Collapsed stack: the cards behind the front one peek out as empty chunky cards. */
 [data-sonner-toaster] [data-sonner-toast] > [data-app-toast] {
   height: 100%;

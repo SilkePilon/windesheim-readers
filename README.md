@@ -101,7 +101,10 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | `/api/auth/*` (sign-in, link checks, sign-out) | IP | 30 per 10 minutes |
 | Sign-in requests | IP | 10 per 10 minutes |
 | `GET /api/auth/get-session` | IP | 300 per minute |
-| AI: tutor chat, open-answer grading, explain grading (one shared bucket) | user | 20 per 5 minutes, 150 per day |
+| AI tutor chat | user | 6 per minute, 30 per 10 minutes |
+| AI explain-it-back grading | user | 4 per minute, 15 per 10 minutes |
+| AI open-question grading | user | 6 per minute, 25 per 10 minutes |
+| All three AI features together | user | 40 per 10 minutes |
 | Progress and XP writes (reviews, quiz checks and submits, read, listen progress, profile) | user | 120 per minute |
 | Admin AI calls (key checks, model lists, test prompt, voice models and samples) | admin | 30 per 10 minutes |
 | Admin uploads and jobs (upload, retry, restructure, generate, audio, badge backfill) | admin | 30 per hour |
@@ -111,7 +114,17 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | Joining a battle | user | 20 per minute |
 | Link-preview images (`/og/battle/*`) | IP | 60 per minute |
 
-**AI tutor messages** also have a daily limit per student, set under **Admin → AI settings → Limits** (default 30, `0` = unlimited; admins have no limit). It is counted in the database per Amsterdam calendar day, so a restart doesn't reset it, and starts over at midnight. Over the limit the chat answers `429` with `{"error":"TUTOR_DAILY_LIMIT","limit":30,"retryAfter":<seconds until midnight>}`; the tutor tab shows how many questions are left once 10 or fewer remain. The `ai` burst limit above applies as well.
+Admins get twice the AI limits above (not an exemption).
+
+**Daily AI limits.** Each student AI feature also has a daily limit per student, set under **Admin → AI settings → Limieten**. `0` = unlimited; admins have no daily limit.
+
+| Feature | Setting | Default |
+|---|---|---|
+| Tutor messages | `tutorDailyLimit` | 30 |
+| Explain-it-back gradings | `explainDailyLimit` | 20 |
+| Open-question gradings | `gradeDailyLimit` | 30 |
+
+They are counted in the database (`ai_usage`) per Amsterdam calendar day, so a restart doesn't reset them, and start over at midnight. A use is counted right before the model is called: a request that fails validation costs nothing, and one whose model call fails is given back. Over the limit the endpoint answers `429` with `{"error":"AI_DAILY_LIMIT","feature":"explain","limit":20,"retryAfter":<seconds until midnight>}`. `GET /api/me/ai-quota` returns `{tutor, explain, grade}`, each `{limit, used, remaining}` or `null` when unlimited; the app shows what's left once it runs low.
 
 better-auth's own limiter stays on as well (for example 3 sign-in requests per 10 seconds per IP).
 

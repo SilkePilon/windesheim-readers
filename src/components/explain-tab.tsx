@@ -15,6 +15,11 @@ import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, LessonDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { dailyLimitFeature, useAiQuota } from "@/lib/ai-quota";
+import { AiLimitNotice, AiQuotaHint } from "@/components/ai-quota";
+
+/** The remaining counter only shows once it gets this low. */
+const SHOW_REMAINING_AT = 5;
 
 export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
   const { t } = useTranslation();
@@ -25,6 +30,9 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { quota, countUse, refresh } = useAiQuota("explain");
+  const [limitHit, setLimitHit] = useState(false);
+  const limitReached = limitHit || quota?.remaining === 0;
 
   const pick = (c: string) => {
     setConcept(c);
@@ -34,23 +42,27 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
   };
 
   const submit = async () => {
-    if (!concept || text.trim().length < LIMITS.explain.min) return;
+    if (!concept || text.trim().length < LIMITS.explain.min || limitReached) return;
     setLoading(true);
     setError(null);
     try {
       const res = await api.post<GradeResult>(`/lessons/${lesson.id}/explain`, { concept: concept.trim(), explanation: text.trim() });
       setGrade(res);
+      countUse();
       celebrate(res, { quietXp: true });
       invalidate();
     } catch (e) {
-      setError(requestErrorText(e, t, t("common.errorHint")));
+      if (dailyLimitFeature(e)) setLimitHit(true);
+      else setError(requestErrorText(e, t, t("common.errorHint")));
     } finally {
       setLoading(false);
+      refresh();
     }
   };
 
   return (
     <div className="space-y-5">
+      {limitReached && <AiLimitNotice feature="explain" />}
       <Card className="gap-4 px-5 py-5">
         <div>
           <h2 className="font-heading text-lg font-semibold">{t("explain.title")}</h2>
@@ -105,8 +117,9 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
             <span className="text-xs text-muted-foreground">
               {text.trim().length < LIMITS.explain.min ? t("explain.minChars") : t("explain.words", { count: text.trim().split(/\s+/).length })}
               <CharCounter value={text} max={LIMITS.explain.max} className="ml-2" />
+              <AiQuotaHint feature="explain" quota={quota} showAt={SHOW_REMAINING_AT} className="ml-2" />
             </span>
-            <Button variant="chunky" size="xl" onClick={submit} disabled={loading || text.trim().length < LIMITS.explain.min}>
+            <Button variant="chunky" size="xl" onClick={submit} disabled={loading || limitReached || text.trim().length < LIMITS.explain.min}>
               {loading ? <Spinner /> : <Sparkles />} {loading ? t("explain.grading") : t("explain.submit")}
             </Button>
           </div>

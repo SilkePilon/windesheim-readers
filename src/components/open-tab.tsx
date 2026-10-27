@@ -15,6 +15,11 @@ import { LIMITS } from "@shared/limits";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, PublicQuestion } from "@/lib/types";
+import { dailyLimitFeature, useAiQuota } from "@/lib/ai-quota";
+import { AiLimitNotice, AiQuotaHint } from "@/components/ai-quota";
+
+/** The remaining counter only shows once it gets this low. */
+const SHOW_REMAINING_AT = 5;
 
 function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
   const { t } = useTranslation();
@@ -23,19 +28,25 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { quota, countUse, refresh } = useAiQuota("grade");
+  const limitReached = quota?.remaining === 0;
 
   const submit = async () => {
+    if (limitReached) return;
     setLoading(true);
     setError(null);
     try {
       const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer: answer.trim() });
       setGrade(res);
+      countUse();
       celebrate(res, { quietXp: true });
       invalidate();
     } catch (e) {
-      setError(requestErrorText(e, t, t("common.errorHint")));
+      // A used-up daily limit shows once for the whole tab (the reloaded quota says 0).
+      if (!dailyLimitFeature(e)) setError(requestErrorText(e, t, t("common.errorHint")));
     } finally {
       setLoading(false);
+      refresh();
     }
   };
 
@@ -57,8 +68,9 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
           disabled={loading}
         />
         <div className="flex items-center justify-end gap-3">
+          <AiQuotaHint feature="grade" quota={quota} showAt={SHOW_REMAINING_AT} className="mr-auto" />
           <CharCounter value={answer} max={LIMITS.openAnswer.max} />
-          <Button variant="chunky" size="xl" onClick={submit} disabled={loading || answer.trim().length < LIMITS.openAnswer.min}>
+          <Button variant="chunky" size="xl" onClick={submit} disabled={loading || limitReached || answer.trim().length < LIMITS.openAnswer.min}>
             {loading ? <Spinner /> : <Sparkles />} {t("open.submit")}
           </Button>
         </div>
@@ -71,6 +83,7 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
 
 export function OpenTab({ lessonId }: { lessonId: string }) {
   const { t } = useTranslation();
+  const { quota } = useAiQuota("grade");
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["open", lessonId],
     queryFn: () => api.get<PublicQuestion[]>(`/lessons/${lessonId}/open`),
@@ -99,6 +112,7 @@ export function OpenTab({ lessonId }: { lessonId: string }) {
     );
   return (
     <div className="space-y-5">
+      {quota?.remaining === 0 && <AiLimitNotice feature="grade" />}
       <p className="text-sm text-muted-foreground">{t("open.intro")}</p>
       {data.map((q, i) => <OpenQuestion key={q.id} q={q} n={i + 1} />)}
     </div>

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import i18next, { type TFunction } from "i18next";
 import { ApiError, parseRetryAfter } from "../src/lib/api";
 import { errorText, formatWait, rateLimitText } from "../src/lib/error-text";
+import { dailyLimitFeature } from "../src/lib/ai-quota";
 import nl from "../src/locales/nl";
 import en from "../src/locales/en";
 
@@ -34,15 +35,15 @@ describe("rate limits (429)", async () => {
 
   test("errorText shows the wait for RATE_LIMITED", () => {
     const e = new ApiError(429, "RATE_LIMITED", { error: "RATE_LIMITED", retryAfter: 42 }, 42);
-    expect(errorText(e, nlT)).toBe("Te veel aanvragen. Probeer het over 42 seconden opnieuw.");
-    expect(errorText(e, enT)).toBe("Too many requests. Try again in 42 seconds.");
+    expect(errorText(e, nlT)).toBe("Even rustig aan, probeer het over 42 seconden opnieuw.");
+    expect(errorText(e, enT)).toBe("Slow down a little, try again in 42 seconds.");
     // better-auth's own limiter: a 429 without our body.
     expect(errorText(new ApiError(429, "RATE_LIMITED", { message: "Too many requests." }), nlT)).toBe(nl.errors.RATE_LIMITED_SOON!);
   });
 
   test("rateLimitText reads the AI SDK chat error (JSON body as message) and ignores other errors", () => {
     const chat = Object.assign(new Error(JSON.stringify({ error: "RATE_LIMITED", retryAfter: 240 })), { statusCode: 429 });
-    expect(rateLimitText(chat, nlT)).toBe("Te veel aanvragen. Probeer het over 4 minuten opnieuw.");
+    expect(rateLimitText(chat, nlT)).toBe("Even rustig aan, probeer het over 4 minuten opnieuw.");
     expect(rateLimitText(new Error("boom"), nlT)).toBeNull();
     expect(rateLimitText(new ApiError(500, "HTTP_500"), nlT)).toBeNull();
     expect(rateLimitText(undefined, nlT)).toBeNull();
@@ -70,4 +71,17 @@ test("refused input (400 VALIDATION, 413 PAYLOAD_TOO_LARGE) gets friendly text",
     expect(en.errors[key]).toBeTruthy();
   }
   expect(nl.profile.nicknameInvalid).toBe("2–24 tekens, alleen letters, cijfers en spaties");
+});
+
+describe("daily AI limits are not rate limits", () => {
+  test("dailyLimitFeature reads AI_DAILY_LIMIT (and the tutor's older code); rateLimitText ignores them", () => {
+    const api = new ApiError(429, "AI_DAILY_LIMIT", { error: "AI_DAILY_LIMIT", feature: "explain", limit: 20, retryAfter: 3600 });
+    expect(dailyLimitFeature(api)).toBe("explain");
+    expect(rateLimitText(api, ((k: string) => k) as unknown as TFunction)).toBeNull();
+    const chat = Object.assign(new Error(JSON.stringify({ error: "AI_DAILY_LIMIT", feature: "tutor", limit: 30, retryAfter: 60 })), { statusCode: 429 });
+    expect(dailyLimitFeature(chat)).toBe("tutor");
+    expect(dailyLimitFeature(new Error(JSON.stringify({ error: "TUTOR_DAILY_LIMIT", limit: 30 })))).toBe("tutor");
+    expect(dailyLimitFeature(new ApiError(429, "RATE_LIMITED", { retryAfter: 5 }))).toBeNull();
+    expect(dailyLimitFeature(new Error("boom"))).toBeNull();
+  });
 });

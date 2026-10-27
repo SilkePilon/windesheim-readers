@@ -1,11 +1,11 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
 import { db, schema } from "../db";
 import { limits } from "../limits";
-import { consumeTutorMessage, tutorQuota } from "../lib/tutor-quota";
+import { aiQuota, aiQuotas, consumeAi, dailyLimitBody, type ConsumeResult } from "../lib/ai-quota";
 import { displayName, requireUser, type AppEnv } from "../middleware";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import {
@@ -158,6 +158,22 @@ async function dueCount(userId: string) {
   return r?.n ?? 0;
 }
 
+/** 429 for a used-up daily AI limit: `{error: "AI_DAILY_LIMIT", feature, limit, retryAfter}`. */
+function dailyLimitReached(c: Context, r: Extract<ConsumeResult, { ok: false }>) {
+  c.header("Retry-After", String(r.retryAfter));
+  return c.json(dailyLimitBody(r), 429);
+}
+
+/** Runs the model call; if it throws, the daily use it was counted against is given back. */
+async function withRefund<T>(quota: Extract<ConsumeResult, { ok: true }>, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    quota.refund();
+    throw err;
+  }
+}
+
 export const learn = new Hono<AppEnv>()
   .use(requireUser)
 
@@ -203,7 +219,9 @@ export const learn = new Hono<AppEnv>()
 
   /** Every badge in catalogue order: earnedAt (or null) and, for locked counted ones, progress. */
   /** Today's tutor messages left; null when unlimited (or for admins). */
-  .get("/me/tutor-quota", (c) => c.json({ tutor: tutorQuota(c.get("user")) }))
+  .get("/me/ai-quota", (c) => c.json(aiQuotas(c.get("user"))))
+  /** Old name, kept for clients that haven't reloaded since. */
+  .get("/me/tutor-quota", (c) => c.json({ tutor: aiQuota(c.get("user"), "tutor") }))
   .get("/me/badges", async (c) => c.json(await badgeOverview(c.get("user").id)))
 
   .patch("/me", limits.writes, async (c) => {
@@ -535,32 +553,33 @@ export const learn = new Hono<AppEnv>()
     return c.json(qs.map(publicQuestion));
   })
 
-  .post("/questions/:id/grade", limits.ai, async (c) => {
+  .post("/questions/:id/grade", limits.grade, limits.ai, async (c) => {
     const u = c.get("user");
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, c.req.param("id")) });
     if (!q || q.data.type !== "open") return c.json({ error: "NOT_FOUND" }, 404);
     const { answer } = input.openAnswer.parse(await c.req.json());
-    const grade = await gradeOpenAnswer({
-      question: q.prompt,
-      modelAnswer: q.data.modelAnswer,
-      rubric: q.data.rubric,
-      answer,
-      locale: u.locale ?? "nl",
-    });
+    const { modelAnswer, rubric } = q.data;
+    const quota = consumeAi(u, "grade");
+    if (!quota.ok) return dailyLimitReached(c, quota);
+    const grade = await withRefund(quota, () =>
+      gradeOpenAnswer({ question: q.prompt, modelAnswer, rubric, answer, locale: u.locale ?? "nl" }),
+    );
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId: q.lessonId, kind: "explain", score: grade.score, maxScore: 100 });
     const res = await award(u.id, grade.score * XP.openPerPoint, "open", [{ kind: "open", lessonId: q.lessonId }]);
     return c.json({ ...grade, ...res, modelAnswer: q.data.modelAnswer });
   })
 
   // ----- explain it back (Feynman) -----
-  .post("/lessons/:id/explain", limits.ai, async (c) => {
+  .post("/lessons/:id/explain", limits.explain, limits.ai, async (c) => {
     const u = c.get("user");
     const lessonId = c.req.param("id");
     const row = await visibleLesson(lessonId, u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     const { concept, explanation } = input.explain.parse(await c.req.json());
     const source = await getPageText(row.lesson.readerId, row.lesson.startPage, row.lesson.endPage);
-    const grade = await gradeExplanation({ concept, source, explanation, locale: u.locale ?? "nl" });
+    const quota = consumeAi(u, "explain");
+    if (!quota.ok) return dailyLimitReached(c, quota);
+    const grade = await withRefund(quota, () => gradeExplanation({ concept, source, explanation, locale: u.locale ?? "nl" }));
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId, kind: "explain", score: grade.score, maxScore: 100 });
     await updateProgress(u.id, lessonId, { explain: grade.score / 100 });
     const res = await award(u.id, grade.score * XP.explainPerPoint, "explain", [
@@ -570,24 +589,32 @@ export const learn = new Hono<AppEnv>()
   })
 
   // ----- AI tutor chat (streaming) -----
-  .post("/lessons/:id/chat", limits.ai, async (c) => {
+  .post("/lessons/:id/chat", limits.tutor, limits.ai, async (c) => {
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     // Validated before the quota is counted: a refused request costs no tutor message.
     const messages: UIMessage[] = input.tutorChat.parse(await c.req.json());
-    // Daily tutor quota (admin setting), checked and counted before the model is called.
-    const quota = consumeTutorMessage(u);
-    if (!quota.ok) {
-      c.header("Retry-After", String(quota.retryAfter));
-      return c.json({ error: "TUTOR_DAILY_LIMIT", limit: quota.limit, retryAfter: quota.retryAfter }, 429);
-    }
     const source = await getPageText(row.lesson.readerId, row.lesson.startPage, row.lesson.endPage);
+    const modelMessages = await convertToModelMessages(messages.slice(-20));
+    // Daily tutor quota (admin setting), checked and counted right before the model is called.
+    const quota = consumeAi(u, "tutor");
+    if (!quota.ok) return dailyLimitReached(c, quota);
+    const model = await withRefund(quota, async () => (aiStubEnabled() ? stubChatModel() : await getModel("fast")));
+    // A failure before any text arrives (provider down, bad key) gives the message back;
+    // one halfway through the answer keeps it.
+    let answered = false;
     const result = streamText({
-      model: aiStubEnabled() ? stubChatModel() : await getModel("fast"),
+      model,
       instructions: tutorInstructions({ lessonCode: row.lesson.code, lessonTitle: row.lesson.title, source, locale: u.locale ?? "nl" }),
-      messages: await convertToModelMessages(messages.slice(-20)),
+      messages: modelMessages,
       maxOutputTokens: 1200,
+      onChunk: ({ chunk }) => {
+        if (chunk.type === "text-delta") answered = true;
+      },
+      onError: () => {
+        if (!answered) quota.refund();
+      },
     });
     return createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) });
   })

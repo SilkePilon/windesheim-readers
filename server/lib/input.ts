@@ -6,7 +6,7 @@ import { z } from "zod";
 import { LIMITS, charCount, nicknameProblem, normalizeNickname } from "../../shared/limits";
 import { COUNT_MAX, COUNT_MIN, DEFAULT_BATTLE_SETTINGS, DIFFICULTIES, POINTS_MODES, QUESTION_SECONDS } from "../../shared/battle";
 import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
-import { TUTOR_DAILY_LIMIT_MAX } from "./tutor-quota";
+import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
 
 /** No control or zero-width characters, except newlines and tabs in multi-line text. */
@@ -225,14 +225,18 @@ export const voiceChoice = z
   })
   .strict();
 
+const dailyLimit = z.number().int().min(0).max(AI_DAILY_LIMIT_MAX);
+
 export const aiSettings = z
   .object({
     generation: modelChoice.optional(),
     fast: modelChoice.optional(),
     voice: voiceChoice.optional(),
     keys: z.partialRecord(providerEnum, apiKey.nullable()).optional(),
-    /** Tutor messages per student per day; 0 = unlimited. */
-    tutorDailyLimit: z.number().int().min(0).max(TUTOR_DAILY_LIMIT_MAX).optional(),
+    /** Daily AI uses per student (tutor messages, explain gradings, open-answer gradings); 0 = unlimited. */
+    tutorDailyLimit: dailyLimit.optional(),
+    explainDailyLimit: dailyLimit.optional(),
+    gradeDailyLimit: dailyLimit.optional(),
   })
   .strict();
 export const validateKey = z.object({ provider: providerEnum, apiKey: apiKey.optional() }).strict();

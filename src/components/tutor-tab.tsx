@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport } from "ai";
 import { useTranslation } from "react-i18next";
 import { Bot, Eraser, Send, Square } from "lucide-react";
@@ -12,19 +11,13 @@ import { cn } from "@/lib/utils";
 import { requestErrorText } from "@/lib/error-text";
 import { CharCounter } from "@/components/char-counter";
 import { LIMITS } from "@shared/limits";
-import { api } from "@/lib/api";
-import type { TutorQuota } from "@/lib/types";
+import { dailyLimitFeature, useAiQuota } from "@/lib/ai-quota";
+import { AiLimitNotice, AiQuotaHint } from "@/components/ai-quota";
 
-const QUOTA_KEY = ["me", "tutor-quota"];
 /** The remaining-questions counter only shows once it gets this low. */
 const SHOW_REMAINING_AT = 10;
 /** Messages sent per request (the server takes at most LIMITS.tutorMessages and uses 20). */
 const TUTOR_HISTORY = 20;
-
-/** True when a chat request failed on the daily tutor limit (the error message is the JSON body). */
-export function isTutorLimitError(e: unknown) {
-  return e instanceof Error && e.message.includes('"TUTOR_DAILY_LIMIT"');
-}
 
 export function TutorTab({ lessonId, code }: { lessonId: string; code: string }) {
   const { t } = useTranslation();
@@ -32,14 +25,8 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   const listRef = useRef<HTMLDivElement>(null);
   // Follow new tutor output only while the student is at the bottom; scrolling up to re-read pauses it.
   const follow = useRef(true);
-  const qc = useQueryClient();
   // Today's quota; null when unlimited (or for admins).
-  const { data: quotaData } = useQuery({
-    queryKey: QUOTA_KEY,
-    queryFn: () => api.get<{ tutor: TutorQuota | null }>("/me/tutor-quota"),
-  });
-  const quota = quotaData?.tutor ?? null;
-  const refreshQuota = () => void qc.invalidateQueries({ queryKey: QUOTA_KEY });
+  const { quota, countUse, refresh: refreshQuota } = useAiQuota("tutor");
   const { messages, sendMessage, regenerate, status, stop, setMessages, error } = useChat({
     id: `tutor-${lessonId}`,
     transport: new DefaultChatTransport({
@@ -54,8 +41,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
     onError: refreshQuota,
   });
   const busy = status === "submitted" || status === "streaming";
-  const limitReached = isTutorLimitError(error) || quota?.remaining === 0;
-  const showRemaining = !!quota && !limitReached && quota.remaining <= SHOW_REMAINING_AT;
+  const limitReached = dailyLimitFeature(error) === "tutor" || quota?.remaining === 0;
 
   useEffect(() => {
     const page = () => document.scrollingElement ?? document.documentElement;
@@ -83,7 +69,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
     if (!text || busy || limitReached) return;
     follow.current = true;
     // Count the question right away; the server's number replaces it when the answer is done.
-    if (quota) qc.setQueryData(QUOTA_KEY, { tutor: { ...quota, used: quota.used + 1, remaining: Math.max(0, quota.remaining - 1) } });
+    countUse();
     void sendMessage({ text });
     setInput("");
   };
@@ -143,7 +129,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
           </div>
         )}
         {limitReached ? (
-          <Notice tone="info" title={t("tutor.limitTitle")} description={t("tutor.limitText")} />
+          <AiLimitNotice feature="tutor" />
         ) : error && (
           <Notice
             title={t("tutor.failed")}
@@ -199,11 +185,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
         <p className="flex justify-between gap-2 px-2 pt-1 text-[11px] text-muted-foreground">
           <span>{t("tutor.disclaimer")}</span>
           <CharCounter value={input} max={LIMITS.tutorMessage.max} />
-          {showRemaining && (
-            <span className="shrink-0 font-bold text-foreground/70 tabular-nums" aria-live="polite">
-              {t("tutor.remaining", { count: quota.remaining })}
-            </span>
-          )}
+          {!limitReached && <AiQuotaHint feature="tutor" quota={quota} showAt={SHOW_REMAINING_AT} />}
         </p>
       </div>
     </div>

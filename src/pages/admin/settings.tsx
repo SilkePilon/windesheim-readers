@@ -28,7 +28,11 @@ import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/mod
 import { VoiceCard, sameVoice, type VoiceError } from "@/components/admin/voice-card";
 import { api, ApiError } from "@/lib/api";
 import { errorText } from "@/lib/error-text";
-import type { AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
+import type { AiFeature, AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
+
+const AI_FEATURES: AiFeature[] = ["tutor", "explain", "grade"];
+/** Same bound as the server (server/lib/ai-quota.ts AI_DAILY_LIMIT_MAX). */
+const DAILY_LIMIT_MAX = 1000;
 import { LIMITS } from "@shared/limits";
 
 const PROVIDERS: { id: ProviderId; name: string; url: string }[] = [
@@ -194,8 +198,8 @@ export default function AdminSettingsPage() {
   const [draft, setDraft] = useState<Partial<Record<Role, ModelChoice>>>({});
   const [voiceDraft, setVoiceDraft] = useState<VoiceChoice | null>(null);
   const [voiceError, setVoiceError] = useState<VoiceError | null>(null);
-  // The tutor limit as typed (a string, so the field can be empty while editing).
-  const [limitDraft, setLimitDraft] = useState<string | null>(null);
+  // Daily AI limits as typed (strings, so a field can be empty while editing).
+  const [limitDraft, setLimitDraft] = useState<Partial<Record<AiFeature, string>>>({});
   const [typed, setTyped] = useState<Keys>({});
   const [checked, setChecked] = useState<Keys>({});
   const [saving, setSaving] = useState(false);
@@ -224,9 +228,20 @@ export default function AdminSettingsPage() {
   const keysDirty = PROVIDERS.some((p) => key(p.id) !== "");
   const voice = voiceDraft ?? data?.voice;
   const voiceDirty = !!data && !!voiceDraft && !sameVoice(voiceDraft, data.voice);
-  const limitValue = limitDraft === null ? null : Number(limitDraft);
-  const limitValid = limitValue === null || (limitDraft!.trim() !== "" && Number.isInteger(limitValue) && limitValue >= 0 && limitValue <= 1000);
-  const limitDirty = !!data && limitValue !== null && limitValue !== data.tutorDailyLimit;
+  const limitValid = (f: AiFeature) => {
+    const v = limitDraft[f];
+    if (v === undefined) return true;
+    const n = Number(v);
+    return v.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= DAILY_LIMIT_MAX;
+  };
+  const limitsValid = AI_FEATURES.every(limitValid);
+  const changedLimits = Object.fromEntries(
+    AI_FEATURES.filter((f) => data && limitDraft[f] !== undefined && limitValid(f) && Number(limitDraft[f]) !== data[`${f}DailyLimit`]).map((f) => [
+      `${f}DailyLimit`,
+      Number(limitDraft[f]),
+    ]),
+  ) as Partial<Pick<AiSettings, "tutorDailyLimit" | "explainDailyLimit" | "gradeDailyLimit">>;
+  const limitDirty = Object.keys(changedLimits).length > 0 || !limitsValid;
   const dirty = rolesDirty || keysDirty || voiceDirty || limitDirty;
 
   // Guard unsaved edits on in-app navigation and reload, like the structure editor.
@@ -251,6 +266,8 @@ export default function AdminSettingsPage() {
     voice?: VoiceChoice;
     keys?: Partial<Record<ProviderId, string | null>>;
     tutorDailyLimit?: number;
+    explainDailyLimit?: number;
+    gradeDailyLimit?: number;
   }) => {
     const res = await api.put<AiSettings>("/admin/settings/ai", body);
     qc.setQueryData(SETTINGS_KEY, res);
@@ -266,7 +283,7 @@ export default function AdminSettingsPage() {
   const save = async (force = false) => {
     const keys: Partial<Record<ProviderId, string>> = {};
     for (const p of PROVIDERS) if (key(p.id)) keys[p.id] = key(p.id);
-    if (!limitValid) return notify.error(t("admin.ai.tutorLimitInvalid"));
+    if (!limitsValid) return notify.error(t("admin.ai.dailyLimitInvalid"));
     setSaving(true);
     try {
       if (!force) {
@@ -292,10 +309,10 @@ export default function AdminSettingsPage() {
         // Only a changed voice is sent, so an untouched default stays "unset" (and follows the keys).
         voice: voiceDirty && voice ? { ...voice, instructions: voice.instructions?.trim() || undefined } : undefined,
         keys: Object.keys(keys).length ? keys : undefined,
-        tutorDailyLimit: limitDirty ? limitValue! : undefined,
+        ...changedLimits,
       });
       setDraft({});
-      setLimitDraft(null);
+      setLimitDraft({});
       setVoiceDraft(null);
       setVoiceError(null);
       setTyped({});
@@ -325,7 +342,7 @@ export default function AdminSettingsPage() {
     setDraft({});
     setVoiceDraft(null);
     setVoiceError(null);
-    setLimitDraft(null);
+    setLimitDraft({});
     setTyped({});
     setChecked({});
   };
@@ -449,29 +466,30 @@ export default function AdminSettingsPage() {
             <CardDescription className="text-xs">{t("admin.ai.limitsHint")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Field className="gap-1.5" data-invalid={!limitValid || undefined}>
-              <FieldLabel htmlFor="tutor-limit">{t("admin.ai.tutorLimit")}</FieldLabel>
-              <div>
-                <Input
-                  id="tutor-limit"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={1000}
-                  step={1}
-                  value={limitDraft ?? String(data.tutorDailyLimit)}
-                  disabled={saving}
-                  aria-invalid={!limitValid}
-                  onChange={(e) => setLimitDraft(e.target.value)}
-                  className="w-32 tabular-nums"
-                />
-              </div>
-              {limitValid ? (
-                <FieldDescription className="text-xs">{t("admin.ai.tutorLimitHint")}</FieldDescription>
-              ) : (
-                <FieldError>{t("admin.ai.tutorLimitInvalid")}</FieldError>
-              )}
-            </Field>
+            <div className="grid gap-4">
+              {AI_FEATURES.map((f) => (
+                <Field key={f} className="gap-1.5" data-invalid={!limitValid(f) || undefined}>
+                  <FieldLabel htmlFor={`limit-${f}`}>{t(`admin.ai.dailyLimit.${f}`)}</FieldLabel>
+                  <div>
+                    <Input
+                      id={`limit-${f}`}
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={DAILY_LIMIT_MAX}
+                      step={1}
+                      value={limitDraft[f] ?? String(data[`${f}DailyLimit`])}
+                      disabled={saving}
+                      aria-invalid={!limitValid(f)}
+                      onChange={(e) => setLimitDraft((d) => ({ ...d, [f]: e.target.value }))}
+                      className="w-32 tabular-nums"
+                    />
+                  </div>
+                  {!limitValid(f) && <FieldError>{t("admin.ai.dailyLimitInvalid")}</FieldError>}
+                </Field>
+              ))}
+              <FieldDescription className="text-xs">{t("admin.ai.dailyLimitsHint")}</FieldDescription>
+            </div>
           </CardContent>
         </Card>
         </div>

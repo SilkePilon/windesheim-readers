@@ -1,6 +1,21 @@
 import type { LanguageModel } from "ai";
 
-/** Stub tutor model for tests/dev (used when `aiStubEnabled()`: AI_STUB=1, never in production). */
+/**
+ * Stub AI for tests/dev (used when `aiStubEnabled()`: AI_STUB=1, never in production): the
+ * tutor model and the graders answer fixed text and never call a provider.
+ */
+
+/** Test hook: make the stubs fail like a provider error would. */
+export const aiStubControl = { fail: false };
+
+const stubFailure = () => new Error("AI stub: simulated provider failure");
+
+/** A fixed grade: the score follows the answer length, so tests can tell answers apart. */
+export function stubGrade(answer: string) {
+  if (aiStubControl.fail) throw stubFailure();
+  const score = Math.min(100, 40 + answer.trim().length);
+  return { score, feedback: "Stub-beoordeling: dit is een testantwoord.", strengths: ["Stub"], missing: [] as string[] };
+}
 
 const REPLY = "Stub-tutor: dit is een testantwoord.";
 const usage = {
@@ -22,19 +37,19 @@ export function stubChatModel(): LanguageModel {
     provider: "stub",
     modelId: "stub-chat",
     supportedUrls: {},
-    doGenerate: async () => ({
-      content: [{ type: "text", text: REPLY }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage,
-      warnings: [],
-    }),
-    doStream: async () => ({
-      stream: new ReadableStream({
+    doGenerate: async () => {
+      if (aiStubControl.fail) throw stubFailure();
+      return { content: [{ type: "text", text: REPLY }], finishReason: { unified: "stop", raw: "stop" }, usage, warnings: [] };
+    },
+    doStream: async () => {
+      if (aiStubControl.fail) throw stubFailure();
+      const stream = new ReadableStream({
         start(c) {
           for (const p of parts) c.enqueue(p);
           c.close();
         },
-      }),
-    }),
+      });
+      return { stream };
+    },
   } as unknown as LanguageModel;
 }

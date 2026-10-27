@@ -34,7 +34,7 @@ export class RateLimiter {
     if (!rules.length) throw new Error("RateLimiter needs at least one rule");
     this.rules = rules;
     this.maxKeys = Math.max(1, opts.maxKeys ?? DEFAULT_MAX_KEYS);
-    this.now = opts.now ?? Date.now;
+    this.now = opts.now ?? (() => Date.now());
     registry.add(new WeakRef(this));
   }
 
@@ -112,9 +112,20 @@ export interface RateLimitOptions {
   /** Defaults to the user id when signed in, else the IP. `null` skips the limit. */
   key?: (c: Context) => string | null;
   maxKeys?: number;
+  /** Signed-in admins get every rule's limit multiplied by this (their own counters). */
+  adminFactor?: number;
 }
 
-export type RateLimitMiddleware = MiddlewareHandler & { limiter: RateLimiter; limitName: string };
+export type RateLimitMiddleware = MiddlewareHandler & {
+  limiter: RateLimiter;
+  /** The admins' counters when `adminFactor` is set. */
+  adminLimiter?: RateLimiter;
+  limitName: string;
+  /** Clears every counter (tests). */
+  reset: () => void;
+};
+
+const isAdmin = (c: Context) => (c.get("user") as { role?: string } | undefined)?.role === "admin";
 
 /**
  * Hono middleware: answers 429 `{error: "RATE_LIMITED", retryAfter}` with a `Retry-After`
@@ -122,19 +133,29 @@ export type RateLimitMiddleware = MiddlewareHandler & { limiter: RateLimiter; li
  */
 export function rateLimit(opts: RateLimitOptions): RateLimitMiddleware {
   const limiter = new RateLimiter(opts.rules, { maxKeys: opts.maxKeys });
+  const adminLimiter = opts.adminFactor
+    ? new RateLimiter(
+        opts.rules.map((r) => ({ ...r, limit: Math.round(r.limit * opts.adminFactor!) })),
+        { maxKeys: opts.maxKeys },
+      )
+    : undefined;
   const key = opts.key ?? userOrIpKey;
   const mw: MiddlewareHandler = async (c, next) => {
     if (env.rateLimitDisabled) return next();
     const k = key(c);
     if (k === null) return next();
-    const r = limiter.hit(k);
+    const r = (adminLimiter && isAdmin(c) ? adminLimiter : limiter).hit(k);
     if (!r.ok) {
       if (!env.isProd) console.warn(`[rate-limit] ${opts.name} blocked ${k}`);
       return tooManyRequests(c, r.retryAfterMs / 1000);
     }
     return next();
   };
-  return Object.assign(mw, { limiter, limitName: opts.name });
+  const reset = () => {
+    limiter.reset();
+    adminLimiter?.reset();
+  };
+  return Object.assign(mw, { limiter, adminLimiter, limitName: opts.name, reset });
 }
 
 export const SECOND = 1000;

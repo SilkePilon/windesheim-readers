@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import { ApiError, parseRetryAfter } from "./api";
+import { dailyLimitFeature } from "./ai-quota";
 
 /** Server error codes with their own wording (`errors.<CODE>` in the locales). */
 const KNOWN = ["ALREADY_RUNNING", "LESSON_NOT_READY", "AUDIO_NOT_READY", "NOT_FOUND", "UNAUTHORIZED", "FORBIDDEN", "VALIDATION", "PAYLOAD_TOO_LARGE"] as const;
@@ -35,6 +36,8 @@ export function formatWait(seconds: number, t: TFunction) {
  * Also reads errors whose message is the raw JSON body (the AI SDK chat transport does that).
  */
 export function rateLimitInfo(e: unknown): { retryAfter?: number } | null {
+  // A used-up daily AI limit is a 429 too, but has its own wording (see lib/ai-quota.ts).
+  if (dailyLimitFeature(e)) return null;
   if (e instanceof ApiError) {
     if (e.status !== 429 && e.code !== "RATE_LIMITED") return null;
     return { retryAfter: e.retryAfter ?? parseRetryAfter(e.data) };

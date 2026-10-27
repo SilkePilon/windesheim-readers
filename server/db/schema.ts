@@ -306,7 +306,7 @@ export const aiUsage = sqliteTable(
   {
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     day: text("day").notNull(), // YYYY-MM-DD (Europe/Amsterdam)
-    kind: text("kind", { enum: ["tutor"] }).notNull(),
+    kind: text("kind", { enum: ["tutor", "explain", "grade"] }).notNull(),
     count: integer("count").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],

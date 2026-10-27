@@ -219,15 +219,20 @@ export interface AiSettings {
   /** The "Stem" (TTS) role: stored choice or the default. */
   voice: VoiceChoice;
   voiceDefaults: Record<VoiceProviderId, VoiceChoice>;
-  /** Tutor messages per student per day; 0 = unlimited. */
+  /** Daily uses per student; 0 = unlimited. */
   tutorDailyLimit: number;
+  explainDailyLimit: number;
+  gradeDailyLimit: number;
 }
-/** Today's tutor messages for the signed-in student; null when unlimited (or an admin). */
-export interface TutorQuota {
+/** The student AI features with a daily limit. */
+export type AiFeature = "tutor" | "explain" | "grade";
+/** Today's uses of one AI feature for the signed-in student; null when unlimited (or an admin). */
+export interface AiQuota {
   limit: number;
   used: number;
   remaining: number;
 }
+export type AiQuotas = Record<AiFeature, AiQuota | null>;
 export type VoiceProviderId = "google" | "openai";
 export interface VoiceChoice {
   provider: VoiceProviderId;

@@ -65,10 +65,28 @@ console.log("lessons visible:", readers[0].lessons.length, lesson.code);
   ok((await chat(bob))[0] === 200, "second tutor message allowed");
   const [s3, b3, ra] = await chat(bob);
   const body3 = JSON.parse(b3);
-  ok(s3 === 429 && body3.error === "TUTOR_DAILY_LIMIT" && body3.limit === 2 && body3.retryAfter > 0 && ra === String(body3.retryAfter), "third tutor message: 429 TUTOR_DAILY_LIMIT until midnight");
+  ok(s3 === 429 && body3.error === "AI_DAILY_LIMIT" && body3.feature === "tutor" && body3.limit === 2 && body3.retryAfter > 0 && ra === String(body3.retryAfter), "third tutor message: 429 AI_DAILY_LIMIT until midnight");
   ok((await chat(admin))[0] === 200 && (await j(admin, "GET", "/me/tutor-quota"))[1].tutor === null, "admins have no tutor limit");
   ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 0 }))[0] === 200 && (await chat(bob))[0] === 200, "0 = unlimited");
   ok((await j(admin, "PUT", "/admin/settings/ai", { tutorDailyLimit: 30 }))[1].tutorDailyLimit === 30, "tutor limit back to 30");
+
+  // The graders have their own daily limits (AI_STUB=1 grades without a provider).
+  const [, settings] = await j(admin, "GET", "/admin/settings/ai");
+  ok(settings.explainDailyLimit === 20 && settings.gradeDailyLimit === 30, "explain and grade limits default to 20 and 30");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { gradeDailyLimit: -1 }))[0] === 400, "negative grade limit is rejected");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { explainDailyLimit: 1, gradeDailyLimit: 1 }))[0] === 200, "admin sets the explain and grade limits");
+  const explanation = { concept: "Bedrijfskunde", explanation: "Bedrijfskunde combineert economie, psychologie en sociologie." };
+  const [e1, eb1] = await j(bob, "POST", `/lessons/${lesson.id}/explain`, explanation);
+  ok(e1 === 200 && String(eb1.feedback).startsWith("Stub-"), "stub explain grading");
+  const [e2, eb2] = await j(bob, "POST", `/lessons/${lesson.id}/explain`, explanation);
+  ok(e2 === 429 && eb2.error === "AI_DAILY_LIMIT" && eb2.feature === "explain" && eb2.limit === 1, "second explain: 429 AI_DAILY_LIMIT");
+  const [, open] = await j(bob, "GET", `/lessons/${lesson.id}/open`);
+  const [g1] = await j(bob, "POST", `/questions/${open[0].id}/grade`, { answer: "Omdat het meerdere vakgebieden combineert." });
+  const [g2, gb2] = await j(bob, "POST", `/questions/${open[0].id}/grade`, { answer: "Nog een keer." });
+  ok(g1 === 200 && g2 === 429 && gb2.feature === "grade", "open grading: one allowed, then 429 AI_DAILY_LIMIT");
+  const [, quota] = await j(bob, "GET", "/me/ai-quota");
+  ok(quota.tutor.limit === 30 && quota.explain.remaining === 0 && quota.grade.remaining === 0, "/me/ai-quota reports every feature");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { explainDailyLimit: 20, gradeDailyLimit: 30 }))[0] === 200, "explain and grade limits back to defaults");
 }
 const [, detail] = await j(student, "GET", `/lessons/${lesson.id}`);
 console.log("detail:", detail.quizCount, detail.flashcardCount, detail.openCount);

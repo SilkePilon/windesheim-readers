@@ -1,4 +1,4 @@
-import { DAY, HOUR, MINUTE, SECOND, ipKey, rateLimit } from "./lib/rate-limit";
+import { HOUR, MINUTE, SECOND, ipKey, rateLimit } from "./lib/rate-limit";
 
 /**
  * Every in-memory request limit in one place (the hard, persisted sign-in email limits live
@@ -20,14 +20,37 @@ export const limits = {
   /** Sign-in POSTs per IP, on top of `auth`. */
   signIn: rateLimit({ name: "sign-in", rules: [{ limit: 10, windowMs: 10 * MINUTE }], key: ipKey }),
 
-  /** AI-cost student endpoints (tutor chat, open-answer grading, explain grading), per user. */
-  ai: rateLimit({
-    name: "ai",
+  // AI features students use, per user (admins: twice the limits). Each feature has its own
+  // bucket; `ai` caps all three together. Daily limits come on top (lib/ai-quota.ts).
+  /** Tutor chat messages. */
+  tutor: rateLimit({
+    name: "tutor",
     rules: [
-      { limit: 20, windowMs: 5 * MINUTE },
-      { limit: 150, windowMs: DAY },
+      { limit: 6, windowMs: MINUTE },
+      { limit: 30, windowMs: 10 * MINUTE },
     ],
+    adminFactor: 2,
   }),
+  /** Explain-it-back (Feynman) grading. */
+  explain: rateLimit({
+    name: "explain",
+    rules: [
+      { limit: 4, windowMs: MINUTE },
+      { limit: 15, windowMs: 10 * MINUTE },
+    ],
+    adminFactor: 2,
+  }),
+  /** Open-question grading. */
+  grade: rateLimit({
+    name: "grade",
+    rules: [
+      { limit: 6, windowMs: MINUTE },
+      { limit: 25, windowMs: 10 * MINUTE },
+    ],
+    adminFactor: 2,
+  }),
+  /** All three AI features together. */
+  ai: rateLimit({ name: "ai", rules: [{ limit: 40, windowMs: 10 * MINUTE }], adminFactor: 2 }),
   /** Writes that award XP or save progress, per user. */
   writes: rateLimit({ name: "writes", rules: [{ limit: 120, windowMs: MINUTE }] }),
 

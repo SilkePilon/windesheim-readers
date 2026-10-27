@@ -132,3 +132,20 @@ describe("rateLimit middleware", () => {
     expect((await app.request("/x", { headers: { "x-user": "a" } })).status).toBe(429);
   });
 });
+
+describe("adminFactor", () => {
+  test("admins get their own counters with the limits multiplied", async () => {
+    const mw = rateLimit({ name: "t", rules: [{ limit: 2, windowMs: 60_000 }], adminFactor: 2 });
+    const app = new Hono<{ Variables: { user: { id: string; role: string } } }>()
+      .use(async (c, next) => {
+        c.set("user", { id: c.req.header("x-user")!, role: c.req.header("x-role")! });
+        await next();
+      })
+      .get("/x", mw, (c) => c.text("ok"));
+    const hit = async (role: string) => (await app.request("/x", { headers: { "x-user": role, "x-role": role } })).status;
+    expect([await hit("user"), await hit("user"), await hit("user")]).toEqual([200, 200, 429]);
+    expect([await hit("admin"), await hit("admin"), await hit("admin"), await hit("admin"), await hit("admin")]).toEqual([200, 200, 200, 200, 429]);
+    mw.reset();
+    expect(await hit("user")).toBe(200);
+  });
+});

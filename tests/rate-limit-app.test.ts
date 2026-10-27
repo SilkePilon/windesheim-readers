@@ -9,7 +9,8 @@ import { env } from "../server/env";
 import { resetEmailGate } from "../server/lib/email-gate";
 import { limits } from "../server/limits";
 import { messageGuard } from "../server/live/battle";
-import { setTutorDailyLimit, TUTOR_DAILY_LIMIT_DEFAULT } from "../server/lib/tutor-quota";
+import { AI_DAILY_DEFAULTS, setAiDailyLimits, type AiFeature } from "../server/lib/ai-quota";
+import { aiStubControl } from "../server/ai/chat-stub";
 
 runMigrations();
 const { app } = await import("../server/app");
@@ -43,7 +44,7 @@ afterAll(() => {
 let n = 0;
 let ip = "";
 beforeEach(() => {
-  for (const l of Object.values(limits)) l.limiter.reset();
+  for (const l of Object.values(limits)) l.reset();
   resetEmailGate();
   env.clientIpHeader = "x-test-ip";
   env.rateLimitDisabled = false;
@@ -161,18 +162,61 @@ describe("auth and api buckets (per IP from the socket)", () => {
 });
 
 describe("per-user limits", () => {
-  test("AI endpoints share one bucket of 20 per 5 minutes; writes have their own", async () => {
-    const cookie = await login("ai-user@student.windesheim.nl");
-    const post = (path: string) => fetch(`${base}/api${path}`, { method: "POST", headers: { ...H, cookie }, body: "{}" });
-    for (let i = 0; i < 10; i++) expect((await post("/lessons/nope/explain")).status).toBe(404);
-    for (let i = 0; i < 10; i++) expect((await post("/questions/nope/grade")).status).not.toBe(429);
-    const r = await post("/lessons/nope/chat");
+  const poster = (cookie: string) => (path: string) => fetch(`${base}/api${path}`, { method: "POST", headers: { ...H, cookie }, body: "{}" });
+  const userId = async (cookie: string) => ((await (await fetch(`${base}/api/me`, { headers: { cookie } })).json()) as { user: { id: string } }).user.id;
+
+  test("each AI feature has its own burst bucket; writes have theirs", async () => {
+    const post = poster(await login("ai-user@student.windesheim.nl"));
+    for (let i = 0; i < 4; i++) expect((await post("/lessons/nope/explain")).status).toBe(404);
+    const r = await post("/lessons/nope/explain");
     expect(r.status).toBe(429);
-    expect(((await r.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(200);
+    const body = (await r.json()) as { error: string; retryAfter: number };
+    expect(body.error).toBe("RATE_LIMITED");
+    expect(body.retryAfter).toBeGreaterThan(50);
+    // Explain is used up for the minute; grading and the tutor are not.
+    for (let i = 0; i < 6; i++) expect((await post("/questions/nope/grade")).status).toBe(404);
+    expect((await post("/questions/nope/grade")).status).toBe(429);
+    for (let i = 0; i < 6; i++) expect((await post("/lessons/nope/chat")).status).toBe(404);
+    expect((await post("/lessons/nope/chat")).status).toBe(429);
     expect((await post("/lessons/nope/read")).status).toBe(404);
     // Another user behind the same IP still has their own AI budget.
-    const other = await login("ai-other@student.windesheim.nl");
-    expect((await fetch(`${base}/api/lessons/nope/explain`, { method: "POST", headers: { ...H, cookie: other }, body: "{}" })).status).toBe(404);
+    expect((await poster(await login("ai-other@student.windesheim.nl"))("/lessons/nope/explain")).status).toBe(404);
+  });
+
+  test("the 10-minute window per feature (explain: 15)", async () => {
+    let t = Date.now();
+    const realNow = Date.now;
+    const cookie = await login("ai-window@student.windesheim.nl");
+    const post = poster(cookie);
+    try {
+      // 4 a minute, 15 per 10 minutes: step the clock a minute between bursts.
+      Date.now = () => t;
+      let ok = 0;
+      for (let minute = 0; minute < 5; minute++, t += 61_000) {
+        for (let i = 0; i < 4; i++) if ((await post("/lessons/nope/explain")).status === 404) ok++;
+      }
+      expect(ok).toBe(15);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test("the combined AI guard (40 per 10 min) caps all features together", async () => {
+    const cookie = await login("ai-combined@student.windesheim.nl");
+    const id = await userId(cookie);
+    for (let i = 0; i < 39; i++) limits.ai.limiter.hit(`u:${id}`);
+    const post = poster(cookie);
+    expect((await post("/lessons/nope/explain")).status).toBe(404);
+    expect((await post("/questions/nope/grade")).status).toBe(429); // its own bucket is untouched
+    expect((await post("/lessons/nope/chat")).status).toBe(429);
+  });
+
+  test("admins get twice the burst limits, not an exemption", async () => {
+    const cookie = await login("ai-admin@windesheim.nl");
+    db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.email, "ai-admin@windesheim.nl")).run();
+    const post = poster(cookie);
+    for (let i = 0; i < 8; i++) expect((await post("/lessons/nope/explain")).status).toBe(404);
+    expect((await post("/lessons/nope/explain")).status).toBe(429);
   });
 });
 
@@ -234,68 +278,127 @@ describe("battle websocket", () => {
   });
 });
 
-describe("tutor daily limit (persisted, admin setting)", () => {
+describe("daily AI limits (persisted, admin settings)", () => {
   const stub = process.env.AI_STUB;
   beforeAll(() => {
-    process.env.AI_STUB = "1"; // the stub tutor model: never a real AI call
+    process.env.AI_STUB = "1"; // stub tutor and graders: never a real AI call
     db.insert(schema.reader).values({ id: "tq-reader", title: "R", fileName: "r.pdf", status: "ready", published: true }).onConflictDoNothing().run();
     db.insert(schema.lesson)
       .values({ id: "tq-lesson", readerId: "tq-reader", code: "1.1A", title: "L", week: 1, position: 0, startPage: 1, endPage: 2, status: "ready" })
       .onConflictDoNothing()
       .run();
+    db.insert(schema.question)
+      .values({ id: "tq-open", lessonId: "tq-lesson", type: "open", prompt: "Why?", difficulty: 2, data: { type: "open", modelAnswer: "Because", rubric: ["x"] } })
+      .onConflictDoNothing()
+      .run();
+  });
+  // Only the daily limits here: the burst buckets have their own tests above.
+  beforeEach(() => {
+    env.rateLimitDisabled = true;
+    aiStubControl.fail = false;
   });
   afterAll(() => {
     if (stub === undefined) delete process.env.AI_STUB;
     else process.env.AI_STUB = stub;
-    setTutorDailyLimit(TUTOR_DAILY_LIMIT_DEFAULT);
+    aiStubControl.fail = false;
+    setAiDailyLimits(AI_DAILY_DEFAULTS);
   });
 
-  const chat = (cookie: string) =>
-    fetch(`${base}/api/lessons/tq-lesson/chat`, {
-      method: "POST",
-      headers: { ...H, cookie },
-      body: JSON.stringify({ messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Hoi" }] }] }),
+  const send: Record<AiFeature, (cookie: string) => Promise<Response>> = {
+    tutor: (cookie) =>
+      fetch(`${base}/api/lessons/tq-lesson/chat`, {
+        method: "POST",
+        headers: { ...H, cookie },
+        body: JSON.stringify({ messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Hoi" }] }] }),
+      }),
+    explain: (cookie) =>
+      fetch(`${base}/api/lessons/tq-lesson/explain`, {
+        method: "POST",
+        headers: { ...H, cookie },
+        body: JSON.stringify({ concept: "Organisatie", explanation: "Een organisatie is een groep mensen met een doel." }),
+      }),
+    grade: (cookie) =>
+      fetch(`${base}/api/questions/tq-open/grade`, { method: "POST", headers: { ...H, cookie }, body: JSON.stringify({ answer: "Omdat het zo is." }) }),
+  };
+  const quotas = async (cookie: string) => (await (await fetch(`${base}/api/me/ai-quota`, { headers: { cookie } })).json()) as Record<AiFeature, unknown>;
+
+  for (const f of ["tutor", "explain", "grade"] as const) {
+    test(`${f}: atomic under concurrency, 429 AI_DAILY_LIMIT shape`, async () => {
+      setAiDailyLimits({ [f]: 4 });
+      const cookie = await login(`dl-${f}@student.windesheim.nl`);
+      const rs = await Promise.all(Array.from({ length: 12 }, () => send[f](cookie)));
+      const ok = rs.filter((r) => r.status === 200);
+      expect(ok).toHaveLength(4);
+      expect(await ok[0]!.text()).toContain("Stub-");
+      const refused = rs.filter((r) => r.status === 429);
+      expect(refused).toHaveLength(8);
+      const body = (await refused[0]!.json()) as { error: string; feature: string; limit: number; retryAfter: number };
+      expect(body).toEqual({ error: "AI_DAILY_LIMIT", feature: f, limit: 4, retryAfter: body.retryAfter });
+      expect(body.retryAfter).toBeGreaterThan(0);
+      expect(body.retryAfter).toBeLessThanOrEqual(25 * 3600);
+      expect(refused[0]!.headers.get("Retry-After")).toBe(String(body.retryAfter));
+      const q = await quotas(cookie);
+      expect(q[f]).toEqual({ limit: 4, used: 4, remaining: 0 });
+      // The other features are counted separately.
+      for (const other of ["tutor", "explain", "grade"] as const) if (other !== f) expect((q[other] as { used: number }).used).toBe(0);
+      setAiDailyLimits({ [f]: AI_DAILY_DEFAULTS[f] });
     });
 
-  test("atomic under concurrency: 12 parallel messages with a limit of 4 let exactly 4 through", async () => {
-    setTutorDailyLimit(4);
-    const cookie = await login("tq-race@student.windesheim.nl");
-    const rs = await Promise.all(Array.from({ length: 12 }, () => chat(cookie)));
-    const ok = rs.filter((r) => r.status === 200);
-    expect(ok).toHaveLength(4);
-    expect(await ok[0]!.text()).toContain("Stub-tutor");
-    const refused = rs.filter((r) => r.status === 429);
-    expect(refused).toHaveLength(8);
-    const body = (await refused[0]!.json()) as { error: string; limit: number; retryAfter: number };
-    expect(body.error).toBe("TUTOR_DAILY_LIMIT");
-    expect(body.limit).toBe(4);
-    expect(body.retryAfter).toBeGreaterThan(0);
-    expect(body.retryAfter).toBeLessThanOrEqual(25 * 3600);
-    expect(refused[0]!.headers.get("Retry-After")).toBe(String(body.retryAfter));
-    const quota = (await (await fetch(`${base}/api/me/tutor-quota`, { headers: { cookie } })).json()) as { tutor: unknown };
-    expect(quota.tutor).toEqual({ limit: 4, used: 4, remaining: 0 });
+    test(`${f}: a model failure gives the use back`, async () => {
+      setAiDailyLimits({ [f]: 2 });
+      const cookie = await login(`dl-fail-${f}@student.windesheim.nl`);
+      aiStubControl.fail = true;
+      const r = await send[f](cookie);
+      await r.text(); // the tutor streams its error; the graders answer 500
+      aiStubControl.fail = false;
+      expect((await quotas(cookie))[f]).toEqual({ limit: 2, used: 0, remaining: 2 });
+      expect((await send[f](cookie)).status).toBe(200);
+      expect((await quotas(cookie))[f]).toEqual({ limit: 2, used: 1, remaining: 1 });
+      setAiDailyLimits({ [f]: AI_DAILY_DEFAULTS[f] });
+    });
+  }
+
+  test("a request refused by validation costs nothing", async () => {
+    const cookie = await login("dl-invalid@student.windesheim.nl");
+    const r = await fetch(`${base}/api/lessons/tq-lesson/explain`, { method: "POST", headers: { ...H, cookie }, body: JSON.stringify({ concept: "x", explanation: "short" }) });
+    expect(r.status).toBe(400);
+    const g = await fetch(`${base}/api/questions/tq-open/grade`, { method: "POST", headers: { ...H, cookie }, body: JSON.stringify({ answer: "z".repeat(2001) }) });
+    expect(g.status).toBe(400);
+    const q = await quotas(cookie);
+    expect([(q.explain as { used: number }).used, (q.grade as { used: number }).used]).toEqual([0, 0]);
   });
 
-  test("the settings endpoint validates the limit (integer 0-1000, admins only)", async () => {
+  test("the settings endpoint validates all three limits (integer 0-1000, admins only)", async () => {
     const student = await login("tq-student@student.windesheim.nl");
     const adminCookie = await login("tq-admin@windesheim.nl");
     db.update(schema.user).set({ role: "admin" }).where(eq(schema.user.email, "tq-admin@windesheim.nl")).run();
-    const put = (cookie: string, tutorDailyLimit: unknown) =>
-      fetch(`${base}/api/admin/settings/ai`, { method: "PUT", headers: { ...H, cookie }, body: JSON.stringify({ tutorDailyLimit }) });
-    for (const bad of [-1, 1001, 2.5, "5", null]) {
-      const r = await put(adminCookie, bad);
-      expect(r.status).toBe(400);
-      expect(((await r.json()) as { error: string }).error).toBe("VALIDATION");
+    const put = (cookie: string, body: Record<string, unknown>) =>
+      fetch(`${base}/api/admin/settings/ai`, { method: "PUT", headers: { ...H, cookie }, body: JSON.stringify(body) });
+    for (const name of ["tutorDailyLimit", "explainDailyLimit", "gradeDailyLimit"]) {
+      for (const bad of [-1, 1001, 2.5, "5", null]) {
+        const r = await put(adminCookie, { [name]: bad });
+        expect(r.status).toBe(400);
+        expect(((await r.json()) as { error: string }).error).toBe("VALIDATION");
+      }
     }
-    expect((await put(student, 5)).status).toBe(403);
-    const r = await put(adminCookie, 1000);
+    expect((await put(student, { explainDailyLimit: 5 })).status).toBe(403);
+    const r = await put(adminCookie, { tutorDailyLimit: 1000, explainDailyLimit: 0, gradeDailyLimit: 7 });
     expect(r.status).toBe(200);
-    expect(((await r.json()) as { tutorDailyLimit: number }).tutorDailyLimit).toBe(1000);
-    const get = await fetch(`${base}/api/admin/settings/ai`, { headers: { cookie: adminCookie } });
-    expect(((await get.json()) as { tutorDailyLimit: number }).tutorDailyLimit).toBe(1000);
-    // Admins are exempt from the limit itself.
-    setTutorDailyLimit(1);
-    for (let i = 0; i < 3; i++) expect((await chat(adminCookie)).status).toBe(200);
-    expect(((await (await fetch(`${base}/api/me/tutor-quota`, { headers: { cookie: adminCookie } })).json()) as { tutor: unknown }).tutor).toBeNull();
+    const saved = { tutorDailyLimit: 1000, explainDailyLimit: 0, gradeDailyLimit: 7 };
+    expect(await r.json()).toMatchObject(saved);
+    expect(await (await fetch(`${base}/api/admin/settings/ai`, { headers: { cookie: adminCookie } })).json()).toMatchObject(saved);
+    // Defaults when nothing is stored.
+    setAiDailyLimits(AI_DAILY_DEFAULTS);
+    expect(await (await fetch(`${base}/api/admin/settings/ai`, { headers: { cookie: adminCookie } })).json()).toMatchObject({
+      tutorDailyLimit: 30,
+      explainDailyLimit: 20,
+      gradeDailyLimit: 30,
+    });
+    // Admins are exempt from the daily limits themselves.
+    setAiDailyLimits({ tutor: 1, explain: 1, grade: 1 });
+    for (const f of ["tutor", "explain", "grade"] as const) for (let i = 0; i < 3; i++) expect((await send[f](adminCookie)).status).toBe(200);
+    expect(await quotas(adminCookie)).toEqual({ tutor: null, explain: null, grade: null });
+    // The old tutor-only route still answers.
+    expect(await (await fetch(`${base}/api/me/tutor-quota`, { headers: { cookie: student } })).json()).toEqual({ tutor: { limit: 1, used: 0, remaining: 1 } });
   });
 });

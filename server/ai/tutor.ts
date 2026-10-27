@@ -2,6 +2,8 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { getModel } from "./providers";
 import { readerReferenceRule } from "./content-rules";
+import { aiStubEnabled } from "./speech";
+import { stubGrade } from "./chat-stub";
 
 const langName = (l: string) => (l === "en" ? "English" : "Nederlands");
 
@@ -24,6 +26,7 @@ export async function gradeOpenAnswer(input: {
   answer: string;
   locale: string;
 }) {
+  if (aiStubEnabled()) return clamp(stubGrade(input.answer));
   const { output } = await generateText({
     model: await getModel("fast"),
     instructions: `Je beoordeelt antwoorden van hbo-studenten op open vragen. Beoordeel inhoud, niet spelling of stijl.
@@ -40,6 +43,7 @@ ${readerReferenceRule(input.locale)}`,
 
 /** "Explain it back" (Feynman technique): student explains a concept in their own words. */
 export async function gradeExplanation(input: { concept: string; source: string; explanation: string; locale: string }) {
+  if (aiStubEnabled()) return clamp(stubGrade(input.explanation));
   const { output } = await generateText({
     model: await getModel("fast"),
     instructions: `Je bent een hbo-docent die de Feynman-techniek gebruikt. De student legt een begrip uit in eigen woorden, alsof aan een medestudent.

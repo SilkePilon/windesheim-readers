@@ -7,7 +7,7 @@ import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, schema } from "../db";
 import { limits } from "../limits";
-import { getTutorDailyLimit, setTutorDailyLimit } from "../lib/tutor-quota";
+import { getAiLimitSettings, setAiDailyLimits } from "../lib/ai-quota";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
@@ -24,7 +24,7 @@ const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
 
 /** AI settings for the admin page, plus the usage limits that live next to them. */
-const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), tutorDailyLimit: getTutorDailyLimit() });
+const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), ...getAiLimitSettings() });
 
 export const admin = new Hono<AppEnv>()
   .use(requireUser, requireAdmin)
@@ -343,9 +343,9 @@ export const admin = new Hono<AppEnv>()
     const body = input.aiSettings.parse(await c.req.json());
     const bad = body.voice && voiceProblem(body.voice);
     if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.voice!.provider, body.voice!.model).map((v) => v.id) }, 400);
-    const { tutorDailyLimit, ...ai } = body;
+    const { tutorDailyLimit, explainDailyLimit, gradeDailyLimit, ...ai } = body;
     await updateAiSettings(ai);
-    if (tutorDailyLimit !== undefined) setTutorDailyLimit(tutorDailyLimit);
+    setAiDailyLimits({ tutor: tutorDailyLimit, explain: explainDailyLimit, grade: gradeDailyLimit });
     return c.json(await aiSettingsView());
   })
   .post("/settings/ai/validate", limits.adminAi, async (c) => {

@@ -14,7 +14,7 @@ import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey
 import { listModels, validateKey } from "../ai/models";
 import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, publicAudio, queueReaderAudio } from "../ai/audio";
 import { synthesize, voiceSampleText } from "../ai/speech";
-import { VOICES } from "../ai/voices";
+import { voiceProblem, VOICES, voicesFor } from "../ai/voices";
 import { backfillBadges } from "../lib/badges";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
@@ -362,6 +362,8 @@ export const admin = new Hono<AppEnv>()
         keys: z.partialRecord(providerEnum, z.string().nullable()).optional(),
       })
       .parse(await c.req.json());
+    const bad = body.voice && voiceProblem(body.voice);
+    if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.voice!.provider, body.voice!.model).map((v) => v.id) }, 400);
     await updateAiSettings(body);
     return c.json(await getAiSettingsPublic());
   })
@@ -391,6 +393,8 @@ export const admin = new Hono<AppEnv>()
   /** "Probeer stem": a short MP3 sample with the given (unsaved) voice settings. */
   .post("/settings/ai/voice/sample", async (c) => {
     const body = voiceChoice.extend({ apiKey: z.string().optional(), language: z.enum(["nl", "en"]).optional() }).parse(await c.req.json());
+    const bad = voiceProblem(body);
+    if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.provider, body.model).map((v) => v.id) }, 400);
     try {
       const language = body.language ?? "nl";
       const { mp3 } = await synthesize(voiceSampleText(language), body, await resolveApiKey(body.provider, body.apiKey), language);

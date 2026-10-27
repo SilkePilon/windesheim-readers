@@ -191,15 +191,6 @@ export function mp3Info(b: Uint8Array): Mp3Info {
   return { frames, durationMs: Math.round((samples / first.sampleRate) * 1000), ...first };
 }
 
-/** Normalise TTS output (WAV or MP3) to our stored format: MP3 64 kbps mono. MP3 input is kept as-is. */
-export function toStoredMp3(audio: Uint8Array): { mp3: Uint8Array; durationMs: number } {
-  if (isWav(audio)) {
-    const pcm = parseWav(audio);
-    return { mp3: encodeMp3(pcm), durationMs: Math.round((pcm.samples.length / pcm.sampleRate) * 1000) };
-  }
-  return { mp3: audio, durationMs: mp3Info(audio).durationMs };
-}
-
 export type RangeResult = { start: number; end: number } | "unsatisfiable" | null;
 
 /**

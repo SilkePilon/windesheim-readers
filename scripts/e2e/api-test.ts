@@ -370,6 +370,11 @@ console.log("ws errors:", errs);
   const [vs, saved] = await j(admin, "PUT", "/admin/settings/ai", { voice: { provider: "openai", model: "gpt-4o-mini-tts", voice: "coral", instructions: "  " } });
   ok(vs === 200 && saved.voice.voice === "coral" && saved.voice.instructions === undefined, "settings: voice can be saved (blank instructions = default)");
   ok((await j(admin, "PUT", "/admin/settings/ai", { voice: { provider: "anthropic", model: "x", voice: "y" } }))[0] === 400, "settings: voice provider must be google or openai");
+  {
+    const [bs, bad] = await j(admin, "PUT", "/admin/settings/ai", { voice: { provider: "openai", model: "tts-1", voice: "marin" } });
+    ok(bs === 400 && bad.error === "INVALID_VOICE" && /gpt-4o-mini-tts/.test(bad.message) && bad.validVoices.includes("coral") && !bad.validVoices.includes("marin"), "settings: a voice the model can't use is rejected with a clear error");
+    ok((await j(admin, "GET", "/admin/settings/ai"))[1].voice.voice === "coral", "settings: rejected voice is not saved");
+  }
   const sample = await fetch(base + "/admin/settings/ai/voice/sample", { method: "POST", headers: { ...H, cookie: admin }, body: JSON.stringify({ provider: "google", model: "gemini-3.8-flash-tts", voice: "Sulafat" }) });
   const sampleBytes = new Uint8Array(await sample.arrayBuffer());
   ok(sample.status === 200 && sample.headers.get("content-type") === "audio/mpeg" && sampleBytes[0] === 0xff, "voice sample returns an MP3");

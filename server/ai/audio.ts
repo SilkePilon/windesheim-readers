@@ -14,7 +14,8 @@ import { env } from "../env";
 import { examplesPrompt, normalizeScript, scriptInstructions, scriptPrompt, scriptSchema, stubScript, type AudioScript } from "./audio-script";
 import { getPageText } from "./pipeline";
 import { createModel, getRoleConfig, getVoiceConfig, type ModelChoice } from "./providers";
-import { aiStubEnabled, synthesize } from "./speech";
+import { aiStubEnabled, isRateLimited, synthesize, type SpeakFn } from "./speech";
+import { effectiveVoice } from "./voices";
 
 const AUDIO_ROOT = () => join(env.uploadDir, "audio");
 export const audioDir = (lessonId: string) => join(AUDIO_ROOT(), lessonId);
@@ -67,20 +68,6 @@ export async function generateScript(l: typeof schema.lesson.$inferSelect, langu
 
 // ---------- audio ----------
 
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]!, i);
-      }
-    }),
-  );
-  return out;
-}
-
 async function upsertAudio(lessonId: string, data: Partial<typeof schema.lessonAudio.$inferInsert>) {
   const set = { ...data, updatedAt: new Date() };
   await db
@@ -95,14 +82,31 @@ export function isAudioInFlight(lessonId: string) {
   return inFlight.has(lessonId);
 }
 
+export interface AudioJobDeps {
+  script?: typeof generateScript;
+  speak?: SpeakFn;
+  /** Wait before the per-chapter retry (ms); default 2 s after a 429, else 1 s. */
+  retryDelayMs?: (e: unknown) => number;
+}
+
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal.aborted || ms <= 0) return resolve();
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+  });
+
 /**
  * (Re)generate the audio of one lesson. The previous audio keeps being served until the new
  * set is complete; then the directory is swapped. "ready" only when every chapter exists.
+ * The first chapter that fails (after one retry) stops every worker: no further TTS calls,
+ * nothing written, and the job only finishes (and leaves `inFlight`) once all workers settled.
  */
-export async function generateLessonAudio(lessonId: string) {
+export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps = {}) {
   if (inFlight.has(lessonId)) return;
   inFlight.add(lessonId);
   const tmp = join(AUDIO_ROOT(), `.tmp-${lessonId}-${nanoid(6)}`);
+  const old = join(AUDIO_ROOT(), `.old-${lessonId}-${nanoid(6)}`);
   try {
     const l = await db.query.lesson.findFirst({ where: eq(schema.lesson.id, lessonId) });
     if (!l) return;
@@ -111,32 +115,65 @@ export async function generateLessonAudio(lessonId: string) {
     await upsertAudio(lessonId, { status: "generating", error: null });
     try {
       if (l.status !== "ready") throw new Error("Lesson content is not ready");
-      const script = await generateScript(l, r.language);
-      const { choice, apiKey } = await getVoiceConfig();
+      const script = await (deps.script ?? generateScript)(l, r.language);
+      const { choice: configured, apiKey } = await getVoiceConfig();
+      const choice = effectiveVoice(configured);
       await mkdir(tmp, { recursive: true });
-      const chapters = await mapLimit(script.chapters, CHAPTER_CONCURRENCY, async (ch, i): Promise<LessonAudioChapter> => {
-        let audio;
+
+      const ac = new AbortController();
+      let failure: unknown = null;
+      const chapters: LessonAudioChapter[] = new Array(script.chapters.length);
+      const retryDelay = deps.retryDelayMs ?? ((e: unknown) => (isRateLimited(e) ? 2000 : 1000));
+      const speakChapter = async (i: number) => {
+        const text = script.chapters[i]!.text;
+        const opts = { signal: ac.signal, speak: deps.speak };
         try {
-          audio = await synthesize(ch.text, choice, apiKey, r.language);
+          return await synthesize(text, choice, apiKey, r.language, opts);
         } catch (e) {
+          if (ac.signal.aborted) throw e;
           console.warn(`[audio ${l.code}] chapter ${i + 1} failed, retrying once:`, errMsg(e));
-          audio = await synthesize(ch.text, choice, apiKey, r.language);
+          await sleep(retryDelay(e), ac.signal);
+          ac.signal.throwIfAborted();
+          return await synthesize(text, choice, apiKey, r.language, opts);
         }
-        await Bun.write(join(tmp, `${i + 1}.mp3`), audio.mp3);
-        return { n: i + 1, durationMs: audio.durationMs, bytes: audio.mp3.length };
-      });
+      };
+      let next = 0;
+      // Workers never reject: Promise.all only resolves once every one of them has settled.
+      await Promise.all(
+        Array.from({ length: Math.min(CHAPTER_CONCURRENCY, chapters.length) }, async () => {
+          while (!failure && next < chapters.length) {
+            const i = next++;
+            try {
+              const audio = await speakChapter(i);
+              if (failure) return; // another chapter failed meanwhile: write nothing more
+              await Bun.write(join(tmp, `${i + 1}.mp3`), audio.mp3);
+              chapters[i] = { n: i + 1, durationMs: audio.durationMs, bytes: audio.mp3.length };
+            } catch (e) {
+              if (!failure) {
+                failure = new Error(`Chapter ${i + 1}: ${errMsg(e)}`);
+                ac.abort();
+              }
+            }
+          }
+        }),
+      );
+      if (failure) throw failure;
+
       // The lesson may have been deleted (or its reader re-structured) while we were working.
-      if (!(await db.query.lesson.findFirst({ where: eq(schema.lesson.id, lessonId), columns: { id: true } }))) return;
-      await rm(audioDir(lessonId), { recursive: true, force: true });
+      const now = await db.query.lesson.findFirst({ where: eq(schema.lesson.id, lessonId), columns: { id: true, generatedAt: true } });
+      if (!now) return;
+      // Swap without a 404 gap: move the old set aside, move the new one in, then delete the old one.
+      await rename(audioDir(lessonId), old).catch(() => {});
       await rename(tmp, audioDir(lessonId));
       await upsertAudio(lessonId, {
         status: "ready",
-        stale: false,
+        // Content regenerated while we were speaking the old text → still stale.
+        stale: now.generatedAt?.getTime() !== l.generatedAt?.getTime(),
         error: null,
         script,
         chapters,
-        provider: aiStubEnabled() ? "stub" : choice.provider,
-        model: aiStubEnabled() ? "stub" : choice.model,
+        provider: aiStubEnabled() && !deps.speak ? "stub" : choice.provider,
+        model: aiStubEnabled() && !deps.speak ? "stub" : choice.model,
         voice: choice.voice,
         generatedAt: new Date(),
       });
@@ -146,6 +183,7 @@ export async function generateLessonAudio(lessonId: string) {
     }
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
+    await rm(old, { recursive: true, force: true }).catch(() => {});
     inFlight.delete(lessonId);
   }
 }
@@ -206,7 +244,7 @@ export async function recoverAudio() {
   if (!entries.length) return;
   const existing = new Set((await db.select({ id: schema.lesson.id }).from(schema.lesson)).map((l) => l.id));
   await Promise.all(
-    entries.filter((e) => e.startsWith(".tmp-") || !existing.has(e)).map((e) => rm(join(AUDIO_ROOT(), e), { recursive: true, force: true }).catch(() => {})),
+    entries.filter((e) => e.startsWith(".tmp-") || e.startsWith(".old-") || !existing.has(e)).map((e) => rm(join(AUDIO_ROOT(), e), { recursive: true, force: true }).catch(() => {})),
   );
 }
 

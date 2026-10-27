@@ -64,3 +64,29 @@ export const VOICES: Record<VoiceProviderId, VoiceInfo[]> = { google: GOOGLE, op
 
 /** Gemini TTS model to fall back to when the (default) newest one isn't available for the key. */
 export const GOOGLE_TTS_FALLBACK = "gemini-2.5-flash-preview-tts";
+
+/** Gemini TTS models to try, newest first, when the configured one is unavailable for the key. */
+export const GOOGLE_TTS_CHAIN = ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", GOOGLE_TTS_FALLBACK];
+
+/** OpenAI's `instructions` (voice direction) only exists on gpt-4o-mini-tts*; tts-1/tts-1-hd reject it. */
+export function supportsInstructions(provider: VoiceProviderId, model: string) {
+  return provider === "google" || model.startsWith("gpt-4o-mini-tts");
+}
+
+export function voicesFor(provider: VoiceProviderId, model: string) {
+  return VOICES[provider].filter((v) => !v.modelPrefix || model.startsWith(v.modelPrefix));
+}
+
+/** Null when the voice works with the provider + model, else an admin-facing explanation. */
+export function voiceProblem(c: { provider: VoiceProviderId; model: string; voice: string }): string | null {
+  if (voicesFor(c.provider, c.model).some((v) => v.id === c.voice)) return null;
+  const known = VOICES[c.provider].find((v) => v.id === c.voice);
+  return known
+    ? `Voice "${c.voice}" only works with ${known.modelPrefix} models, not "${c.model}"`
+    : `Unknown ${c.provider === "google" ? "Gemini" : "OpenAI"} voice "${c.voice}"`;
+}
+
+/** The voice if valid for the model, else the first valid one (the catalogue lists the defaults first). */
+export function effectiveVoice<T extends { provider: VoiceProviderId; model: string; voice: string }>(c: T): T {
+  return voiceProblem(c) ? { ...c, voice: voicesFor(c.provider, c.model)[0]!.id } : c;
+}

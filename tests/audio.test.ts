@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { concatPcm, encodeMp3, mp3Info, parseRange, parseWav, pcmToWav, tone, toStoredMp3 } from "../server/lib/audio-codec";
+import { concatPcm, encodeMp3, mp3Info, parseRange, parseWav, pcmToWav, tone } from "../server/lib/audio-codec";
 import { chunkText, normalizeScript, scriptSchema, stubScript, TTS_MAX_CHARS, tidySpoken, type RawScript } from "../server/ai/audio-script";
 
 const ch = (kind: RawScript["chapters"][number]["kind"], text = `${kind} text.`) => ({ kind, title: kind, text });
@@ -129,14 +129,10 @@ describe("WAV → MP3", () => {
     }
   });
 
-  test("toStoredMp3 encodes WAV and passes MP3 through; concatPcm adds gaps", () => {
+  test("concatPcm adds gaps; mp3Info rejects garbage", () => {
     const joined = concatPcm([tone(500), tone(500)], 250);
     expect(joined.samples.length).toBe(24000 * 1.25);
-    const { mp3, durationMs } = toStoredMp3(pcmToWav(joined));
-    expect(durationMs).toBe(1250);
-    const again = toStoredMp3(mp3);
-    expect(again.mp3).toBe(mp3);
-    expect(Math.abs(again.durationMs - 1250)).toBeLessThan(150);
+    expect(Math.abs(mp3Info(encodeMp3(joined)).durationMs - 1250)).toBeLessThan(150);
     expect(() => mp3Info(new Uint8Array(100))).toThrow();
   });
 });

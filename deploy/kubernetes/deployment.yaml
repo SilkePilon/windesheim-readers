@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: windesheim-readers
+  labels: { app: windesheim-readers }
+spec:
+  # SQLite on a ReadWriteOnce volume: exactly one pod, and stop the old pod before the new
+  # one starts. Live battles are kept in memory, so more replicas would also split them.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: windesheim-readers }
+  template:
+    metadata:
+      labels: { app: windesheim-readers }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: ghcr.io/silkepilon/windesheim-readers:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef: { name: windesheim-readers }
+            - secretRef: { name: windesheim-readers }
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: windesheim-readers-data

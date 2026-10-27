@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: windesheim-readers
+data:
+  # Public URL of the app, used in magic-link emails. Must match the Ingress host.
+  APP_URL: "https://readers.example.com"
+  ADMIN_EMAILS: "you@windesheim.nl"
+  ALLOWED_EMAIL_DOMAINS: "windesheim.nl,student.windesheim.nl"
+  EMAIL_FROM: "Windesheim Readers <noreply@example.com>"

@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: windesheim-readers
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+# Pin a release instead of "latest" in production:
+images:
+  - name: ghcr.io/silkepilon/windesheim-readers
+    newTag: latest

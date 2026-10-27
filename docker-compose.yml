@@ -1,0 +1,19 @@
+# Standalone deployment: `docker compose up -d` (fill in .env first, see README).
+services:
+  app:
+    image: ghcr.io/silkepilon/windesheim-readers:latest
+    # Or build it yourself from this checkout:
+    # build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      # Paths inside the container; the volume below keeps them.
+      DATABASE_PATH: /app/data/app.db
+      UPLOAD_DIR: /app/data/uploads
+    volumes:
+      - readers-data:/app/data
+
+volumes:
+  readers-data:

@@ -4,7 +4,8 @@ import { upgradeWebSocket, websocket, serveStatic } from "@hono/bun";
 import { ZodError } from "zod";
 import { auth } from "./auth";
 import { env } from "./env";
-import { runMigrations } from "./db";
+import { sql } from "drizzle-orm";
+import { db, runMigrations } from "./db";
 import { admin } from "./routes/admin";
 import { learn } from "./routes/learn";
 import { userFromHeaders } from "./middleware";
@@ -28,6 +29,16 @@ app.onError((err, c) => {
   if (err instanceof ZodError) return c.json({ error: "VALIDATION", issues: err.issues }, 400);
   console.error(err);
   return c.json({ error: err.message || "INTERNAL" }, 500);
+});
+
+// Liveness/readiness probe for Docker and Kubernetes: also proves the database answers.
+app.get("/api/health", (c) => {
+  try {
+    db.get(sql`select 1`);
+    return c.json({ ok: true });
+  } catch {
+    return c.json({ ok: false }, 503);
+  }
 });
 
 app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -74,6 +85,9 @@ if (env.isProd) {
   app.use("/*", serveStatic({ root: "./dist" }));
   app.get("*", serveStatic({ path: "./dist/index.html" }));
 }
+
+// As PID 1 in a container nothing stops the process on SIGTERM unless we handle it.
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => process.exit(0));
 
 console.log(`API listening on http://localhost:${env.port}`);
 

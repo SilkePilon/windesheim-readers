@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: windesheim-readers
+  annotations:
+    # ingress-nginx: allow 50 MB reader PDFs, long AI requests and the battle WebSocket.
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # With cert-manager installed, this issues the TLS certificate:
+    # cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [readers.example.com]
+      secretName: windesheim-readers-tls
+  rules:
+    - host: readers.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: windesheim-readers
+                port: { name: http }

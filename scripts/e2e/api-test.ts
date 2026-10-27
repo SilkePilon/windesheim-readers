@@ -347,4 +347,105 @@ console.log("ws errors:", errs);
   ok((await (async () => { h.send({ t: "create", lessonIds: [readers[0].lessons[0].id], count: 3 }); await Bun.sleep(200); return h.msgs.filter((m) => m.t === "error").pop()?.error; })()) === "BAD_MESSAGE", "count: create below 5 is rejected");
   h.s.close();
 }
+// ----- luisterles (audio summary; AI_STUB=1 → stub script + tone TTS, no paid calls) -----
+{
+  const { Database } = await import("bun:sqlite");
+  const { existsSync } = await import("node:fs");
+  const DIR = LOG.replace(/\/[^/]+$/, "");
+  const raw = (cookie: string, path: string, headers: Record<string, string> = {}) => fetch(base + path.replace(/^\/api/, ""), { headers: { ...H, cookie, ...headers } });
+  const waitAudio = async (readerId: string, done: (l: any) => boolean) => {
+    for (let i = 0; i < 100; i++) {
+      const [, r] = await j(admin, "GET", `/admin/readers/${readerId}`);
+      if (r.lessons.every(done)) return r.lessons;
+      await Bun.sleep(200);
+    }
+    return (await j(admin, "GET", `/admin/readers/${readerId}`))[1].lessons;
+  };
+
+  // Settings: the Stem role
+  const [, ai] = await j(admin, "GET", "/admin/settings/ai");
+  ok(ai.voice?.provider && ai.voice.model && ai.voice.voice && ai.voiceDefaults.google.model && ai.voiceDefaults.openai.model === "gpt-4o-mini-tts", "settings: voice role with defaults");
+  const [, voices] = await j(admin, "GET", "/admin/settings/ai/voices");
+  ok(voices.google.some((v: any) => v.id === ai.voiceDefaults.google.voice) && voices.openai.some((v: any) => v.id === "marin"), "voices: per-provider lists contain the defaults");
+  const [vs, saved] = await j(admin, "PUT", "/admin/settings/ai", { voice: { provider: "openai", model: "gpt-4o-mini-tts", voice: "coral", instructions: "  " } });
+  ok(vs === 200 && saved.voice.voice === "coral" && saved.voice.instructions === undefined, "settings: voice can be saved (blank instructions = default)");
+  ok((await j(admin, "PUT", "/admin/settings/ai", { voice: { provider: "anthropic", model: "x", voice: "y" } }))[0] === 400, "settings: voice provider must be google or openai");
+  const sample = await fetch(base + "/admin/settings/ai/voice/sample", { method: "POST", headers: { ...H, cookie: admin }, body: JSON.stringify({ provider: "google", model: "gemini-3.8-flash-tts", voice: "Sulafat" }) });
+  const sampleBytes = new Uint8Array(await sample.arrayBuffer());
+  ok(sample.status === 200 && sample.headers.get("content-type") === "audio/mpeg" && sampleBytes[0] === 0xff, "voice sample returns an MP3");
+  ok((await j(student, "GET", "/admin/settings/ai/voices"))[0] === 403, "students cannot see voice settings");
+
+  // Generate for the seeded reader ("missing only")
+  const [gs, gen] = await j(admin, "POST", "/admin/readers/e2e-reader/audio", {});
+  ok(gs === 200 && gen.queued === readers[0].lessons.length, `audio queued for every ready lesson (${gen.queued})`);
+  const lessonsA = await waitAudio("e2e-reader", (l) => l.audio.status === "ready");
+  ok(lessonsA.every((l: any) => l.audio.status === "ready" && l.audio.chapters === 6 && l.audio.totalMs > 0 && !l.audio.stale), "admin list: audio klaar with 6 chapters for every lesson");
+  ok((await j(admin, "POST", "/admin/readers/e2e-reader/audio", {}))[1].queued === 0, "generate again (missing only) queues nothing");
+  const L = readers[0].lessons[2];
+  const [, adm] = await j(admin, "GET", `/admin/lessons/${L.id}/audio`);
+  ok(adm.script?.chapters?.length === 6 && adm.script.chapters.every((c: any) => c.text && c.kind), "admin can fetch the script");
+
+  // Student status: no text
+  const [ss, st] = await j(student, "GET", `/lessons/${L.id}/audio`);
+  const stJson = JSON.stringify(st);
+  ok(ss === 200 && st.status === "ready" && st.chapters.length === 6 && st.totalMs === st.chapters.reduce((a: number, c: any) => a + c.durationMs, 0), "student audio status: ready, 6 chapters, totalMs");
+  ok(!stJson.includes('"text"') && !stJson.includes("script") && !stJson.includes("Het eerste punt"), "student audio status has no script text");
+
+  // MP3 + Range
+  const url = st.chapters[0].url as string;
+  const full = await raw(student, url);
+  const fullBytes = new Uint8Array(await full.arrayBuffer());
+  ok(full.status === 200 && full.headers.get("content-type") === "audio/mpeg" && full.headers.get("cache-control") === "private, max-age=86400" && full.headers.get("accept-ranges") === "bytes", "mp3: 200 with audio/mpeg, private cache, accept-ranges");
+  ok(fullBytes.length === Number(full.headers.get("content-length")) && fullBytes[0] === 0xff, "mp3: body is the whole MP3");
+  const part = await raw(student, url, { range: "bytes=10-109" });
+  const partBytes = new Uint8Array(await part.arrayBuffer());
+  ok(part.status === 206 && part.headers.get("content-range") === `bytes 10-109/${fullBytes.length}` && partBytes.length === 100 && partBytes[0] === fullBytes[10], "mp3: Range → 206 with the right bytes");
+  ok((await raw(student, url, { range: `bytes=${fullBytes.length}-` })).status === 416, "mp3: unsatisfiable Range → 416");
+  ok((await raw(student, `/lessons/${L.id}/audio/99.mp3`)).status === 404, "mp3: unknown chapter → 404");
+  ok((await fetch(base + url.replace(/^\/api/, ""))).status === 401, "mp3: logged out → 401");
+  ok((await fetch(base + `/lessons/${L.id}/audio`)).status === 401, "audio status: logged out → 401");
+
+  // Listen progress: resume position, ≥ 90% marks read once
+  const total = st.totalMs as number;
+  const xpOf = async () => (await j(student, "GET", "/me"))[1].stats.xp as number;
+  const [, lBefore] = await j(student, "GET", `/lessons/${L.id}`);
+  ok(lBefore.progress.summaryRead === false, "listen lesson is not read yet");
+  const xp0 = await xpOf();
+  const [, p1] = await j(student, "POST", `/lessons/${L.id}/audio/progress`, { positionMs: Math.floor(total / 2) });
+  ok(p1.listenMs === Math.floor(total / 2) && p1.summaryRead === false && p1.award === null, "progress < 90%: position saved, not read");
+  ok((await j(student, "GET", `/lessons/${L.id}/audio`))[1].listenMs === Math.floor(total / 2), "status returns the resume position");
+  const [, p2] = await j(student, "POST", `/lessons/${L.id}/audio/progress`, { positionMs: total, heardMs: Math.ceil(total * 0.9) });
+  ok(p2.summaryRead === true && p2.award?.gained > 0, `progress ≥ 90%: marked read with XP (+${p2.award?.gained})`);
+  const xp1 = await xpOf();
+  ok(xp1 - xp0 === p2.award.gained, "XP went up by exactly the award");
+  const [, p3] = await j(student, "POST", `/lessons/${L.id}/audio/progress`, { positionMs: total });
+  ok(p3.award === null && p3.summaryRead === true, "listening again awards nothing");
+  ok((await j(student, "POST", `/lessons/${L.id}/read`))[1].gained === 0, "reading after listening awards nothing");
+  ok((await xpOf()) === xp1, "no double XP");
+  ok((await j(student, "GET", `/lessons/${L.id}`))[1].progress.summaryRead === true, "lesson shows read after listening");
+
+  // Unpublished reader: 404 for students; stale marking, "missing only", file cleanup on delete
+  const sdb = new Database(`${DIR}/app.db`);
+  sdb.run("insert into reader (id, title, file_name, page_count, status, published, created_at) values ('e2e-audio', 'Audio', 'a.pdf', 10, 'ready', 0, 0)");
+  sdb.run("insert into lesson (id, reader_id, code, title, week, position, start_page, end_page, status, summary) values ('e2e-al1', 'e2e-audio', '1.1', 'Een', 1, 0, 1, 2, 'ready', 'x'), ('e2e-al2', 'e2e-audio', '1.2', 'Twee', 1, 1, 3, 4, 'ready', 'y')");
+  sdb.close();
+  await j(admin, "POST", "/admin/readers/e2e-audio/audio", {});
+  await waitAudio("e2e-audio", (l) => l.audio.status === "ready");
+  ok(existsSync(`${DIR}/uploads/audio/e2e-al1/1.mp3`) && existsSync(`${DIR}/uploads/audio/e2e-al2/6.mp3`), "audio files are stored per lesson");
+  ok((await j(student, "GET", "/lessons/e2e-al1/audio"))[0] === 404 && (await raw(student, "/lessons/e2e-al1/audio/1.mp3")).status === 404, "unpublished lesson: 404 for students");
+  ok((await raw(admin, "/lessons/e2e-al1/audio/1.mp3")).status === 200, "unpublished lesson: admins can still listen");
+  const [, ar] = await j(admin, "GET", "/admin/readers/e2e-audio");
+  const edit = ar.lessons.map((l: any) => ({ id: l.id, code: l.code, title: l.title, week: l.week, startPage: l.startPage, endPage: l.id === "e2e-al2" ? 5 : l.endPage }));
+  ok((await j(admin, "PUT", "/admin/readers/e2e-audio/lessons", edit))[0] === 200, "lesson pages changed");
+  const stale = (await j(admin, "GET", "/admin/readers/e2e-audio"))[1].lessons;
+  ok(stale.find((l: any) => l.id === "e2e-al2").audio.stale && !stale.find((l: any) => l.id === "e2e-al1").audio.stale, "changed lesson's audio is marked stale");
+  ok((await j(student, "GET", `/lessons/${L.id}/audio`))[1].status === "ready", "other audio unaffected");
+  const [, again] = await j(admin, "POST", "/admin/readers/e2e-audio/audio", {});
+  ok(again.queued === 1 && again.lessonIds[0] === "e2e-al2", "generate (missing only) picks just the stale lesson");
+  await waitAudio("e2e-audio", (l) => l.audio.status === "ready" && !l.audio.stale);
+  ok((await j(admin, "POST", "/admin/lessons/e2e-al1/audio"))[0] === 200, "per-lesson regenerate (Opnieuw) starts");
+  await waitAudio("e2e-audio", (l) => l.audio.status === "ready");
+  ok((await j(admin, "PUT", "/admin/readers/e2e-audio/lessons", edit.filter((l: any) => l.id !== "e2e-al2")))[0] === 200 && !existsSync(`${DIR}/uploads/audio/e2e-al2`), "removing a lesson deletes its audio files");
+  ok((await j(admin, "DELETE", "/admin/readers/e2e-audio"))[0] === 200 && !existsSync(`${DIR}/uploads/audio/e2e-al1`), "deleting the reader deletes its audio files");
+}
 process.exit(0);

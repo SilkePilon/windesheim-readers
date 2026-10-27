@@ -261,7 +261,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
             autoAdvanceMs={reveal.correct ? AUTO_NEXT_CORRECT_MS : AUTO_NEXT_WRONG_MS}
           />
         ) : tapToAnswer ? null : (
-          <div className="sticky bottom-0 mt-auto bg-gradient-to-t from-background from-70% to-transparent pt-4 pb-[calc(4px+env(safe-area-inset-bottom))]">
+          <div className="sticky bottom-0 bg-gradient-to-t from-background from-70% to-transparent pt-1 pb-[calc(4px+env(safe-area-inset-bottom))]">
             <Button variant="chunky" size="xl" className="w-full" onClick={() => void check()} disabled={!isAnswered(q, value) || busy}>
               {busy && <Spinner />} {t("quiz.check")}
             </Button>

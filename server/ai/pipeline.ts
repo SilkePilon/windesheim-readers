@@ -7,7 +7,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import { db, schema } from "../db";
 import { env } from "../env";
 import { getModel } from "./providers";
-import { mergeLetterParts, questionCounts, readerReferenceRule, readerWording } from "./content-rules";
+import { mergeLetterParts, questionCounts, readerReferenceRule, readerWording, selfContainedRule, studyMaterialBlock } from "./content-rules";
 import { deleteAudioFiles, markAudioStale } from "./audio";
 
 // ---------- helpers ----------
@@ -184,6 +184,9 @@ function contentPrompt(language: string, focus: "study" | "quiz") {
 - Gebruik UITSLUITEND informatie uit de reader. Verzin geen feiten.
 - Schrijf alles in de taal van de reader (taalcode: ${language}).
 ${readerReferenceRule(language)}
+${selfContainedRule(language)}${focus === "quiz" ? `
+- Je krijgt ook het studiemateriaal dat studenten zien. Toets alleen wat daarin staat: elke vraag moet met alleen dat materiaal te beantwoorden zijn. Gebruik de reader-tekst om de vragen inhoudelijk juist en precies te maken.` : `
+- Alles wat flashcards en leerpunten vragen, moet ook in de samenvatting of de begrippen staan.`}
 - Vragen moeten begrip toetsen, niet alleen herkenning. Varieer moeilijkheid.
 - Meerkeuze-afleiders moeten plausibel zijn (veelgemaakte misvattingen), niet absurd.
 - Afbeeldingen zijn niet zichtbaar; negeer verwijzingen naar figuren tenzij de reader ze uitlegt.`;
@@ -201,12 +204,20 @@ export async function generateLessonContent(lessonId: string) {
     const counts = questionCounts(l.endPage - l.startPage + 1);
     const prompt = `Paragraaf ${l.code}: ${l.title} (reader-pagina ${l.startPage}-${l.endPage})\n\n${text}`;
     const model = await getModel("generation");
-    // Two calls with the full paragraph text: study material and questions each get the whole output budget.
-    const [study, quiz] = await Promise.all([
-      generateText({ model, instructions: contentPrompt(r.language, "study"), prompt, output: Output.object({ schema: studySchema(counts) }) }),
-      generateText({ model, instructions: contentPrompt(r.language, "quiz"), prompt, output: Output.object({ schema: quizSchema(counts) }) }),
-    ]);
+    // Two calls with the full paragraph text, so each gets the whole output budget. Questions
+    // come second: they get the study material students actually see, and may only test that.
     const w = (s: string) => readerWording(s, r.language);
+    const study = await generateText({ model, instructions: contentPrompt(r.language, "study"), prompt, output: Output.object({ schema: studySchema(counts) }) });
+    const seen = studyMaterialBlock(
+      { summary: w(study.output.summary), keyPoints: study.output.keyPoints.map(w), terms: study.output.terms.map((t) => ({ term: t.term, definition: w(t.definition) })) },
+      r.language,
+    );
+    const quiz = await generateText({
+      model,
+      instructions: contentPrompt(r.language, "quiz"),
+      prompt: `${prompt}\n\n---\n\n${seen}`,
+      output: Output.object({ schema: quizSchema(counts) }),
+    });
     const output = {
       summary: w(study.output.summary),
       keyPoints: study.output.keyPoints.map(w),

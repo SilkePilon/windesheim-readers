@@ -87,3 +87,34 @@ export function readerReferenceRule(language: string) {
     ? `- Students only see the reader, never your input. When you refer to the source, always say "the reader" (e.g. "as stated in the reader"), never "the text", "the passage" or "the excerpt".`
     : `- Studenten zien alleen de reader, nooit jouw invoer. Verwijs naar de bron altijd als "de reader" (bv. "zoals in de reader staat", "volgens de reader"), nooit als "de tekst", "het fragment" of "de gegeven tekst".`;
 }
+
+/**
+ * Students often study from the generated summary instead of reading the whole reader, so a
+ * question about "the example of company X in the reader" is unanswerable for them. Every
+ * question and flashcard has to stand on its own.
+ */
+export function selfContainedRule(language: string) {
+  return language === "en"
+    ? `- Every question and flashcard must stand on its own. Students often study from the summary instead of the full reader, so NEVER ask about a specific example, case, company, person, story, table, exercise or figure from the reader ("the example of the bakery in the reader", "what did company X do?"). Test the concept itself.
+- Want to test application? Write a short, complete situation (mini-case) inside the question itself, with every detail needed to answer it. It may be a new, recognisable situation; it must not depend on knowing an example from the reader.
+- Explanations follow the same rule: explain with the concept, not with an example the student may not have seen.`
+    : `- Elke vraag en flashcard moet op zichzelf staan. Studenten leren vaak uit de samenvatting in plaats van de hele reader, dus vraag NOOIT naar een specifiek voorbeeld, casus, bedrijf, persoon, verhaal, tabel, opdracht of figuur uit de reader ("het voorbeeld van de bakker uit de reader", "wat deed bedrijf X?"). Toets het begrip zelf.
+- Wil je toepassing toetsen? Schrijf dan een korte, volledige situatie (mini-casus) in de vraag zelf, met alle gegevens die nodig zijn om te antwoorden. Dat mag een nieuwe, herkenbare situatie zijn; ze mag niet afhangen van het kennen van een voorbeeld uit de reader.
+- Uitleg bij antwoorden volgt dezelfde regel: leg uit met het begrip, niet met een voorbeeld dat de student misschien niet kent.`;
+}
+
+/** What students actually see for a lesson, handed to the question generator as its yardstick. */
+export function studyMaterialBlock(
+  m: { summary: string; keyPoints: string[]; terms: { term: string; definition: string }[] },
+  language: string,
+) {
+  const en = language === "en";
+  return [
+    en
+      ? "STUDY MATERIAL THE STUDENTS SEE (summary, key points, terms). Every question must be answerable with this material alone:"
+      : "STUDIEMATERIAAL DAT STUDENTEN ZIEN (samenvatting, leerpunten, begrippen). Elke vraag moet met alleen dit materiaal te beantwoorden zijn:",
+    m.summary,
+    (en ? "Key points:\n" : "Leerpunten:\n") + m.keyPoints.map((k) => `- ${k}`).join("\n"),
+    (en ? "Terms:\n" : "Begrippen:\n") + m.terms.map((t) => `- ${t.term}: ${t.definition}`).join("\n"),
+  ].join("\n\n");
+}

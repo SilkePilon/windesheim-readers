@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mergeLetterParts, questionCounts, readerWording } from "../server/ai/content-rules";
+import { mergeLetterParts, questionCounts, readerWording, selfContainedRule, studyMaterialBlock } from "../server/ai/content-rules";
 
 const L = (code: string, startPage: number, endPage: number, title = code, week = 1) => ({ code, title, week, startPage, endPage });
 
@@ -46,5 +46,21 @@ describe("readerWording", () => {
   test("english", () => {
     expect(readerWording("According to the text, noise is always present.", "en")).toBe("According to the reader, noise is always present.");
     expect(readerWording("As described in the passage above ...", "en")).toBe("As described in the reader ...");
+  });
+});
+
+describe("selfContainedRule / studyMaterialBlock", () => {
+  test("forbids asking about reader examples, in both languages", () => {
+    expect(selfContainedRule("nl")).toContain("NOOIT naar een specifiek voorbeeld");
+    expect(selfContainedRule("nl")).toContain("mini-casus");
+    expect(selfContainedRule("en")).toContain("NEVER ask about a specific example");
+  });
+  test("lists what students see", () => {
+    const b = studyMaterialBlock({ summary: "Sam", keyPoints: ["a", "b"], terms: [{ term: "T", definition: "d" }] }, "nl");
+    expect(b).toContain("Elke vraag moet met alleen dit materiaal te beantwoorden zijn");
+    expect(b).toContain("Sam");
+    expect(b).toContain("- a\n- b");
+    expect(b).toContain("- T: d");
+    expect(studyMaterialBlock({ summary: "", keyPoints: [], terms: [] }, "en")).toContain("STUDY MATERIAL THE STUDENTS SEE");
   });
 });

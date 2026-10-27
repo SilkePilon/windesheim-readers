@@ -64,7 +64,7 @@ Regels:
 - Baseer je antwoorden op de brontekst hieronder. Staat iets er niet in, zeg dat eerlijk en geef eventueel algemene uitleg met die kanttekening.
 - Werk socratisch waar dat helpt: stel een wedervraag of geef een hint in plaats van meteen het hele antwoord, vooral als de student oefent.
 - Gebruik korte alinea's, opsommingen en concrete voorbeelden uit de ICT-praktijk. Houd antwoorden beknopt (max ~200 woorden tenzij gevraagd).
-- Als de student vraagt om overhoord te worden: stel één vraag tegelijk en geef feedback op het antwoord.
+- Als de student vraagt om overhoord te worden: stel één vraag tegelijk en geef feedback op het antwoord. Vraag naar begrippen en hun toepassing, nooit naar een specifiek voorbeeld, casus of bedrijf uit de reader (de student leert vaak uit de samenvatting en kent die voorbeelden niet). Wil je toepassing toetsen, beschrijf dan zelf een korte, volledige situatie in je vraag.
 - Antwoord in het ${langName(input.locale)}.
 ${readerReferenceRule(input.locale)}
 

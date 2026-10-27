@@ -148,13 +148,24 @@ describe("badge rules", () => {
     expect(masteryBadges(weeks).badges).toContain("world_dorp");
   });
 
-  test("weekly winners: top 3 / #1, only with 3+ players", () => {
-    const r = (userId: string, xp: number) => ({ userId, xp });
-    expect(weeklyWinners([r("a", 50), r("b", 20)])).toEqual([]);
+  test("weekly winners: top 3 / #1, only with 2+ ranked players, hidden users rank but get nothing", () => {
+    const r = (userId: string, xp: number, show = true) => ({ userId, xp, show });
+    expect(weeklyWinners([r("a", 50)])).toEqual([]);
+    expect(weeklyWinners([r("a", 50), r("b", 20)])).toEqual([
+      { userId: "a", badges: ["weekly_top3", "weekly_first"] },
+      { userId: "b", badges: ["weekly_top3"] },
+    ]);
     expect(weeklyWinners([r("a", 50), r("b", 20), r("c", 10), r("d", 5)])).toEqual([
       { userId: "a", badges: ["weekly_top3", "weekly_first"] },
       { userId: "b", badges: ["weekly_top3"] },
       { userId: "c", badges: ["weekly_top3"] },
     ]);
+    // A hidden #1 takes the place (as on the leaderboard): the best visible user is #2, not first.
+    expect(weeklyWinners([r("h", 90, false), r("a", 50), r("b", 20), r("c", 10)])).toEqual([
+      { userId: "a", badges: ["weekly_top3"] },
+      { userId: "b", badges: ["weekly_top3"] },
+    ]);
+    // A hidden player still counts towards the minimum.
+    expect(weeklyWinners([r("h", 90, false), r("a", 50)])).toEqual([{ userId: "a", badges: ["weekly_top3"] }]);
   });
 });

@@ -19,8 +19,8 @@ const { startOfPreviousWeek } = await import("../../server/lib/time");
 runMigrations();
 
 const now = Date.now();
-const users = ["u1", "u2", "u3", "u4"];
-for (const id of users) db.insert(schema.user).values({ id, name: id, email: `${id}@student.windesheim.nl` }).run();
+const users = ["u1", "u2", "u3", "u4", "u5"];
+for (const id of users) db.insert(schema.user).values({ id, name: id, email: `${id}@student.windesheim.nl`, showOnLeaderboard: id !== "u5" }).run();
 db.insert(schema.reader).values({ id: "r", title: "R", fileName: "r.pdf", status: "ready", published: true }).run();
 for (const [i, week] of [1, 1, 2].entries())
   db.insert(schema.lesson).values({ id: `l${i}`, readerId: "r", code: `${i}`, title: `L${i}`, week, position: i, startPage: 1, endPage: 2, status: "ready" }).run();
@@ -61,6 +61,8 @@ xp("w3", "u4", 30, new Date(prev.getTime() + 3600e3));
 xp("w4", "u4", 90, new Date(twoBack.getTime() + 3600e3));
 xp("w5", "u3", 60, new Date(twoBack.getTime() + 3600e3));
 xp("w6", "u2", 30, new Date(twoBack.getTime() + 3600e3));
+// A hidden user tops the older week: ranks #1 there, so u4 is only #2 and gets no weekly_first.
+xp("w7", "u5", 200, new Date(twoBack.getTime() + 3600e3));
 // Undo the claims the warm-up made (it ran on empty weeks).
 db.delete(schema.setting).run();
 resetWeeklyCache();
@@ -94,6 +96,7 @@ console.log(
     u2All: badgesOf("u2"),
     u3All: badgesOf("u3"),
     u4All: badgesOf("u4"),
+    u5All: badgesOf("u5"),
     secondRun,
     afterReset,
   }),

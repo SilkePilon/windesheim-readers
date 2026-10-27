@@ -34,7 +34,7 @@ interface Player {
   id: string;
   name: string;
   score: number;
-  /** Score under the default rules (normal points, both bonuses): the stored attempt uses it, so it stays within maxScore. */
+  /** Score under the default rules (normal points, both bonuses): the stored attempt uses it (clamped to maxScore: a streak bonus can exceed 1000 per question). */
   baseScore: number;
   streak: number;
   sockets: Set<WSContext>;
@@ -215,7 +215,7 @@ async function end(r: Room) {
     // stored as reason "battle_win" (wins and win streaks are counted from it).
     await db
       .insert(schema.attempt)
-      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: player?.baseScore ?? 0, maxScore: r.questions.length * 1000 })
+      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: Math.min(player?.baseScore ?? 0, r.questions.length * 1000), maxScore: r.questions.length * 1000 })
       .catch(() => {});
     const won = p.rank === 1 && r.players.size >= 3;
     const perfect = r.questions.length >= 5 && r.questions.every((_, i) => player?.answers.get(i)?.correct === true);

@@ -97,7 +97,7 @@ export function BadgeCell({ badge }: { badge: BadgeStatus }) {
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={earnedAt ? name : `${name}, ${t("profile.lockedBadge")}${progressText ? ` (${progressText})` : ""}`}
+        aria-label={earnedAt ? `${name}, ${t("profile.earnedBadge")}` : `${name}, ${t("profile.lockedBadge")}${progressText ? ` (${progressText})` : ""}`}
         className={cn(CELL, "outline-none focus-visible:ring-3 focus-visible:ring-ring/50")}
       >
         <BadgeIconTile

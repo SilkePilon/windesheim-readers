@@ -331,6 +331,7 @@ const en: Messages = {
     badgeCount: "{{n}} of {{total}}",
     earnedOn: "Earned on {{date}}",
     badges: "Badges",
+    earnedBadge: "Earned",
     lockedBadge: "Not earned yet",
     badgeProgress: "{{value}} / {{target}}",
     badgeTier: "{{tier}} badge",

@@ -6,7 +6,6 @@ import type { QuestId } from "../../shared/quests";
 import { dayKey, previousDay } from "./time";
 
 export { dayKey, startOfDay, startOfWeek } from "./time";
-export { grantBadge } from "./badges";
 
 export interface XpResult {
   xp: number;

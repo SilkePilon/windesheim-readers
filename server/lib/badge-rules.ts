@@ -29,8 +29,8 @@ export function eventsForReason(reason: string): BadgeEvent[] {
 export const MASTER_MASTERY = 0.9;
 /** Full days without any activity before coming back earns "comeback". */
 export const COMEBACK_DAYS = 7;
-/** Weekly leaderboard badges need at least this many ranked players that week. */
-export const WEEKLY_MIN_PLAYERS = 3;
+/** Weekly leaderboard badges need at least this many ranked players that week (hidden ones count, as on the leaderboard). */
+export const WEEKLY_MIN_PLAYERS = 2;
 
 export function timeOfDayBadges(hour: number): BadgeId[] {
   const out: BadgeId[] = [];
@@ -106,9 +106,16 @@ export function hasWinStreak(recent: boolean[], n = 3) {
   return recent.length >= n && recent.slice(0, n).every(Boolean);
 }
 
-/** Weekly top 3 / #1 from that week's ranking (highest XP first; hidden users already removed). */
-export function weeklyWinners(ranked: { userId: string; xp: number }[]) {
+/**
+ * Weekly top 3 / #1 from that week's ranking (highest XP first). The ranking covers every
+ * user, like the leaderboard; only users who show on it get a badge for their place.
+ */
+export function weeklyWinners(ranked: { userId: string; xp: number; show: boolean }[]) {
   const players = ranked.filter((r) => r.xp > 0);
   if (players.length < WEEKLY_MIN_PLAYERS) return [];
-  return players.slice(0, 3).map((r, i) => ({ userId: r.userId, badges: (i === 0 ? ["weekly_top3", "weekly_first"] : ["weekly_top3"]) as BadgeId[] }));
+  return players
+    .slice(0, 3)
+    .map((r, i) => ({ ...r, i }))
+    .filter((r) => r.show)
+    .map((r) => ({ userId: r.userId, badges: (r.i === 0 ? ["weekly_top3", "weekly_first"] : ["weekly_top3"]) as BadgeId[] }));
 }

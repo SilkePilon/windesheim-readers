@@ -329,6 +329,7 @@ const nl = {
     badgeCount: "{{n}} van {{total}}",
     earnedOn: "Verdiend op {{date}}",
     badges: "Badges",
+    earnedBadge: "Verdiend",
     lockedBadge: "Nog niet verdiend",
     badgeProgress: "{{value}} / {{target}}",
     badgeTier: "{{tier}}-badge",

@@ -31,10 +31,33 @@ test("badge checks are cheap and weekly awards are atomic", async () => {
     expect(r.claimsAfterFailure).toBe(0);
     expect(r.u2).toEqual(["weekly_top3", "weekly_first"]);
     expect(r.u3All).toEqual(["weekly_top3"]);
-    expect(r.u4All).toEqual(["weekly_first", "weekly_top3"]);
+    expect(r.u4All).toEqual(["weekly_top3"]); // #2 behind the hidden user (no weekly_first)
+    expect(r.u5All).toEqual([]); // hidden: ranked, never awarded
     expect(r.secondRun).toEqual([]);
     expect(r.afterReset).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 30_000);
+
+// Backfill on a synthetic DB (50 users x 500 xp_events): it must stay fast and must not
+// hog the event loop (a 5 ms timer keeps ticking). Was ~11.6 s with zero ticks before.
+test("badge backfill is fast and yields to the event loop", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "wr-backfill-"));
+  try {
+    const proc = Bun.spawn(["bun", join(import.meta.dir, "fixtures/badge-backfill-perf.ts")], {
+      env: { ...process.env, DATABASE_PATH: join(dir, "app.db"), NODE_ENV: "test" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const out = await new Response(proc.stdout).text();
+    expect(await proc.exited, await new Response(proc.stderr).text()).toBe(0);
+    const r = JSON.parse(out.trim().split("\n").pop()!);
+    expect(r.users).toBe(50);
+    expect(r.ms).toBeLessThan(8000);
+    expect(r.ticks).toBeGreaterThan(10); // timers fired during the backfill
+    expect(r.maxGap).toBeLessThan(1000);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 60_000);

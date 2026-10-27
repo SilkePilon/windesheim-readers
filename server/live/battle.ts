@@ -4,11 +4,12 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db, schema } from "../db";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
-import { awardXp, grantBadge } from "../lib/game";
+import { awardXp } from "../lib/game";
+import { checkBadges } from "../lib/badges";
 import { recordQuestEvent } from "../lib/quests";
 import { displayName } from "../middleware";
 import type { SessionUser } from "../auth";
-import { XP } from "../../shared/game";
+import { XP, type BadgeId } from "../../shared/game";
 import { env } from "../env";
 import {
   COUNT_MAX,
@@ -203,21 +204,38 @@ async function end(r: Room) {
   // Placement XP and the winner badge follow the podium (everyone played the same settings).
   const rank = ranking(r);
   const xpById: Record<string, number> = {};
+  const badgesById: Record<string, BadgeId[]> = {};
   for (const p of rank) {
     if (r.players.size < 2 && p.score === 0) continue;
     const placeXp = r.players.size >= 2 ? (XP.battlePlace[p.rank - 1] ?? 0) : 0;
     const amount = placeXp + XP.battleParticipation;
     xpById[p.id] = amount;
-    await awardXp(p.id, amount, "battle")
-      .then(() => recordQuestEvent(p.id, { kind: "xp", amount, reason: "battle" }))
-      .catch(() => {});
+    const player = r.players.get(p.id);
+    // The attempt first: the battle badges count it. A podium win needs 3+ players and is
+    // stored as reason "battle_win" (wins and win streaks are counted from it).
     await db
       .insert(schema.attempt)
-      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: r.players.get(p.id)?.baseScore ?? 0, maxScore: r.questions.length * 1000 })
+      .values({ id: nanoid(), userId: p.id, lessonId: r.lessonIds[0] ?? null, kind: "battle", score: player?.baseScore ?? 0, maxScore: r.questions.length * 1000 })
       .catch(() => {});
-    if (p.rank === 1 && r.players.size >= 3) await grantBadge(p.id, "battle_winner").catch(() => {});
+    const won = p.rank === 1 && r.players.size >= 3;
+    const perfect = r.questions.length >= 5 && r.questions.every((_, i) => player?.answers.get(i)?.correct === true);
+    const got = new Set<BadgeId>();
+    await awardXp(p.id, amount, won ? "battle_win" : "battle")
+      .then(async (res) => {
+        res.newBadges.forEach((b) => got.add(b));
+        const q = await recordQuestEvent(p.id, { kind: "xp", amount, reason: "battle" });
+        q.newBadges.forEach((b) => got.add(b));
+        (await checkBadges(p.id, ["battle"], { battle: { perfect } })).forEach((b) => got.add(b));
+      })
+      .catch((err) => console.error("[battle] awarding XP/badges failed", err));
+    if (got.size) badgesById[p.id] = [...got];
   }
-  broadcast(r, { t: "end", ranking: rank, xp: xpById });
+  // Hosting a battle that is played to the end (2+ players) earns the host a badge.
+  if (r.players.size >= 2) {
+    const hosted = await checkBadges(r.hostId, ["battle_host"]).catch(() => [] as BadgeId[]);
+    if (hosted.length) badgesById[r.hostId] = [...(badgesById[r.hostId] ?? []), ...hosted];
+  }
+  broadcast(r, { t: "end", ranking: rank, xp: xpById, badges: badgesById });
   broadcast(r, roomState(r));
   setTimeout(() => closeRoom(r), 10 * 60_000);
 }

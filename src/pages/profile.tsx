@@ -2,32 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import {
-  Bird,
-  Brain,
-  Check,
-  ChevronRight,
-  Download,
-  Flame,
-  GraduationCap,
-  Layers,
-  LogOut,
-  Moon,
-  Sprout,
-  Star,
-  Swords,
-  Target,
-  Trophy,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Check, ChevronRight, Download, LogOut } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Page, PageSpinner } from "@/components/page";
 import { PlayerAvatar } from "@/components/game/player-avatar";
@@ -35,26 +16,12 @@ import { InstallDrawer } from "@/components/install-drawer";
 import { useInstall } from "@/lib/install";
 import { api } from "@/lib/api";
 import { setLocale } from "@/lib/i18n";
-import { useInvalidateProgress, useMe } from "@/lib/queries";
-import { BADGES, levelTitleIndex, type BadgeId } from "@shared/game";
+import { useBadges, useInvalidateProgress, useMe } from "@/lib/queries";
+import { levelTitleIndex } from "@shared/game";
+import { BADGE_CATEGORIES, BADGES } from "@shared/badges";
+import { BadgeCell } from "@/components/game/badge-tile";
+import type { BadgeStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-// Earned badge tiles: a lucide icon on a Speelveld colour (white icon, like the activity
-// tiles; gold uses its dark foreground).
-const BADGE_STYLE: Record<BadgeId, { icon: LucideIcon; tile: string }> = {
-  first_steps: { icon: Sprout, tile: "bg-success text-white shadow-[0_4px_0_var(--success-shade)]" },
-  streak_3: { icon: Flame, tile: "bg-warning text-white shadow-[0_4px_0_var(--warning-shade)]" },
-  streak_7: { icon: Zap, tile: "bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]" },
-  streak_30: { icon: Trophy, tile: "bg-danger text-white shadow-[0_4px_0_var(--danger-shade)]" },
-  perfect_quiz: { icon: Target, tile: "bg-info text-white shadow-[0_4px_0_var(--info-shade)]" },
-  cards_100: { icon: Layers, tile: "bg-success text-white shadow-[0_4px_0_var(--success-shade)]" },
-  cards_500: { icon: Brain, tile: "bg-primary text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]" },
-  explain_master: { icon: GraduationCap, tile: "bg-info text-white shadow-[0_4px_0_var(--info-shade)]" },
-  lesson_master: { icon: Star, tile: "bg-gold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)]" },
-  battle_winner: { icon: Swords, tile: "bg-danger text-white shadow-[0_4px_0_var(--danger-shade)]" },
-  night_owl: { icon: Moon, tile: "bg-primary text-primary-foreground shadow-[0_4px_0_var(--primary-shade)]" },
-  early_bird: { icon: Bird, tile: "bg-warning text-white shadow-[0_4px_0_var(--warning-shade)]" },
-};
 
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
@@ -65,8 +32,6 @@ export default function ProfilePage() {
 
   if (!me) return <PageSpinner />;
   const s = me.stats;
-  const earnedAt = new Map(me.badges.map((b) => [b.id, b.earnedAt]));
-  const ids = Object.keys(BADGES) as BadgeId[];
   const num = (n: number) => n.toLocaleString(i18n.language);
 
   const patch = async (body: Record<string, unknown>) => {
@@ -109,17 +74,7 @@ export default function ProfilePage() {
 
       {/* Desktop: badges and settings side by side. */}
       <div className="lg:mt-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-8">
-        <section>
-          <h2 className="mt-6 font-heading text-base font-semibold">
-            {t("profile.badges")}{" "}
-            <span className="text-[13px] text-muted-foreground">{t("profile.badgeCount", { n: earnedAt.size, total: ids.length })}</span>
-          </h2>
-          <div className="mt-2.5 grid grid-cols-4 gap-2.5">
-            {ids.map((id) => (
-              <BadgeTile key={id} id={id} earnedAt={earnedAt.get(id)} />
-            ))}
-          </div>
-        </section>
+        <BadgeSection />
 
         <Card className="mt-6 gap-0 py-1 lg:mt-[58px]">
           <NicknameRow current={me.user.nickname ?? ""} placeholder={me.user.name} onSave={(v) => patch({ nickname: v || null })} />
@@ -173,38 +128,41 @@ function StatTile({ value, label, valueClass }: { value: string; label: string; 
   );
 }
 
-function BadgeTile({ id, earnedAt }: { id: BadgeId; earnedAt?: string }) {
-  const { t, i18n } = useTranslation();
-  const { icon: Icon, tile } = BADGE_STYLE[id];
-  const name = t(`badges.${id}.name`);
+/** Badges grouped by category: earned medals and locked tiles with their progress. */
+function BadgeSection() {
+  const { t } = useTranslation();
+  const { data: badges } = useBadges();
+  const earned = badges?.filter((b) => b.earnedAt).length ?? 0;
   return (
-    <Popover>
-      <PopoverTrigger
-        aria-label={name}
-        className={cn(
-          "grid aspect-square place-items-center rounded-[18px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          "transition-[translate,box-shadow] duration-100 active:translate-y-1 active:shadow-none motion-reduce:transition-none motion-reduce:active:translate-y-0",
-          earnedAt ? tile : "bg-track text-muted-foreground/60 shadow-[0_4px_0_var(--chunky)]",
-        )}
-      >
-        <Icon className="size-[26px]" strokeWidth={2.4} />
-      </PopoverTrigger>
-      <PopoverContent collisionPadding={12} className="w-60 gap-1 rounded-[16px] p-3.5 shadow-[0_5px_0_var(--chunky)] ring-0">
-        <p className="font-heading text-base font-semibold">{name}</p>
-        <p className="text-sm font-semibold">{t(`badges.${id}.desc`)}</p>
-        <p className={cn("text-xs font-bold", earnedAt ? "text-success-shade dark:text-success" : "text-muted-foreground")}>
-          {earnedAt
-            ? t("profile.earnedOn", {
-                date: new Date(earnedAt).toLocaleDateString(i18n.language, {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                }),
-              })
-            : t("profile.lockedBadge")}
-        </p>
-      </PopoverContent>
-    </Popover>
+    <section aria-labelledby="badges-title">
+      <h2 id="badges-title" className="mt-6 font-heading text-base font-semibold">
+        {t("profile.badges")}{" "}
+        {badges && <span className="text-[13px] text-muted-foreground">{t("profile.badgeCount", { n: earned, total: badges.length })}</span>}
+      </h2>
+      {BADGE_CATEGORIES.map((category) => {
+        const list = (badges ?? []).filter((b) => BADGES[b.id]?.category === category);
+        if (!list.length) return null;
+        return <BadgeGroup key={category} title={t(`badgeCategories.${category}`)} list={list} />;
+      })}
+    </section>
+  );
+}
+
+function BadgeGroup({ title, list }: { title: string; list: BadgeStatus[] }) {
+  const { t } = useTranslation();
+  const earned = list.filter((b) => b.earnedAt).length;
+  return (
+    <div className="mt-4">
+      <h3 className="flex items-baseline justify-between gap-2 text-[13px] font-extrabold text-muted-foreground">
+        <span>{title}</span>
+        <span className="text-xs tabular-nums">{t("profile.badgeCount", { n: earned, total: list.length })}</span>
+      </h3>
+      <div className="mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3">
+        {list.map((b) => (
+          <BadgeCell key={b.id} badge={b} />
+        ))}
+      </div>
+    </div>
   );
 }
 

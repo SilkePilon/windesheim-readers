@@ -1,4 +1,12 @@
 import type { BadgeId } from "@shared/game";
+
+/** GET /me/badges: one entry per catalogue badge. */
+export interface BadgeStatus {
+  id: BadgeId;
+  earnedAt: string | null;
+  /** Locked badges with a counted target: value (capped) / target. */
+  progress?: { value: number; target: number };
+}
 import type { QuestId } from "@shared/quests";
 
 export interface Me {

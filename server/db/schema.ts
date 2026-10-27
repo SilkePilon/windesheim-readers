@@ -204,7 +204,11 @@ export const xpEvent = sqliteTable(
     reason: text("reason").notNull(),
     createdAt: ts("created_at").notNull().default(now),
   },
-  (t) => [index("xp_event_user_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("xp_event_user_idx").on(t.userId, t.createdAt),
+    // Badge counts per reason (cards reviewed, battles won, ...).
+    index("xp_event_user_reason_idx").on(t.userId, t.reason),
+  ],
 );
 
 export const userStats = sqliteTable("user_stats", {

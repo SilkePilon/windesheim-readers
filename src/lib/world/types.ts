@@ -1,7 +1,8 @@
+import type { BiomeId } from "@shared/biomes";
 import type { Rect } from "./geometry";
 import type { Rng } from "./rng";
 
-export type BiomeId = "bos" | "dorp" | "stad" | "haven" | "jungle" | "woestijn" | "bergen" | "campus";
+export type { BiomeId };
 
 /** 0 = new (fog), 1 = started/current (construction), 2 = done (alive). */
 export type Stage = 0 | 1 | 2;

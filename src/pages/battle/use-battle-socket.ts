@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicQuestion } from "@/lib/types";
 import type { BattleSettings } from "@shared/battle";
+import type { BadgeId } from "@shared/badges";
 
 // ---------- protocol types (server/live/battle.ts) ----------
 
@@ -57,6 +58,8 @@ export interface EndMsg {
   t: "end";
   ranking: RankEntry[];
   xp: Record<string, number>;
+  /** Badges each player (and the host) earned with this battle. */
+  badges?: Record<string, BadgeId[]>;
 }
 
 /** Server timestamps → this device's clock, so a skewed local clock can't eat the timer. */

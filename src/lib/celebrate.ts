@@ -1,6 +1,9 @@
+import { createElement } from "react";
 import { toast } from "sonner";
 import i18n from "./i18n";
-import { BADGES, levelFromXp } from "@shared/game";
+import { levelFromXp } from "@shared/game";
+import { BADGES } from "@shared/badges";
+import { BADGE_ICON } from "@/components/game/badge-icons";
 import { QUESTS } from "@shared/quests";
 import type { XpResult } from "./types";
 
@@ -20,6 +23,13 @@ export function celebrate(res: Partial<XpResult> | undefined, opts: { quietXp?: 
     toast.success(t("quests.done", { name: t(`quests.names.${q}`, { n: target }), xp: reward }), { icon: "🎯", duration: 4000 });
   }
   for (const b of res.newBadges ?? []) {
-    toast.success(t("celebrate.badge", { name: t(`badges.${b}.name`) }), { icon: BADGES[b].icon, duration: 4000 });
+    // The catalogue's lucide icon (part 2 of the polish batch swaps this for the badge tile).
+    const def = BADGES[b];
+    if (!def) continue;
+    toast.success(t("celebrate.badge", { name: t(`badges.${b}.name`) }), {
+      description: t(`badges.${b}.desc`),
+      icon: createElement(BADGE_ICON[def.icon], { className: "size-4", strokeWidth: 2.4 }),
+      duration: 4000,
+    });
   }
 }

@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
 import { setLocale } from "./i18n";
-import type { Leaderboard, LessonDetail, Me, ReaderWithLessons } from "./types";
+import type { BadgeStatus, Leaderboard, LessonDetail, Me, ReaderWithLessons } from "./types";
 
 export const qk = {
   me: ["me"] as const,
   readers: ["readers"] as const,
   lesson: (id: string) => ["lesson", id] as const,
   leaderboard: (p: string) => ["leaderboard", p] as const,
+  badges: ["me", "badges"] as const,
 };
 
 export function useMe() {
@@ -41,6 +42,11 @@ export function useReaders() {
 
 export function useLesson(id: string) {
   return useQuery({ queryKey: qk.lesson(id), queryFn: () => api.get<LessonDetail>(`/lessons/${id}`) });
+}
+
+/** Every badge with earnedAt / progress (GET /me/badges). Under the "me" key, so progress invalidation refreshes it. */
+export function useBadges() {
+  return useQuery({ queryKey: qk.badges, queryFn: () => api.get<BadgeStatus[]>("/me/badges") });
 }
 
 export function useLeaderboard(period: "week" | "all") {

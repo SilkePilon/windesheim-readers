@@ -58,22 +58,7 @@ export function levelTitle(level: number) {
   return LEVEL_TITLES[levelTitleIndex(level)]!;
 }
 
-export const BADGES = {
-  first_steps: { icon: "🌱" },
-  streak_3: { icon: "🔥" },
-  streak_7: { icon: "⚡" },
-  streak_30: { icon: "🏆" },
-  perfect_quiz: { icon: "💯" },
-  cards_100: { icon: "🃏" },
-  cards_500: { icon: "🧠" },
-  explain_master: { icon: "🎓" },
-  lesson_master: { icon: "⭐" },
-  battle_winner: { icon: "⚔️" },
-  night_owl: { icon: "🦉" },
-  early_bird: { icon: "🐦" },
-} as const;
-
-export type BadgeId = keyof typeof BADGES;
+export { BADGES, type BadgeId } from "./badges";
 
 export const MASTERY_WEIGHTS = { quiz: 0.4, cards: 0.3, explain: 0.2, read: 0.1 } as const;
 

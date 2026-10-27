@@ -1,48 +1,13 @@
 import { and, count, eq, gte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, schema } from "../db";
-import type { BadgeId } from "../../shared/game";
+import type { BadgeId } from "../../shared/badges";
 import type { QuestId } from "../../shared/quests";
+import { dayKey, previousDay } from "./time";
+import { checkBadges } from "./badges";
 
-const TZ = "Europe/Amsterdam";
-
-export function dayKey(d = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
-
-function hourInTz(d = new Date()) {
-  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", hourCycle: "h23" }).format(d));
-}
-
-function previousDay(key: string) {
-  const d = new Date(`${key}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function tzOffsetMs(d: Date) {
-  return (
-    new Date(d.toLocaleString("en-US", { timeZone: TZ })).getTime() -
-    new Date(d.toLocaleString("en-US", { timeZone: "UTC" })).getTime()
-  );
-}
-
-/** Midnight (Amsterdam) of the current day. */
-export function startOfDay(d = new Date()) {
-  return new Date(new Date(`${dayKey(d)}T00:00:00Z`).getTime() - tzOffsetMs(d));
-}
-
-/** Monday 00:00 (Amsterdam) of the current week. */
-export function startOfWeek(d = new Date()) {
-  const local = new Date(`${dayKey(d)}T00:00:00Z`);
-  local.setUTCDate(local.getUTCDate() - ((local.getUTCDay() + 6) % 7));
-  return new Date(local.getTime() - tzOffsetMs(d));
-}
-
-export async function grantBadge(userId: string, badge: BadgeId) {
-  const res = await db.insert(schema.userBadge).values({ userId, badge }).onConflictDoNothing().returning();
-  return res.length > 0;
-}
+export { dayKey, startOfDay, startOfWeek } from "./time";
+export { grantBadge } from "./badges";
 
 export interface XpResult {
   xp: number;
@@ -53,7 +18,7 @@ export interface XpResult {
   quests?: QuestId[];
 }
 
-/** Award XP, update the daily streak and check streak / time badges. */
+/** Award XP, update the daily streak and check the XP-driven badges (streak, time of day, ...). */
 export async function awardXp(userId: string, amount: number, reason: string): Promise<XpResult> {
   amount = Math.max(0, Math.round(amount));
   const today = dayKey();
@@ -75,16 +40,8 @@ export async function awardXp(userId: string, amount: number, reason: string): P
 
   if (amount > 0) await db.insert(schema.xpEvent).values({ id: nanoid(), userId, amount, reason });
 
-  const check = async (cond: boolean, b: BadgeId) => {
-    if (cond && (await grantBadge(userId, b))) newBadges.push(b);
-  };
-  await check(true, "first_steps");
-  await check(streak >= 3, "streak_3");
-  await check(streak >= 7, "streak_7");
-  await check(streak >= 30, "streak_30");
-  const h = hourInTz();
-  await check(h >= 23 || h < 4, "night_owl");
-  await check(h >= 5 && h < 7, "early_bird");
+  // Streak, time-of-day, comeback, weekend and the lazy weekly-leaderboard badges.
+  newBadges.push(...(await checkBadges(userId, ["xp"], { prevActiveDay: stats.lastActiveDay, streak })));
 
   return { xp, gained: amount, streak, newBadges };
 }
@@ -129,14 +86,6 @@ export async function cardMasteryByLesson(userId: string) {
     )
     .groupBy(schema.flashcard.lessonId);
   return new Map(rows.map((r) => [r.lessonId, r.total ? Number(r.learned ?? 0) / r.total : 0]));
-}
-
-export async function totalReviews(userId: string) {
-  const [r] = await db
-    .select({ n: count() })
-    .from(schema.xpEvent)
-    .where(and(eq(schema.xpEvent.userId, userId), eq(schema.xpEvent.reason, "card")));
-  return r?.n ?? 0;
 }
 
 export async function xpSince(userId: string, since: Date) {

@@ -40,4 +40,31 @@ describe("awardWithQuests", () => {
     );
     expect(res).toEqual(base);
   });
+
+  test("badges from checkBadges are merged without duplicates", async () => {
+    const res = await awardWithQuests(
+      {
+        awardXp: async () => ({ ...base, newBadges: ["first_steps"] }),
+        recordQuestEvent: async () => ({ completed: [], reward: 0, newBadges: [] }),
+        checkBadges: async (_u, reason) => (reason === "card" ? ["first_steps", "cards_50"] : []),
+      },
+      "u1", 3, "card",
+    );
+    expect(res.newBadges).toEqual(["first_steps", "cards_50"]);
+  });
+
+  test("a throwing badge check does not fail the award", async () => {
+    const err = spyOn(console, "error").mockImplementation(() => {});
+    const res = await awardWithQuests(
+      {
+        awardXp,
+        recordQuestEvent: async () => ({ completed: [], reward: 0, newBadges: [] }),
+        checkBadges: async () => { throw new Error("SQLITE_BUSY"); },
+      },
+      "u1", 10, "quiz",
+    );
+    expect(res).toEqual(base);
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
 });

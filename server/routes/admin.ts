@@ -12,6 +12,7 @@ import { extractAndStructure, extractPdf, generateReader, proposeStructure } fro
 import { retryAction } from "../ai/retry";
 import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings } from "../ai/providers";
 import { listModels, validateKey } from "../ai/models";
+import { backfillBadges } from "../lib/badges";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
@@ -21,6 +22,9 @@ const modelChoice = z.object({ provider: providerEnum, model: z.string().min(1) 
 
 export const admin = new Hono<AppEnv>()
   .use(requireUser, requireAdmin)
+
+  /** Re-run the (idempotent, silent) badge backfill for every user; normally runs once at start. */
+  .post("/badges/backfill", async (c) => c.json(await backfillBadges({ force: true })))
 
   // ----- readers -----
   .get("/readers", async (c) => {

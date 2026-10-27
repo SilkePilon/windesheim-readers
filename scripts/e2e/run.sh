@@ -14,4 +14,4 @@ SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT
 for _ in $(seq 1 50); do curl -sf "http://localhost:$E2E_PORT/api/readers" -o /dev/null -w '' 2>/dev/null && break; curl -s -o /dev/null "http://localhost:$E2E_PORT/" && break; sleep 0.2; done
 bun scripts/e2e/seed.ts "$DIR/app.db"
-for t in "${@:-api-test quiz-test}"; do for x in $t; do echo "== $x"; bun "scripts/e2e/$x.ts"; done; done
+for t in "${@:-api-test quiz-test badges-test}"; do for x in $t; do echo "== $x"; bun "scripts/e2e/$x.ts"; done; done

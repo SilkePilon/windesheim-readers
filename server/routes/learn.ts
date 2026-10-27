@@ -12,17 +12,17 @@ import {
   cardMasteryByLesson,
   dayKey,
   getOrCreateProgress,
-  grantBadge,
   startOfDay,
   startOfWeek,
-  totalReviews,
   updateProgress,
   xpSince,
 } from "../lib/game";
 import { getQuests, recordQuestEvent } from "../lib/quests";
 import { awardWithQuests } from "../lib/award";
+import { badgeOverview, checkBadges, eventsForReason } from "../lib/badges";
 import type { QuestEvent } from "../../shared/quests";
 import { computeMastery, levelFromXp, quizXpFactor, quizXpPerCorrect, XP, type BadgeId } from "../../shared/game";
+import { isBadgeId } from "../../shared/badges";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
 import { getModel } from "../ai/providers";
@@ -63,9 +63,15 @@ function createQuizSession(userId: string, lessonId: string, questionIds: string
 }
 const NEW_CARDS_PER_SESSION = 15;
 
-/** Award XP and advance the daily quests (see awardWithQuests). */
+/** Award XP, advance the daily quests and check the badges the action can earn (see awardWithQuests). */
 const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = []) =>
-  awardWithQuests({ awardXp, recordQuestEvent }, userId, amount, reason, events);
+  awardWithQuests(
+    { awardXp, recordQuestEvent, checkBadges: (u, r) => checkBadges(u, eventsForReason(r)) },
+    userId,
+    amount,
+    reason,
+    events,
+  );
 
 /** Lessons visible to this user: from published readers (admins see all). */
 async function visibleLesson(lessonId: string, isAdmin: boolean) {
@@ -158,10 +164,13 @@ export const learn = new Hono<AppEnv>()
         weekXp,
         due,
       },
-      badges: badges.map((b) => ({ id: b.badge as BadgeId, earnedAt: b.earnedAt })),
+      badges: badges.filter((b) => isBadgeId(b.badge)).map((b) => ({ id: b.badge as BadgeId, earnedAt: b.earnedAt })),
       quests: await getQuests(u.id),
     });
   })
+
+  /** Every badge in catalogue order: earnedAt (or null) and, for locked counted ones, progress. */
+  .get("/me/badges", async (c) => c.json(await badgeOverview(c.get("user").id)))
 
   .patch("/me", async (c) => {
     const body = z
@@ -370,9 +379,6 @@ export const learn = new Hono<AppEnv>()
       { kind: "card_review" },
       { kind: "card_lesson", lessonId: card.lessonId },
     ]);
-    const total = await totalReviews(u.id);
-    for (const [n, b] of [[100, "cards_100"], [500, "cards_500"]] as const)
-      if (total >= n && (await grantBadge(u.id, b))) res.newBadges.push(b);
     // `intervals`: fresh rating previews in case the card comes back in this session.
     return c.json({ ...res, due: next.due, intervals: previewIntervals(next, now) });
   })
@@ -428,8 +434,6 @@ export const learn = new Hono<AppEnv>()
     const res = await award(u.id, (correct * XP.quizCorrect + (perfect ? XP.quizPerfectBonus : 0)) * factor, "quiz", [
       { kind: "quiz_submit", pct: correct / max, lessonId },
     ]);
-    if (perfect && (await grantBadge(u.id, "perfect_quiz"))) res.newBadges.push("perfect_quiz");
-    await checkLessonMaster(u.id, lessonId, res.newBadges);
     return c.json({ ...res, correct, max });
   })
 
@@ -478,8 +482,6 @@ export const learn = new Hono<AppEnv>()
     const res = await award(u.id, grade.score * XP.explainPerPoint, "explain", [
       { kind: "explain", score: grade.score, lessonId },
     ]);
-    if (grade.score >= 90 && (await grantBadge(u.id, "explain_master"))) res.newBadges.push("explain_master");
-    await checkLessonMaster(u.id, lessonId, res.newBadges);
     return c.json({ ...grade, ...res });
   })
 
@@ -583,10 +585,4 @@ function latestLesson(lessonIds: string[], last: Map<string, number>): string | 
     if (at !== undefined && (best === null || at > last.get(best)!)) best = id;
   }
   return best;
-}
-
-async function checkLessonMaster(userId: string, lessonId: string, newBadges: BadgeId[]) {
-  const p = await getOrCreateProgress(userId, lessonId);
-  const cm = (await cardMasteryByLesson(userId)).get(lessonId) ?? 0;
-  if (computeMastery({ ...p, cardMastery: cm }) >= 0.9 && (await grantBadge(userId, "lesson_master"))) newBadges.push("lesson_master");
 }

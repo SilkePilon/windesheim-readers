@@ -1,0 +1,1 @@
+CREATE INDEX `xp_event_user_reason_idx` ON `xp_event` (`user_id`,`reason`);

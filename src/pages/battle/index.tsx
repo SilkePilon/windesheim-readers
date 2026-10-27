@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/app-layout";
 import { Page, PageHeader } from "@/components/page";
 import { StudyShell } from "@/components/shell/study-shell";
 import { useInvalidateProgress, useMe } from "@/lib/queries";
+import { celebrate } from "@/lib/celebrate";
 import { useBattleSocket } from "./use-battle-socket";
 import { Setup } from "./setup";
 import { Lobby, Play, Results, StartCountdown } from "./stage";
@@ -73,7 +74,10 @@ export default function BattlePage() {
   }, [b.error, codeParam, navigate]);
 
   useEffect(() => {
-    if (b.end) invalidate();
+    if (!b.end) return;
+    invalidate();
+    const mine = me && b.end.badges?.[me.user.id];
+    if (mine?.length) celebrate({ newBadges: mine });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b.end]);
 

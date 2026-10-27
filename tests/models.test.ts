@@ -9,7 +9,9 @@ import {
   listModels,
   parseAnthropic,
   parseGoogle,
+  parseGoogleSpeech,
   parseOpenAI,
+  parseOpenAISpeech,
   parseOpenRouter,
   validateKey,
 } from "../server/ai/models";
@@ -35,6 +37,10 @@ describe("parsers", () => {
     const o = parseOpenAI(openaiFixture);
     expect(o.map((m) => m.id).sort()).toEqual(["gpt-5", "gpt-5-mini", "o4-mini"]);
     expect(o[0].created).toBe(1754500000 * 1000);
+  });
+  test("speech models (Stem role)", () => {
+    expect(parseGoogleSpeech(googleFixture).map((m) => m.id)).toEqual(["gemini-2.5-flash-preview-tts"]);
+    expect(parseOpenAISpeech(openaiFixture).map((m) => m.id)).toEqual(["tts-1"]);
   });
   test("openrouter", () => {
     const r = parseOpenRouter(openrouterFixture);

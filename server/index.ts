@@ -10,10 +10,12 @@ import { learn } from "./routes/learn";
 import { userFromHeaders } from "./middleware";
 import { battleConnection } from "./live/battle";
 import { recoverInterruptedJobs } from "./ai/pipeline";
+import { recoverAudio } from "./ai/audio";
 import { backfillBadges } from "./lib/badges";
 
 runMigrations();
 await recoverInterruptedJobs();
+await recoverAudio();
 // Existing accounts silently get the badges their data already earns (once per catalogue version).
 void backfillBadges()
   .then((r) => r.users && console.log(`[badges] backfill: ${r.granted} badges for ${r.users} users`))

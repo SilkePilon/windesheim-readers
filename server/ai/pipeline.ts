@@ -8,6 +8,7 @@ import { db, schema } from "../db";
 import { env } from "../env";
 import { getModel } from "./providers";
 import { mergeLetterParts, questionCounts, readerReferenceRule, readerWording } from "./content-rules";
+import { deleteAudioFiles, markAudioStale } from "./audio";
 
 // ---------- helpers ----------
 
@@ -98,10 +99,12 @@ export async function proposeStructure(readerId: string) {
         endPage: Math.min(r.pageCount, l.endPage),
       }));
 
+    const oldIds = (await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, readerId))).map((x) => x.id);
     await db.transaction(async (tx) => {
       await tx.delete(schema.lesson).where(eq(schema.lesson.readerId, readerId));
       if (lessons.length) await tx.insert(schema.lesson).values(lessons);
     });
+    await deleteAudioFiles(oldIds);
     await setReader(readerId, {
       status: "review",
       language: output.language || "nl",
@@ -280,6 +283,7 @@ export async function generateLessonContent(lessonId: string) {
         .set({ status: "ready", summary: output.summary, keyPoints: output.keyPoints, generatedAt: new Date() })
         .where(eq(schema.lesson.id, lessonId));
     });
+    await markAudioStale([lessonId]);
   } catch (e) {
     console.error(`[generate ${l.code}]`, e);
     await db.update(schema.lesson).set({ status: "error", error: errMsg(e) }).where(eq(schema.lesson.id, lessonId));

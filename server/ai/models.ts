@@ -52,6 +52,28 @@ export function parseGoogle(json: Json): ModelInfo[] {
   return sortModels(out);
 }
 
+/** Gemini text-to-speech models (the "Stem" role). */
+export function parseGoogleSpeech(json: Json): ModelInfo[] {
+  const out: ModelInfo[] = [];
+  for (const m of json?.models ?? []) {
+    const id = String(m.name ?? "").replace(/^models\//, "");
+    if (!/tts/i.test(id) || !(m.supportedGenerationMethods ?? []).includes("generateContent")) continue;
+    out.push({ id, name: m.displayName || id, contextWindow: num(m.inputTokenLimit), maxOutput: num(m.outputTokenLimit) });
+  }
+  return sortModels(out);
+}
+
+/** OpenAI text-to-speech models (tts-1, tts-1-hd, gpt-4o-mini-tts, ...). */
+export function parseOpenAISpeech(json: Json): ModelInfo[] {
+  const out: ModelInfo[] = [];
+  for (const m of json?.data ?? []) {
+    const id = String(m.id ?? "");
+    if (!/tts/.test(id)) continue;
+    out.push({ id, name: id, created: typeof m.created === "number" ? m.created * 1000 : undefined });
+  }
+  return sortModels(out);
+}
+
 export function parseAnthropic(json: Json): ModelInfo[] {
   const out: ModelInfo[] = [];
   for (const m of json?.data ?? []) {
@@ -103,6 +125,8 @@ export function parseOpenRouter(json: Json): ModelInfo[] {
 interface Opts {
   refresh?: boolean;
   fetchImpl?: typeof fetch;
+  /** "speech" lists TTS models instead (google and openai only). */
+  kind?: "text" | "speech";
 }
 
 async function getJson(url: string, headers: Record<string, string>, f: typeof fetch): Promise<Json> {
@@ -130,8 +154,9 @@ async function getJson(url: string, headers: Record<string, string>, f: typeof f
 
 const MAX_PAGES = 20;
 
-async function fetchAll(provider: ProviderId, apiKey: string | undefined, f: typeof fetch): Promise<ModelInfo[]> {
+async function fetchAll(provider: ProviderId, apiKey: string | undefined, f: typeof fetch, kind: "text" | "speech" = "text"): Promise<ModelInfo[]> {
   if (provider !== "openrouter" && !apiKey) throw new ProviderAuthError(NO_API_KEY);
+  if (kind === "speech" && provider !== "google" && provider !== "openai") return [];
   switch (provider) {
     case "google": {
       const raw: Json[] = [];
@@ -143,7 +168,7 @@ async function fetchAll(provider: ProviderId, apiKey: string | undefined, f: typ
         token = j.nextPageToken;
         if (!token) break;
       }
-      return parseGoogle({ models: raw });
+      return (kind === "speech" ? parseGoogleSpeech : parseGoogle)({ models: raw });
     }
     case "anthropic": {
       const raw: Json[] = [];
@@ -158,7 +183,9 @@ async function fetchAll(provider: ProviderId, apiKey: string | undefined, f: typ
       return parseAnthropic({ data: raw });
     }
     case "openai":
-      return parseOpenAI(await getJson("https://api.openai.com/v1/models", { Authorization: `Bearer ${apiKey}` }, f));
+      return (kind === "speech" ? parseOpenAISpeech : parseOpenAI)(
+        await getJson("https://api.openai.com/v1/models", { Authorization: `Bearer ${apiKey}` }, f),
+      );
     case "openrouter":
       return parseOpenRouter(await getJson("https://openrouter.ai/api/v1/models", {}, f));
   }
@@ -169,10 +196,10 @@ const cache = new Map<string, { at: number; models: ModelInfo[] }>();
 
 export async function listModels(provider: ProviderId, apiKey: string | undefined, opts: Opts = {}): Promise<ModelInfo[]> {
   const hash = createHash("sha256").update(apiKey ?? "").digest("hex").slice(0, 16);
-  const key = `${provider}:${hash}`;
+  const key = `${provider}:${opts.kind ?? "text"}:${hash}`;
   const hit = cache.get(key);
   if (!opts.refresh && hit && Date.now() - hit.at < TTL) return hit.models;
-  const models = await fetchAll(provider, apiKey, opts.fetchImpl ?? fetch);
+  const models = await fetchAll(provider, apiKey, opts.fetchImpl ?? fetch, opts.kind);
   cache.set(key, { at: Date.now(), models });
   return models;
 }

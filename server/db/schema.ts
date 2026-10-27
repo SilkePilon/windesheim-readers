@@ -157,6 +157,32 @@ export const question = sqliteTable(
   (t) => [index("question_lesson_idx").on(t.lessonId)],
 );
 
+export type LessonAudioStatus = "pending" | "generating" | "ready" | "error";
+export interface LessonAudioChapter {
+  /** 1-based; file UPLOAD_DIR/audio/<lessonId>/<n>.mp3 */
+  n: number;
+  durationMs: number;
+  bytes: number;
+}
+
+/** "Luisterles": one spoken summary per lesson, shared by every student. */
+export const lessonAudio = sqliteTable("lesson_audio", {
+  lessonId: text("lesson_id").primaryKey().references(() => lesson.id, { onDelete: "cascade" }),
+  /** Status of the latest generation job. `chapters` always describes the files on disk. */
+  status: text("status").$type<LessonAudioStatus>().notNull().default("pending"),
+  /** The lesson content was regenerated after this audio was made. */
+  stale: integer("stale", { mode: "boolean" }).notNull().default(false),
+  /** Internal (admin only, never sent to students). */
+  script: text("script", { mode: "json" }).$type<import("../ai/audio-script").AudioScript>(),
+  chapters: text("chapters", { mode: "json" }).$type<LessonAudioChapter[]>().notNull().default(sql`'[]'`),
+  provider: text("provider"),
+  model: text("model"),
+  voice: text("voice"),
+  generatedAt: ts("generated_at"),
+  error: text("error"),
+  updatedAt: ts("updated_at").notNull().default(now),
+});
+
 // ---------- learning state ----------
 
 export const cardReview = sqliteTable(
@@ -227,6 +253,7 @@ export const lessonProgress = sqliteTable(
     summaryRead: integer("summary_read", { mode: "boolean" }).notNull().default(false),
     bestQuiz: real("best_quiz").notNull().default(0), // 0..1
     bestExplain: real("best_explain").notNull().default(0), // 0..1
+    listenMs: integer("listen_ms").notNull().default(0), // luisterles resume position
     updatedAt: ts("updated_at").notNull().default(now),
   },
   (t) => [primaryKey({ columns: [t.userId, t.lessonId] })],

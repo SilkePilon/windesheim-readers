@@ -18,7 +18,7 @@ case "$cmd" in
     mkdir -p "$DIR/uploads"
     env -u RESEND_API_KEY PORT=$API_PORT DATABASE_PATH=$DIR/app.db UPLOAD_DIR=$DIR/uploads \
       APP_URL=http://localhost:$WEB_PORT APP_SECRET=dev-secret-dev-secret-dev-secret-0000 \
-      ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development \
+      ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development AI_STUB=${AI_STUB:-1} \
       nohup bun --watch server/index.ts > "$DIR/api.log" 2>&1 & echo $! > "$DIR/api.pid"
     API_URL=http://localhost:$API_PORT VITE_PORT=$WEB_PORT nohup bunx vite --strictPort > "$DIR/web.log" 2>&1 & echo $! > "$DIR/web.pid"
     for _ in $(seq 1 100); do curl -s -o /dev/null "http://localhost:$API_PORT/" && curl -s -o /dev/null "http://localhost:$WEB_PORT/" && break; sleep 0.2; done

@@ -8,7 +8,7 @@ export E2E_PORT=${E2E_PORT:-3200} E2E_LOG=$DIR/srv.log
 rm -rf "$DIR" && mkdir -p "$DIR/uploads"
 env -u RESEND_API_KEY PORT=$E2E_PORT DATABASE_PATH=$DIR/app.db UPLOAD_DIR=$DIR/uploads \
   APP_URL=http://localhost:5173 APP_SECRET=e2e-secret-e2e-secret-e2e-secret-00 \
-  ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development BATTLE_COUNTDOWN_MS=300 \
+  ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development BATTLE_COUNTDOWN_MS=300 AI_STUB=1 \
   bun server/index.ts > "$E2E_LOG" 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT

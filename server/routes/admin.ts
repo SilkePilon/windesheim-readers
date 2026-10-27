@@ -10,8 +10,11 @@ import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
 import { retryAction } from "../ai/retry";
-import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings } from "../ai/providers";
+import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings, VOICE_PROVIDERS } from "../ai/providers";
 import { listModels, validateKey } from "../ai/models";
+import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, publicAudio, queueReaderAudio } from "../ai/audio";
+import { synthesize, voiceSampleText } from "../ai/speech";
+import { VOICES } from "../ai/voices";
 import { backfillBadges } from "../lib/badges";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
@@ -19,6 +22,12 @@ const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
 
 const providerEnum = z.enum(PROVIDERS);
 const modelChoice = z.object({ provider: providerEnum, model: z.string().min(1) });
+const voiceChoice = z.object({
+  provider: z.enum(VOICE_PROVIDERS),
+  model: z.string().trim().min(1),
+  voice: z.string().trim().min(1),
+  instructions: z.string().max(1000).optional(),
+});
 
 export const admin = new Hono<AppEnv>()
   .use(requireUser, requireAdmin)
@@ -103,6 +112,7 @@ export const admin = new Hono<AppEnv>()
       .where(eq(schema.lesson.readerId, id))
       .orderBy(asc(schema.lesson.position));
     const ids = lessons.map((l) => l.id);
+    const audio = ids.length ? await db.select().from(schema.lessonAudio).where(inArray(schema.lessonAudio.lessonId, ids)) : [];
     const [cards, qs] = ids.length
       ? await Promise.all([
           db
@@ -123,6 +133,7 @@ export const admin = new Hono<AppEnv>()
         ...l,
         flashcards: cards.find((x) => x.lessonId === l.id)?.n ?? 0,
         questions: qs.find((x) => x.lessonId === l.id)?.n ?? 0,
+        audio: adminAudioSummary(audio.find((a) => a.lessonId === l.id)),
       })),
     });
   })
@@ -150,8 +161,10 @@ export const admin = new Hono<AppEnv>()
 
   .delete("/readers/:id", async (c) => {
     const id = c.req.param("id");
+    const lessonIds = (await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, id))).map((l) => l.id);
     await db.delete(schema.reader).where(eq(schema.reader.id, id));
     await unlink(pdfPath(id)).catch(() => {});
+    await deleteAudioFiles(lessonIds);
     return c.json({ ok: true });
   })
 
@@ -220,11 +233,14 @@ export const admin = new Hono<AppEnv>()
       )
       .parse(await c.req.json());
 
-    const existing = new Set(
-      (await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, readerId))).map((l) => l.id),
-    );
+    const before = await db
+      .select({ id: schema.lesson.id, startPage: schema.lesson.startPage, endPage: schema.lesson.endPage })
+      .from(schema.lesson)
+      .where(eq(schema.lesson.readerId, readerId));
+    const existing = new Set(before.map((l) => l.id));
+    const keep: string[] = [];
+    const moved: string[] = [];
     await db.transaction(async (tx) => {
-      const keep: string[] = [];
       for (const [i, l] of lessons.entries()) {
         const data = {
           code: l.code.trim(),
@@ -235,6 +251,8 @@ export const admin = new Hono<AppEnv>()
           endPage: Math.min(Math.max(l.endPage, l.startPage), r.pageCount),
         };
         if (l.id && existing.has(l.id)) {
+          const old = before.find((b) => b.id === l.id)!;
+          if (old.startPage !== data.startPage || old.endPage !== data.endPage) moved.push(l.id);
           await tx.update(schema.lesson).set(data).where(eq(schema.lesson.id, l.id));
           keep.push(l.id);
         } else {
@@ -247,6 +265,8 @@ export const admin = new Hono<AppEnv>()
         .delete(schema.lesson)
         .where(keep.length ? and(eq(schema.lesson.readerId, readerId), notInArray(schema.lesson.id, keep)) : eq(schema.lesson.readerId, readerId));
     });
+    await deleteAudioFiles(before.map((b) => b.id).filter((id) => !keep.includes(id)));
+    await markAudioStale(moved); // other pages → the spoken summary no longer matches
     if (r.status === "structuring" || r.status === "error")
       await db.update(schema.reader).set({ status: "review", error: null }).where(eq(schema.reader.id, readerId));
     return c.json({ ok: true });
@@ -256,6 +276,43 @@ export const admin = new Hono<AppEnv>()
     const { lessonIds } = z.object({ lessonIds: z.array(z.string()).optional() }).parse(await c.req.json().catch(() => ({})));
     void generateReader(c.req.param("id"), lessonIds);
     return c.json({ ok: true });
+  })
+
+  // ----- luisterles (audio summary) -----
+  /** Queue audio for the reader's ready lessons: missing/failed/stale only, or all selected with `force`. */
+  .post("/readers/:id/audio", async (c) => {
+    const id = c.req.param("id");
+    const body = z
+      .object({ lessonIds: z.array(z.string()).optional(), force: z.boolean().optional() })
+      .parse(await c.req.json().catch(() => ({})));
+    if (!(await db.query.reader.findFirst({ where: eq(schema.reader.id, id), columns: { id: true } }))) return c.json({ error: "NOT_FOUND" }, 404);
+    const lessonIds = await queueReaderAudio(id, body);
+    return c.json({ queued: lessonIds.length, lessonIds });
+  })
+  /** Regenerate one lesson's audio ("Opnieuw"). */
+  .post("/lessons/:id/audio", async (c) => {
+    const id = c.req.param("id");
+    const l = await db.query.lesson.findFirst({ where: eq(schema.lesson.id, id) });
+    if (!l) return c.json({ error: "NOT_FOUND" }, 404);
+    if (l.status !== "ready") return c.json({ error: "LESSON_NOT_READY" }, 409);
+    const ids = await queueReaderAudio(l.readerId, { lessonIds: [id], force: true });
+    if (!ids.length) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    return c.json({ ok: true });
+  })
+  /** Admin detail incl. the internal script (quality control). */
+  .get("/lessons/:id/audio", async (c) => {
+    const id = c.req.param("id");
+    if (!(await db.query.lesson.findFirst({ where: eq(schema.lesson.id, id), columns: { id: true } }))) return c.json({ error: "NOT_FOUND" }, 404);
+    const row = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, id) });
+    return c.json({
+      ...adminAudioSummary(row),
+      running: isAudioInFlight(id),
+      provider: row?.provider ?? null,
+      model: row?.model ?? null,
+      voice: row?.voice ?? null,
+      chapterList: publicAudio(id, row).chapters,
+      script: row?.script ?? null,
+    });
   })
 
   // ----- lesson content editing -----
@@ -300,6 +357,7 @@ export const admin = new Hono<AppEnv>()
       .object({
         generation: modelChoice.optional(),
         fast: modelChoice.optional(),
+        voice: voiceChoice.optional(),
         keys: z.partialRecord(providerEnum, z.string().nullable()).optional(),
       })
       .parse(await c.req.json());
@@ -314,6 +372,28 @@ export const admin = new Hono<AppEnv>()
     const body = z.object({ provider: providerEnum, apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
     try {
       return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh }));
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    }
+  })
+  /** Voice catalogue for the "Stem" role, per provider. */
+  .get("/settings/ai/voices", (c) => c.json(VOICES))
+  /** Live list of the provider's speech (TTS) models. */
+  .post("/settings/ai/voice/models", async (c) => {
+    const body = z.object({ provider: z.enum(VOICE_PROVIDERS), apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
+    try {
+      return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh, kind: "speech" }));
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    }
+  })
+  /** "Probeer stem": a short MP3 sample with the given (unsaved) voice settings. */
+  .post("/settings/ai/voice/sample", async (c) => {
+    const body = voiceChoice.extend({ apiKey: z.string().optional(), language: z.enum(["nl", "en"]).optional() }).parse(await c.req.json());
+    try {
+      const language = body.language ?? "nl";
+      const { mp3 } = await synthesize(voiceSampleText(language), body, await resolveApiKey(body.provider, body.apiKey), language);
+      return new Response(mp3 as Uint8Array<ArrayBuffer>, { headers: { "content-type": "audio/mpeg", "cache-control": "no-store" } });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
     }

@@ -26,6 +26,11 @@ import { isBadgeId } from "../../shared/badges";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
 import { getModel } from "../ai/providers";
+import { chapterPath, publicAudio } from "../ai/audio";
+import { parseRange } from "../lib/audio-codec";
+
+/** Listening at least this share of the luisterles counts as having read the summary. */
+const LISTENED_SHARE = 0.9;
 
 const scheduler = fsrs({ enable_fuzz: true });
 
@@ -80,6 +85,21 @@ const award = (userId: string, amount: number, reason: string, events: QuestEven
     events,
     lessonId ?? events.map((e) => ("lessonId" in e ? e.lessonId : undefined)).find(Boolean),
   );
+
+/**
+ * Mark the summary read and award its XP exactly once (atomic claim, so concurrent "read" and
+ * "listened" calls can't both award). Returns null when it was already read.
+ */
+async function markSummaryRead(userId: string, lessonId: string) {
+  await getOrCreateProgress(userId, lessonId);
+  const claimed = await db
+    .update(schema.lessonProgress)
+    .set({ summaryRead: true, updatedAt: new Date() })
+    .where(and(eq(schema.lessonProgress.userId, userId), eq(schema.lessonProgress.lessonId, lessonId), eq(schema.lessonProgress.summaryRead, false)))
+    .returning({ userId: schema.lessonProgress.userId });
+  if (!claimed.length) return null;
+  return award(userId, XP.summaryRead, "summary", [], lessonId);
+}
 
 /** Lessons visible to this user: from published readers (admins see all). */
 async function visibleLesson(lessonId: string, isAdmin: boolean) {
@@ -298,10 +318,66 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
-    const p = await getOrCreateProgress(u.id, row.lesson.id);
-    if (p.summaryRead) return c.json({ gained: 0 });
-    await updateProgress(u.id, row.lesson.id, { summaryRead: true });
-    return c.json(await award(u.id, XP.summaryRead, "summary", [], row.lesson.id));
+    return c.json((await markSummaryRead(u.id, row.lesson.id)) ?? { gained: 0 });
+  })
+
+  // ----- luisterles (audio summary; never the script) -----
+  .get("/lessons/:id/audio", async (c) => {
+    const u = c.get("user");
+    const row = await visibleLesson(c.req.param("id"), u.role === "admin");
+    if (!row) return c.json({ error: "NOT_FOUND" }, 404);
+    const [audio, progress] = await Promise.all([
+      db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) }),
+      db.query.lessonProgress.findFirst({ where: and(eq(schema.lessonProgress.userId, u.id), eq(schema.lessonProgress.lessonId, row.lesson.id)) }),
+    ]);
+    return c.json({ ...publicAudio(row.lesson.id, audio), listenMs: progress?.listenMs ?? 0, summaryRead: progress?.summaryRead ?? false });
+  })
+
+  .get("/lessons/:id/audio/:file{[0-9]+\\.mp3}", async (c) => {
+    const u = c.get("user");
+    const row = await visibleLesson(c.req.param("id"), u.role === "admin");
+    if (!row) return c.json({ error: "NOT_FOUND" }, 404);
+    const n = Number.parseInt(c.req.param("file"), 10);
+    const audio = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) });
+    const f = Bun.file(chapterPath(row.lesson.id, n));
+    if (!audio?.chapters.some((ch) => ch.n === n) || !(await f.exists())) return c.json({ error: "NOT_FOUND" }, 404);
+    const size = f.size;
+    // /api stays network-only in the service worker; the browser may cache it privately (URLs carry ?v=).
+    const headers: Record<string, string> = { "Content-Type": "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=86400" };
+    const range = parseRange(c.req.header("range"), size);
+    if (range === "unsatisfiable") return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+    if (range)
+      return new Response(f.slice(range.start, range.end + 1), {
+        status: 206,
+        headers: { ...headers, "Content-Range": `bytes ${range.start}-${range.end}/${size}`, "Content-Length": String(range.end - range.start + 1) },
+      });
+    return new Response(f, { headers: { ...headers, "Content-Length": String(size) } });
+  })
+
+  /**
+   * Resume position + completion. `positionMs` is stored for "resume where you left off";
+   * `heardMs` (media time actually played, if the client tracks it) or else the position decides
+   * whether ≥ 90% was listened, which marks the summary read once (same XP path as /read).
+   */
+  .post("/lessons/:id/audio/progress", async (c) => {
+    const u = c.get("user");
+    const row = await visibleLesson(c.req.param("id"), u.role === "admin");
+    if (!row) return c.json({ error: "NOT_FOUND" }, 404);
+    const body = z
+      .object({ positionMs: z.number().int().min(0).max(6 * 3600_000), heardMs: z.number().int().min(0).max(6 * 3600_000).optional() })
+      .parse(await c.req.json());
+    const audio = publicAudio(row.lesson.id, await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) }));
+    if (audio.status !== "ready") return c.json({ error: "AUDIO_NOT_READY" }, 409);
+    const listenMs = Math.min(body.positionMs, audio.totalMs);
+    await getOrCreateProgress(u.id, row.lesson.id);
+    await db
+      .update(schema.lessonProgress)
+      .set({ listenMs })
+      .where(and(eq(schema.lessonProgress.userId, u.id), eq(schema.lessonProgress.lessonId, row.lesson.id)));
+    const heard = body.heardMs ?? body.positionMs;
+    const reward = heard >= LISTENED_SHARE * audio.totalMs ? await markSummaryRead(u.id, row.lesson.id) : null;
+    const p = await db.query.lessonProgress.findFirst({ where: and(eq(schema.lessonProgress.userId, u.id), eq(schema.lessonProgress.lessonId, row.lesson.id)) });
+    return c.json({ listenMs, summaryRead: p?.summaryRead ?? false, award: reward });
   })
 
   // ----- flashcards (FSRS spaced repetition) -----

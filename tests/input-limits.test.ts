@@ -168,11 +168,17 @@ describe("battle messages", () => {
     expect(ok(m, { t: "answer", index: 0, answer: 0, name: "x" })).toBe(false);
   });
 
+  test("a full-reader battle (max lessons, real 10-char ids) fits the websocket message cap", () => {
+    const msg = JSON.stringify({ t: "create", lessonIds: Array.from({ length: LIMITS.lessonIds.max }, (_, i) => `l${String(i).padStart(9, "0")}`), count: 20, hostPlays: true });
+    expect(new TextEncoder().encode(msg).length).toBeLessThan(LIMITS.battleMessage.max);
+  });
+
   test("other messages are strict", () => {
     const m = input.battleMessage;
     expect(ok(m, { t: "join", code: "123456" })).toBe(true);
     expect(ok(m, { t: "join", code: "123456", nickname: BEE_MOVIE })).toBe(false);
-    expect(ok(m, { t: "create", lessonIds: Array.from({ length: 31 }, () => "l") })).toBe(false);
+    expect(ok(m, { t: "create", lessonIds: Array.from({ length: LIMITS.lessonIds.max }, () => "l") })).toBe(true);
+    expect(ok(m, { t: "create", lessonIds: Array.from({ length: LIMITS.lessonIds.max + 1 }, () => "l") })).toBe(false);
     expect(ok(m, { t: "create", lessonIds: ["x".repeat(LIMITS.id.max + 1)] })).toBe(false);
     expect(ok(m, { t: "kick", playerId: BEE_MOVIE })).toBe(false);
     expect(ok(m, { t: "settings", settings: { questionSeconds: 20, extra: 1 } })).toBe(false);

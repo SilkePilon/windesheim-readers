@@ -24,6 +24,7 @@ An admin uploads a reader PDF. The AI splits it into one lesson per paragraph an
 - **Quiz Battle**: live multiplayer with a 6-digit code. The host sets the time per question, double points, question count and difficulty. It has a countdown, podium and presentation mode.
 - **Progress**: XP, levels, streaks, daily quests, more than 50 badges, mastery per lesson, and weekly and all-time leaderboards (with opt-out and nicknames).
 - **Look and language**: installable PWA, light and dark theme, Dutch and English.
+- **Link previews**: links pasted in Discord, WhatsApp, Slack, Teams or iMessage show a themed card. A battle link shows a live invite with the room code, host, lesson, player count, status and settings (never player names), rendered on the server with satori and resvg.
 
 **For admins**
 - **Readers**: upload a PDF, review the AI's lesson split (codes, titles, weeks, page ranges), then generate content for everything, for missing lessons or for a single lesson. All generated content can be edited.
@@ -108,6 +109,7 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | Battle messages | connection | 20 per 2 seconds; extra ones are dropped, repeat offenders are disconnected |
 | Creating a battle | user | 10 per 10 minutes |
 | Joining a battle | user | 20 per minute |
+| Link-preview images (`/og/battle/*`) | IP | 60 per minute |
 
 **AI tutor messages** also have a daily limit per student, set under **Admin → AI settings → Limits** (default 30, `0` = unlimited; admins have no limit). It is counted in the database per Amsterdam calendar day, so a restart doesn't reset it, and starts over at midnight. Over the limit the chat answers `429` with `{"error":"TUTOR_DAILY_LIMIT","limit":30,"retryAfter":<seconds until midnight>}`; the tutor tab shows how many questions are left once 10 or fewer remain. The `ai` burst limit above applies as well.
 
@@ -238,6 +240,7 @@ Without `RESEND_API_KEY`, sign-in links are printed in the API console. Sign in 
 | `bun run build` | Typecheck and production build of the web app into `dist/` |
 | `bun run start` | Production server (serves `dist/`) |
 | `bun run db:generate` | Create a migration after changing `server/db/schema.ts` |
+| `bun scripts/og-images.tsx [--preview /tmp/wr-og]` | Regenerate the default link-preview cards in `public/og/` (committed); `--preview` also renders every battle card variant |
 
 **Project layout**
 

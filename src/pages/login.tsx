@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { storageGet, storageSet } from "@/lib/storage";
 import { ApiError, parseRetryAfter } from "@/lib/api";
 import { rateLimitText } from "@/lib/error-text";
+import { LIMITS } from "@shared/limits";
 
 const ALLOWED = /@(student\.)?windesheim\.nl$/i;
 const LAST_EMAIL = "wr.login.email";
@@ -137,6 +138,7 @@ export default function LoginPage() {
                 spellCheck={false}
                 autoFocus
                 placeholder={t("login.emailPlaceholder")}
+                maxLength={LIMITS.email.max}
                 value={value}
                 onChange={(e) => change(e.target.value)}
                 aria-invalid={!!error}

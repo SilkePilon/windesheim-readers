@@ -27,6 +27,8 @@ const en: Messages = {
       hours_one: "{{count}} hour",
       hours_other: "{{count}} hours",
     },
+    charsLeft_one: "{{count}} character left",
+    charsLeft_other: "{{count}} characters left",
   },
   errors: {
     ALREADY_RUNNING: "This is already being made",
@@ -37,6 +39,8 @@ const en: Messages = {
     FORBIDDEN: "You're not allowed to do that",
     RATE_LIMITED: "Too many requests. Try again in {{time}}.",
     RATE_LIMITED_SOON: "Too many requests. Wait a moment and try again.",
+    VALIDATION: "That's not quite right yet. Check what you entered and try again.",
+    PAYLOAD_TOO_LARGE: "That's too long. Make it shorter and try again.",
   } as Record<string, string>,
   nav: {
     path: "Path",
@@ -375,6 +379,7 @@ const en: Messages = {
     levelTitles: ["Newcomer", "Intern", "Junior", "Medior", "Senior", "Process expert", "Architect", "Business expert", "Master", "Legend"],
     nickname: "Nickname",
     nicknameHint: "Shown on the leaderboard and in battles. Empty = your first name.",
+    nicknameInvalid: "2–24 characters, only letters, numbers and spaces",
     showOnLeaderboard: "Show me on the leaderboard",
     language: "Language",
     theme: "Theme",

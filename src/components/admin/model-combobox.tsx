@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import type { ModelInfo, ProviderId } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { LIMITS } from "@shared/limits";
 
 /** FNV-1a fingerprint, so a typed key never ends up verbatim in a query key. */
 export function keyFingerprint(s: string) {
@@ -166,7 +167,7 @@ export function ModelCombobox({
         </PopoverAnchor>
         <PopoverContent align="start" className="w-(--radix-popover-trigger-width) max-w-[calc(100vw-2rem)] p-0">
           <Command shouldFilter={false}>
-            <CommandInput value={search} onValueChange={setSearch} placeholder={t("admin.ai.searchModel")} aria-label={t("admin.ai.searchModel")} />
+            <CommandInput value={search} maxLength={LIMITS.modelId.max} onValueChange={setSearch} placeholder={t("admin.ai.searchModel")} aria-label={t("admin.ai.searchModel")} />
             <CommandList label={t("admin.ai.model")}>
               {isFetching && !models ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">

@@ -57,9 +57,10 @@ import { AudioPill, LessonPill, StatusPill, audioBusy, canRetry } from "@/compon
 import { SaveBar } from "@/components/admin/save-bar";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api, ApiError } from "@/lib/api";
-import { errorText, rateLimitText } from "@/lib/error-text";
+import { errorText } from "@/lib/error-text";
 import type { AdminLessonRow, AdminReader } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { LIMITS } from "@shared/limits";
 
 // The detail endpoint has no counts; they are derived from `lessons`.
 type Detail = Omit<AdminReader, "lessonCount" | "readyCount" | "failedCount"> & { lessons: AdminLessonRow[] };
@@ -76,7 +77,15 @@ function toRows(lessons: AdminLessonRow[]): Row[] {
   return lessons.map((l) => ({ id: l.id, key: l.id, code: l.code, title: l.title, week: l.week, startPage: l.startPage, endPage: l.endPage }));
 }
 
-const rowValid = (r: Row) => !!r.code.trim() && !!r.title.trim() && r.week >= 1 && r.startPage >= 1 && r.endPage >= r.startPage;
+/** The server's bounds (shared/limits.ts); existing values over them show as invalid until edited. */
+const codeValid = (code: string) => !!code.trim() && code.trim().length <= LIMITS.lessonCode.max;
+const titleValid = (title: string) => !!title.trim() && title.trim().length <= LIMITS.lessonTitle.max;
+const weekValid = (w: number) => w >= LIMITS.week.min && w <= LIMITS.week.max;
+const pageValid = (p: number) => p >= LIMITS.page.min && p <= LIMITS.page.max;
+const rowValid = (r: Row) =>
+  codeValid(r.code) && titleValid(r.title) && weekValid(r.week) && pageValid(r.startPage) && pageValid(r.endPage) && r.endPage >= r.startPage;
+/** Digits of the largest allowed number, for numeric cells' maxLength. */
+const digits = (n: number) => String(n).length;
 
 /** Rows only move up and down. */
 const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
@@ -124,7 +133,9 @@ function EditableCell({
   placeholder,
   className,
   invalid,
+  maxLength,
 }: {
+  maxLength?: number;
   value: string | number;
   onCommit: (v: string) => void;
   numeric?: boolean;
@@ -164,6 +175,7 @@ function EditableCell({
         aria-label={label}
         value={draft}
         inputMode={numeric ? "numeric" : undefined}
+        maxLength={maxLength}
         onChange={(e) => setDraft(numeric ? e.target.value.replace(/\D/g, "") : e.target.value)}
         onBlur={finish}
         onKeyDown={onKey}
@@ -239,7 +251,8 @@ function SortableRow({
           value={row.code}
           label={t("admin.code")}
           placeholder="1.2A"
-          invalid={!row.code.trim()}
+          maxLength={LIMITS.lessonCode.max}
+          invalid={!codeValid(row.code)}
           className="font-heading text-[15px] font-semibold text-primary"
           onCommit={(v) => onChange({ code: v })}
         />
@@ -249,25 +262,27 @@ function SortableRow({
           value={row.title}
           label={t("admin.lessonTitle")}
           placeholder={t("admin.lessonTitle")}
-          invalid={!row.title.trim()}
+          maxLength={LIMITS.lessonTitle.max}
+          invalid={!titleValid(row.title)}
           onCommit={(v) => onChange({ title: v })}
         />
       </TableCell>
       <TableCell className="w-16">
-        <EditableCell numeric value={row.week} label={t("admin.weekCol")} invalid={row.week < 1} onCommit={(v) => onChange({ week: num(v) })} />
+        <EditableCell numeric maxLength={digits(LIMITS.week.max)} value={row.week} label={t("admin.weekCol")} invalid={!weekValid(row.week)} onCommit={(v) => onChange({ week: num(v) })} />
       </TableCell>
       <TableCell className="w-32">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <div className="w-10">
-            <EditableCell numeric value={row.startPage} label={t("admin.from")} invalid={row.startPage < 1} className="justify-end text-right" onCommit={(v) => onChange({ startPage: num(v) })} />
+            <EditableCell numeric maxLength={digits(LIMITS.page.max)} value={row.startPage} label={t("admin.from")} invalid={!pageValid(row.startPage)} className="justify-end text-right" onCommit={(v) => onChange({ startPage: num(v) })} />
           </div>
           <span aria-hidden>–</span>
           <div className="w-10">
             <EditableCell
               numeric
+              maxLength={digits(LIMITS.page.max)}
               value={row.endPage}
               label={t("admin.to")}
-              invalid={row.endPage < row.startPage}
+              invalid={!pageValid(row.endPage) || row.endPage < row.startPage}
               onCommit={(v) => onChange({ endPage: num(v) })}
             />
           </div>
@@ -417,7 +432,7 @@ export default function AdminReaderPage() {
       await refetch();
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
+      notify.error(errorText(e, t));
     } finally {
       setSaving(false);
     }

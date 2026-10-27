@@ -27,8 +27,9 @@ import { SaveBar } from "@/components/admin/save-bar";
 import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/model-combobox";
 import { VoiceCard, sameVoice, type VoiceError } from "@/components/admin/voice-card";
 import { api, ApiError } from "@/lib/api";
-import { errorText, rateLimitText } from "@/lib/error-text";
+import { errorText } from "@/lib/error-text";
 import type { AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
+import { LIMITS } from "@shared/limits";
 
 const PROVIDERS: { id: ProviderId; name: string; url: string }[] = [
   {
@@ -316,7 +317,7 @@ export default function AdminSettingsPage() {
       await put({ keys: { [p]: null } });
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
+      notify.error(errorText(e, t));
     }
   };
 
@@ -423,6 +424,7 @@ export default function AdminSettingsPage() {
                       spellCheck={false}
                       placeholder={saved.stored ? "••••••••••••" : t("admin.ai.keyPlaceholder")}
                       value={typed[p.id] ?? ""}
+                      maxLength={LIMITS.apiKey.max}
                       disabled={saving}
                       onChange={(e) => setTyped((s) => ({ ...s, [p.id]: e.target.value }))}
                       className="font-mono placeholder:font-sans"

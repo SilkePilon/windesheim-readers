@@ -9,7 +9,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
 import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
-import { rateLimitText } from "@/lib/error-text";
+import { requestErrorText } from "@/lib/error-text";
+import { CharCounter } from "@/components/char-counter";
+import { LIMITS } from "@shared/limits";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, PublicQuestion } from "@/lib/types";
@@ -26,12 +28,12 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer });
+      const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer: answer.trim() });
       setGrade(res);
       celebrate(res, { quietXp: true });
       invalidate();
     } catch (e) {
-      setError(rateLimitText(e, t) ?? t("common.errorHint"));
+      setError(requestErrorText(e, t, t("common.errorHint")));
     } finally {
       setLoading(false);
     }
@@ -49,12 +51,14 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
         <Textarea
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
+          maxLength={LIMITS.openAnswer.max}
           placeholder={t("open.placeholder")}
           className="min-h-28 rounded-[16px] text-base"
           disabled={loading}
         />
-        <div className="flex justify-end">
-          <Button variant="chunky" size="xl" onClick={submit} disabled={loading || answer.trim().length < 3}>
+        <div className="flex items-center justify-end gap-3">
+          <CharCounter value={answer} max={LIMITS.openAnswer.max} />
+          <Button variant="chunky" size="xl" onClick={submit} disabled={loading || answer.trim().length < LIMITS.openAnswer.min}>
             {loading ? <Spinner /> : <Sparkles />} {t("open.submit")}
           </Button>
         </div>

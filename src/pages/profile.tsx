@@ -15,7 +15,9 @@ import { PlayerAvatar } from "@/components/game/player-avatar";
 import { InstallDrawer } from "@/components/install-drawer";
 import { useInstall } from "@/lib/install";
 import { api } from "@/lib/api";
-import { rateLimitText } from "@/lib/error-text";
+import { requestErrorText } from "@/lib/error-text";
+import { CharCounter } from "@/components/char-counter";
+import { LIMITS, nicknameProblem, normalizeNickname } from "@shared/limits";
 import { setLocale } from "@/lib/i18n";
 import { useBadges, useInvalidateProgress, useMe } from "@/lib/queries";
 import { levelTitleIndex } from "@shared/game";
@@ -41,7 +43,7 @@ export default function ProfilePage() {
       invalidate();
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(rateLimitText(e, t) ?? t("common.error"));
+      notify.error(requestErrorText(e, t, t("common.error")));
     }
   };
 
@@ -206,13 +208,16 @@ function BadgeGroup({ title, count, intro, children }: { title: string; count?: 
   );
 }
 
-function SettingRow({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+function SettingRow({ label, htmlFor, children, below }: { label: string; htmlFor?: string; children: ReactNode; below?: ReactNode }) {
   return (
-    <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-1.5 text-sm font-bold [&+&]:border-t-2 [&+&]:border-background">
-      <label htmlFor={htmlFor} className="min-w-0">
-        {label}
-      </label>
-      {children}
+    <div className="px-4 py-1.5 text-sm font-bold [&+&]:border-t-2 [&+&]:border-background">
+      <div className="flex min-h-9 items-center justify-between gap-3">
+        <label htmlFor={htmlFor} className="min-w-0">
+          {label}
+        </label>
+        {children}
+      </div>
+      {below}
     </div>
   );
 }
@@ -221,12 +226,25 @@ function NicknameRow({ current, placeholder, onSave }: { current: string; placeh
   const { t } = useTranslation();
   const [value, setValue] = useState(current);
   useEffect(() => setValue(current), [current]);
-  const dirty = value.trim() !== current;
+  // The server's rule (shared/limits.ts), checked as you type.
+  const invalid = nicknameProblem(value) !== null;
+  const next = normalizeNickname(value);
+  const dirty = next !== current;
   const save = () => {
-    if (dirty) void onSave(value.trim());
+    if (dirty && !invalid) void onSave(next);
   };
   return (
-    <SettingRow label={t("profile.nickname")} htmlFor="nick">
+    <SettingRow
+      label={t("profile.nickname")}
+      htmlFor="nick"
+      below={
+        invalid && (
+          <p id="nick-error" role="alert" className="pb-1 text-right text-xs font-semibold text-danger-shade dark:text-danger">
+            {t("profile.nicknameInvalid")}
+          </p>
+        )
+      }
+    >
       <form
         className="flex min-w-0 flex-1 items-center justify-end gap-1.5"
         onSubmit={(e) => {
@@ -234,16 +252,22 @@ function NicknameRow({ current, placeholder, onSave }: { current: string; placeh
           save();
         }}
       >
+        <CharCounter value={value} max={LIMITS.nickname.max} />
         <input
           id="nick"
           value={value}
-          maxLength={24}
+          maxLength={LIMITS.nickname.max}
           placeholder={placeholder}
           title={t("profile.nicknameHint")}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? "nick-error" : undefined}
           onChange={(e) => setValue(e.target.value)}
-          className="h-9 w-full max-w-56 min-w-0 rounded-[10px] bg-transparent px-2 text-right font-bold text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:bg-background focus:text-foreground"
+          className={cn(
+            "h-9 w-full max-w-56 min-w-0 rounded-[10px] bg-transparent px-2 text-right font-bold text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:bg-background focus:text-foreground",
+            invalid && "text-danger-shade focus:text-danger-shade dark:text-danger dark:focus:text-danger",
+          )}
         />
-        {dirty && (
+        {dirty && !invalid && (
           <Button
             type="submit"
             variant="chunky-success"

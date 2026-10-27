@@ -2,7 +2,9 @@ import type { TFunction } from "i18next";
 import { ApiError, parseRetryAfter } from "./api";
 
 /** Server error codes with their own wording (`errors.<CODE>` in the locales). */
-const KNOWN = ["ALREADY_RUNNING", "LESSON_NOT_READY", "AUDIO_NOT_READY", "NOT_FOUND", "UNAUTHORIZED", "FORBIDDEN"] as const;
+const KNOWN = ["ALREADY_RUNNING", "LESSON_NOT_READY", "AUDIO_NOT_READY", "NOT_FOUND", "UNAUTHORIZED", "FORBIDDEN", "VALIDATION", "PAYLOAD_TOO_LARGE"] as const;
+/** Input refused by the server: invalid (400) or too large (413). */
+const INPUT_ERRORS = ["VALIDATION", "PAYLOAD_TOO_LARGE"] as const;
 
 /**
  * Readable text for a failed request: known codes get localized text; other bare codes
@@ -46,6 +48,23 @@ export function rateLimitInfo(e: unknown): { retryAfter?: number } | null {
   }
   return null;
 }
+
+/**
+ * Friendly text when the server refused the input itself (400 VALIDATION, 413 PAYLOAD_TOO_LARGE),
+ * else null. Also reads errors whose message is the raw JSON body (the AI SDK chat transport).
+ */
+export function inputErrorText(e: unknown, t: TFunction): string | null {
+  let code = "";
+  if (e instanceof ApiError) code = e.status === 413 ? "PAYLOAD_TOO_LARGE" : e.code;
+  else if (e instanceof Error) {
+    const body = parseJson(e.message);
+    code = typeof body?.error === "string" ? body.error : e.message.trim();
+  }
+  return (INPUT_ERRORS as readonly string[]).includes(code) ? t(`errors.${code}`) : null;
+}
+
+/** The text for a failed request: rate limit, refused input, else `fallback`. */
+export const requestErrorText = (e: unknown, t: TFunction, fallback: string) => rateLimitText(e, t) ?? inputErrorText(e, t) ?? fallback;
 
 function parseJson(text: string): { error?: unknown; retryAfter?: unknown } | null {
   try {

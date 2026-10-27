@@ -14,6 +14,7 @@ import { ModelCombobox } from "@/components/admin/model-combobox";
 import { api, ApiError, parseRetryAfter } from "@/lib/api";
 import { rateLimitText } from "@/lib/error-text";
 import type { VoiceChoice, VoiceInfo, VoiceProviderId } from "@/lib/types";
+import { LIMITS } from "@shared/limits";
 
 const VOICE_PROVIDERS: { id: VoiceProviderId; name: string }[] = [
   { id: "google", name: "Google Gemini" },
@@ -238,7 +239,7 @@ export function VoiceCard({
               <Textarea
                 id="voice-instructions"
                 value={value.instructions ?? ""}
-                maxLength={1000}
+                maxLength={LIMITS.voiceInstructions.max}
                 placeholder={t("admin.ai.voiceInstructionsPlaceholder")}
                 onChange={(e) => onChange({ ...value, instructions: e.target.value })}
                 className="min-h-20 text-sm"

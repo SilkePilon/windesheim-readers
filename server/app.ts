@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { upgradeWebSocket, serveStatic } from "@hono/bun";
 import { ZodError } from "zod";
 import { auth } from "./auth";
@@ -13,6 +14,8 @@ import { battleConnection } from "./live/battle";
 import { limits } from "./limits";
 import { magicLinkGate } from "./lib/email-gate";
 import { AUTH_IP_HEADER, clientIp } from "./lib/client-ip";
+import { magicLinkBody, publicIssues, updateUserBody } from "./lib/input";
+import { LIMITS } from "../shared/limits";
 
 /** The request for better-auth, carrying our resolved client IP (a client-sent value is overwritten). */
 function withClientIp(c: Context): Request {
@@ -27,7 +30,10 @@ export const app = new Hono();
 if (!env.isProd) app.use("/api/*", logger());
 
 app.onError((err, c) => {
-  if (err instanceof ZodError) return c.json({ error: "VALIDATION", issues: err.issues }, 400);
+  // Issues are size-capped and never echo the input back.
+  if (err instanceof ZodError) return c.json({ error: "VALIDATION", issues: publicIssues(err.issues) }, 400);
+  // A body that isn't JSON at all.
+  if (err instanceof SyntaxError && /JSON/i.test(err.message)) return c.json({ error: "VALIDATION", issues: [] }, 400);
   console.error(err);
   return c.json({ error: err.message || "INTERNAL" }, 500);
 });
@@ -42,12 +48,39 @@ app.get("/api/health", (c) => {
   }
 });
 
-// ----- rate limits (see server/limits.ts; the README has the table) -----
+// Flood guard first, so oversized requests count too.
 app.use("/api/*", limits.api);
+
+// ----- request body caps (shared/limits.ts): 413 PAYLOAD_TOO_LARGE before any parsing -----
+const tooLarge = (c: Context) => c.json({ error: "PAYLOAD_TOO_LARGE" }, 413);
+const bodyCaps = {
+  default: bodyLimit({ maxSize: LIMITS.body.default, onError: tooLarge }),
+  tutor: bodyLimit({ maxSize: LIMITS.body.tutor, onError: tooLarge }),
+  admin: bodyLimit({ maxSize: LIMITS.body.admin, onError: tooLarge }),
+  upload: bodyLimit({ maxSize: LIMITS.body.upload, onError: tooLarge }),
+};
+app.use("/api/*", (c, next) => {
+  if (c.req.method === "GET" || c.req.method === "HEAD") return next();
+  const p = c.req.path;
+  if (c.req.method === "POST" && p === "/api/admin/readers") return bodyCaps.upload(c, next);
+  if (c.req.method === "POST" && /^\/api\/lessons\/[^/]+\/chat$/.test(p)) return bodyCaps.tutor(c, next);
+  if (p.startsWith("/api/admin/")) return bodyCaps.admin(c, next);
+  return bodyCaps.default(c, next);
+});
+
+// ----- rate limits (see server/limits.ts; the README has the table) -----
 app.use("/api/auth/*", (c, next) =>
   c.req.method === "GET" && c.req.path === "/api/auth/get-session" ? limits.authSession(c, next) : limits.auth(c, next),
 );
 app.post("/api/auth/sign-in/*", limits.signIn);
+// better-auth takes a few free-text fields too: check them before it (or the email gate) sees them.
+const authBody = (schema: { parse: (v: unknown) => unknown }) => async (c: Context, next: () => Promise<void>) => {
+  const body: unknown = await c.req.raw.clone().json().catch(() => undefined);
+  if (body !== undefined) schema.parse(body);
+  await next();
+};
+app.post("/api/auth/sign-in/magic-link", authBody(magicLinkBody));
+app.post("/api/auth/update-user", authBody(updateUserBody));
 // Hard, persisted limits on sign-in emails, checked before better-auth sends anything.
 app.post("/api/auth/sign-in/magic-link", magicLinkGate);
 

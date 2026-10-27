@@ -8,7 +8,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
 import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
-import { rateLimitText } from "@/lib/error-text";
+import { requestErrorText } from "@/lib/error-text";
+import { CharCounter } from "@/components/char-counter";
+import { LIMITS } from "@shared/limits";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, LessonDetail } from "@/lib/types";
@@ -32,16 +34,16 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
   };
 
   const submit = async () => {
-    if (!concept || text.trim().length < 20) return;
+    if (!concept || text.trim().length < LIMITS.explain.min) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<GradeResult>(`/lessons/${lesson.id}/explain`, { concept, explanation: text });
+      const res = await api.post<GradeResult>(`/lessons/${lesson.id}/explain`, { concept: concept.trim(), explanation: text.trim() });
       setGrade(res);
       celebrate(res, { quietXp: true });
       invalidate();
     } catch (e) {
-      setError(rateLimitText(e, t) ?? t("common.errorHint"));
+      setError(requestErrorText(e, t, t("common.errorHint")));
     } finally {
       setLoading(false);
     }
@@ -94,15 +96,17 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            maxLength={LIMITS.explain.max}
             placeholder={t("explain.placeholder", { concept })}
             className="min-h-36 rounded-[16px] text-base"
             disabled={loading}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
-              {text.trim().length < 20 ? t("explain.minChars") : t("explain.words", { count: text.trim().split(/\s+/).length })}
+              {text.trim().length < LIMITS.explain.min ? t("explain.minChars") : t("explain.words", { count: text.trim().split(/\s+/).length })}
+              <CharCounter value={text} max={LIMITS.explain.max} className="ml-2" />
             </span>
-            <Button variant="chunky" size="xl" onClick={submit} disabled={loading || text.trim().length < 20}>
+            <Button variant="chunky" size="xl" onClick={submit} disabled={loading || text.trim().length < LIMITS.explain.min}>
               {loading ? <Spinner /> : <Sparkles />} {loading ? t("explain.grading") : t("explain.submit")}
             </Button>
           </div>

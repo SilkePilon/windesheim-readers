@@ -25,6 +25,8 @@ const nl = {
       hours_one: "{{count}} uur",
       hours_other: "{{count}} uur",
     },
+    charsLeft_one: "Nog {{count}} teken",
+    charsLeft_other: "Nog {{count}} tekens",
   },
   errors: {
     ALREADY_RUNNING: "Dit wordt al gemaakt",
@@ -35,6 +37,8 @@ const nl = {
     FORBIDDEN: "Dat mag je niet doen",
     RATE_LIMITED: "Te veel aanvragen. Probeer het over {{time}} opnieuw.",
     RATE_LIMITED_SOON: "Te veel aanvragen. Wacht even en probeer het opnieuw.",
+    VALIDATION: "Dat klopt nog niet helemaal. Check wat je invulde en probeer het opnieuw.",
+    PAYLOAD_TOO_LARGE: "Dat is te lang. Maak het korter en probeer het opnieuw.",
   } as Record<string, string>,
   nav: {
     path: "Pad",
@@ -373,6 +377,7 @@ const nl = {
     levelTitles: ["Nieuwkomer", "Stagiair", "Junior", "Medior", "Senior", "Procesexpert", "Architect", "Bedrijfskundige", "Meester", "Legende"],
     nickname: "Bijnaam",
     nicknameHint: "Wordt getoond op de ranglijst en in battles. Leeg = je voornaam.",
+    nicknameInvalid: "2–24 tekens, alleen letters, cijfers en spaties",
     showOnLeaderboard: "Toon mij op de ranglijst",
     language: "Taal",
     theme: "Thema",

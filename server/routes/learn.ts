@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
@@ -32,6 +31,7 @@ import { stubChatModel } from "../ai/chat-stub";
 import { aiStubEnabled } from "../ai/speech";
 import { chapterPath, PUBLIC_AUDIO_COLUMNS, publicAudio } from "../ai/audio";
 import { parseRange } from "../lib/audio-codec";
+import * as input from "../lib/input";
 
 /** Listening at least this share of the luisterles counts as having read the summary. */
 const LISTENED_SHARE = 0.9;
@@ -207,13 +207,7 @@ export const learn = new Hono<AppEnv>()
   .get("/me/badges", async (c) => c.json(await badgeOverview(c.get("user").id)))
 
   .patch("/me", limits.writes, async (c) => {
-    const body = z
-      .object({
-        nickname: z.string().trim().max(24).nullable().optional(),
-        showOnLeaderboard: z.boolean().optional(),
-        locale: z.enum(["nl", "en"]).optional(),
-      })
-      .parse(await c.req.json());
+    const body = input.patchMe.parse(await c.req.json());
     await db.update(schema.user).set(body).where(eq(schema.user.id, c.get("user").id));
     return c.json({ ok: true });
   })
@@ -369,9 +363,7 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
-    const body = z
-      .object({ positionMs: z.number().int().min(0).max(6 * 3600_000), heardMs: z.number().int().min(0).max(6 * 3600_000).optional() })
-      .parse(await c.req.json());
+    const body = input.audioProgress.parse(await c.req.json());
     const audio = publicAudio(
       row.lesson.id,
       await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id), columns: PUBLIC_AUDIO_COLUMNS }),
@@ -455,7 +447,7 @@ export const learn = new Hono<AppEnv>()
 
   .post("/review", limits.writes, async (c) => {
     const u = c.get("user");
-    const { flashcardId, rating } = z.object({ flashcardId: z.string(), rating: z.number().int().min(1).max(4) }).parse(await c.req.json());
+    const { flashcardId, rating } = input.review.parse(await c.req.json());
     const card = await db.query.flashcard.findFirst({ where: eq(schema.flashcard.id, flashcardId) });
     if (!card) return c.json({ error: "NOT_FOUND" }, 404);
     const existing = await db.query.cardReview.findFirst({
@@ -497,13 +489,14 @@ export const learn = new Hono<AppEnv>()
 
   .post("/questions/:id/check", limits.writes, async (c) => {
     const u = c.get("user");
-    const { sessionId, answer } = z.object({ sessionId: z.string(), answer: z.unknown() }).parse(await c.req.json());
+    const { sessionId, answer } = input.quizCheck.parse(await c.req.json());
     const session = quizSessions.get(sessionId);
     const qid = c.req.param("id");
     if (!session || session.userId !== u.id || !session.questionIds.includes(qid)) return c.json({ error: "NO_SESSION" }, 400);
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, qid) });
-    if (!q || q.type === "open") return c.json({ error: "NOT_FOUND" }, 404);
-    const correct = checkAnswer(q.data, answer);
+    if (!q || q.data.type === "open") return c.json({ error: "NOT_FOUND" }, 404);
+    // The exact shape for this question type (a number for mc, a boolean for tf, ...).
+    const correct = checkAnswer(q.data, input.answerFor(q.data.type).parse(answer));
     if (!session.results.has(qid)) session.results.set(qid, correct);
     return c.json({ correct, correctAnswer: correctAnswer(q.data), explanation: explanationOf(q.data) });
   })
@@ -511,7 +504,7 @@ export const learn = new Hono<AppEnv>()
   .post("/lessons/:id/quiz/submit", limits.writes, async (c) => {
     const u = c.get("user");
     const lessonId = c.req.param("id");
-    const { sessionId } = z.object({ sessionId: z.string() }).parse(await c.req.json());
+    const { sessionId } = input.quizSubmit.parse(await c.req.json());
     const session = quizSessions.get(sessionId);
     if (!session || session.userId !== u.id || session.lessonId !== lessonId) return c.json({ error: "NO_SESSION" }, 400);
     quizSessions.delete(sessionId);
@@ -546,7 +539,7 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, c.req.param("id")) });
     if (!q || q.data.type !== "open") return c.json({ error: "NOT_FOUND" }, 404);
-    const { answer } = z.object({ answer: z.string().trim().min(3).max(4000) }).parse(await c.req.json());
+    const { answer } = input.openAnswer.parse(await c.req.json());
     const grade = await gradeOpenAnswer({
       question: q.prompt,
       modelAnswer: q.data.modelAnswer,
@@ -565,9 +558,7 @@ export const learn = new Hono<AppEnv>()
     const lessonId = c.req.param("id");
     const row = await visibleLesson(lessonId, u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
-    const { concept, explanation } = z
-      .object({ concept: z.string().min(1).max(200), explanation: z.string().trim().min(20).max(4000) })
-      .parse(await c.req.json());
+    const { concept, explanation } = input.explain.parse(await c.req.json());
     const source = await getPageText(row.lesson.readerId, row.lesson.startPage, row.lesson.endPage);
     const grade = await gradeExplanation({ concept, source, explanation, locale: u.locale ?? "nl" });
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId, kind: "explain", score: grade.score, maxScore: 100 });
@@ -583,7 +574,8 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
-    const { messages } = (await c.req.json()) as { messages: UIMessage[] };
+    // Validated before the quota is counted: a refused request costs no tutor message.
+    const messages: UIMessage[] = input.tutorChat.parse(await c.req.json());
     // Daily tutor quota (admin setting), checked and counted before the model is called.
     const quota = consumeTutorMessage(u);
     if (!quota.ok) {

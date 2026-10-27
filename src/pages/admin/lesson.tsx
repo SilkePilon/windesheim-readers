@@ -13,6 +13,7 @@ import { Pill } from "@/components/admin/status-pill";
 import { Markdown } from "@/components/markdown";
 import { AudioScriptSection } from "@/components/admin/audio-script";
 import { api } from "@/lib/api";
+import { LIMITS } from "@shared/limits";
 
 interface QuestionRow {
   id: string;
@@ -54,8 +55,8 @@ function FlashcardRow({ card, onChange }: { card: { id: string; front: string; b
   if (edit)
     return (
       <div className="space-y-2 py-3">
-        <Textarea value={front} onChange={(e) => setFront(e.target.value)} className="min-h-12" />
-        <Textarea value={back} onChange={(e) => setBack(e.target.value)} className="min-h-12" />
+        <Textarea value={front} maxLength={LIMITS.flashcardSide.max} onChange={(e) => setFront(e.target.value)} className="min-h-12" />
+        <Textarea value={back} maxLength={LIMITS.flashcardSide.max} onChange={(e) => setBack(e.target.value)} className="min-h-12" />
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="flat" onClick={() => setEdit(false)} aria-label={t("common.cancel")}>
             <X />
@@ -64,8 +65,9 @@ function FlashcardRow({ card, onChange }: { card: { id: string; front: string; b
             size="sm"
             variant="chunky"
             aria-label={t("common.save")}
+            disabled={!front.trim() || !back.trim()}
             onClick={async () => {
-              await api.patch(`/admin/flashcards/${card.id}`, { front, back });
+              await api.patch(`/admin/flashcards/${card.id}`, { front: front.trim(), back: back.trim() });
               setEdit(false);
               onChange();
             }}
@@ -176,6 +178,7 @@ export default function AdminLessonPage() {
                 <Textarea
                   aria-label={t("admin.summary")}
                   value={summary}
+                  maxLength={LIMITS.summary.max}
                   onChange={(e) => setSummary(e.target.value)}
                   className="min-h-[60dvh] font-mono text-sm"
                 />

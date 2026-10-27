@@ -20,6 +20,7 @@ import { rateLimitText } from "@/lib/error-text";
 import type { AdminReader } from "@/lib/types";
 import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { LIMITS } from "@shared/limits";
 
 const BUSY = ["extracting", "structuring", "generating"];
 
@@ -106,11 +107,11 @@ function UploadDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="title">{t("admin.readerTitle")}</FieldLabel>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input id="title" value={title} maxLength={LIMITS.readerTitle.max} onChange={(e) => setTitle(e.target.value)} />
             </Field>
             <Field>
               <FieldLabel htmlFor="course">{t("admin.course")}</FieldLabel>
-              <Input id="course" value={course} onChange={(e) => setCourse(e.target.value)} placeholder="Organisatieprocessen BC1" />
+              <Input id="course" value={course} maxLength={LIMITS.course.max} onChange={(e) => setCourse(e.target.value)} placeholder="Organisatieprocessen BC1" />
             </Field>
             {error && <Notice variant="flat" title={t("admin.uploadFailed")} description={error} />}
           </FieldGroup>

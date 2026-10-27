@@ -1,7 +1,7 @@
 import type { WSContext } from "hono/ws";
 import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { z } from "zod";
+import type { z } from "zod";
 import { db, schema } from "../db";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import { awardXpOnly } from "../lib/game";
@@ -13,14 +13,11 @@ import { XP, type BadgeId } from "../../shared/game";
 import { env } from "../env";
 import { RateLimiter } from "../lib/rate-limit";
 import { BATTLE_LIMITS } from "../limits";
+import { answerFor, battleMessage } from "../lib/input";
+import { LIMITS } from "../../shared/limits";
 import {
-  COUNT_MAX,
-  COUNT_MIN,
   DEFAULT_BATTLE_SETTINGS,
-  DIFFICULTIES,
   DIFFICULTY_LEVEL,
-  POINTS_MODES,
-  QUESTION_SECONDS,
   isDoubled,
   scoreAnswer,
   type BattleSettings,
@@ -241,35 +238,8 @@ async function end(r: Room) {
   setTimeout(() => closeRoom(r), 10 * 60_000);
 }
 
-const createMsg = z.object({
-  t: z.literal("create"),
-  lessonIds: z.array(z.string()).min(1).max(30),
-  count: z.number().int().min(COUNT_MIN).max(COUNT_MAX).default(DEFAULT_BATTLE_SETTINGS.count),
-  hostPlays: z.boolean().default(true),
-});
-const settingsPatch = z
-  .object({
-    questionSeconds: z.literal(QUESTION_SECONDS),
-    points: z.enum(POINTS_MODES),
-    count: z.number().int().min(COUNT_MIN).max(COUNT_MAX),
-    difficulty: z.enum(DIFFICULTIES),
-    speedBonus: z.boolean(),
-    streakBonus: z.boolean(),
-    showScoreboard: z.boolean(),
-  })
-  .partial()
-  .strict();
-const clientMsg = z.discriminatedUnion("t", [
-  createMsg,
-  z.object({ t: z.literal("join"), code: z.string().regex(/^\d{6}$/) }),
-  z.object({ t: z.literal("start") }),
-  z.object({ t: z.literal("answer"), index: z.number().int(), answer: z.unknown() }),
-  z.object({ t: z.literal("next") }),
-  z.object({ t: z.literal("settings"), settings: settingsPatch }),
-  z.object({ t: z.literal("kick"), playerId: z.string() }),
-  z.object({ t: z.literal("leave") }),
-  z.object({ t: z.literal("end") }),
-]);
+/** Client messages (server/lib/input.ts): strict, size-capped, answers typed per question. */
+const clientMsg = battleMessage;
 
 // Per user, across connections: creating rooms, and joining (guards the 6-digit codes).
 const createLimiter = new RateLimiter(BATTLE_LIMITS.create);
@@ -329,6 +299,9 @@ export function battleConnection(user: SessionUser) {
   return {
     async onMessage(raw: string, ws: WSContext) {
       if (!allowMessage(ws)) return;
+      // Cheap size check before parsing (UTF-16 length ≤ bytes, so check both bounds).
+      if (raw.length > LIMITS.battleMessage.max || Buffer.byteLength(raw) > LIMITS.battleMessage.max)
+        return send(ws, { t: "error", error: "MESSAGE_TOO_LARGE" });
       let msg: z.infer<typeof clientMsg>;
       try {
         msg = clientMsg.parse(JSON.parse(raw));
@@ -465,6 +438,8 @@ export function battleConnection(user: SessionUser) {
         const p = r.players.get(user.id);
         if (!p || p.answers.has(r.index)) return;
         const q = r.questions[r.index]!;
+        // The exact shape for this question (a number for mc, a boolean for tf).
+        if (!answerFor(q.data.type).safeParse(msg.answer).success) return send(ws, { t: "error", error: "BAD_MESSAGE" });
         const correct = checkAnswer(q.data, msg.answer);
         const elapsed = Date.now() - r.startedAt;
         const totalMs = questionMs(r);

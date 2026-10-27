@@ -37,6 +37,7 @@ import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { XP } from "@shared/game";
 import { lessonLevel, nextStep, nextStepHint } from "@shared/levels";
+import { LIMITS } from "@shared/limits";
 
 const VIEWS = ["read", "listen", "explain", "open", "tutor"] as const;
 type View = (typeof VIEWS)[number];
@@ -337,6 +338,7 @@ function ReadView({ lesson }: { lesson: LessonDetail }) {
                 <Input
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
+                  maxLength={LIMITS.search.max}
                   aria-label={t("lesson.terms")}
                   className="h-9 rounded-[12px] pl-8"
                 />

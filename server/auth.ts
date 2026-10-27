@@ -18,9 +18,10 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: { type: "string", defaultValue: "user", input: false },
-      nickname: { type: "string", required: false },
-      showOnLeaderboard: { type: "boolean", defaultValue: true },
-      locale: { type: "string", required: false, defaultValue: null },
+      // Not settable through better-auth's endpoints: PATCH /api/me validates them.
+      nickname: { type: "string", required: false, input: false },
+      showOnLeaderboard: { type: "boolean", defaultValue: true, input: false },
+      locale: { type: "string", required: false, defaultValue: null, input: false },
     },
   },
   // better-auth's own limiter (per IP, in memory) stays on as an extra layer behind ours.

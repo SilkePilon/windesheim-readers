@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { z } from "zod";
+import { LIMITS } from "../../shared/limits";
 import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { generateText } from "ai";
@@ -7,32 +7,24 @@ import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, schema } from "../db";
 import { limits } from "../limits";
-import { getTutorDailyLimit, setTutorDailyLimit, TUTOR_DAILY_LIMIT_MAX } from "../lib/tutor-quota";
+import { getTutorDailyLimit, setTutorDailyLimit } from "../lib/tutor-quota";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
 import { retryAction } from "../ai/retry";
-import { createModel, getAiSettingsPublic, getModelFor, PROVIDERS, resolveApiKey, updateAiSettings, VOICE_PROVIDERS } from "../ai/providers";
+import { createModel, getAiSettingsPublic, getModelFor, resolveApiKey, updateAiSettings } from "../ai/providers";
 import { listModels, validateKey } from "../ai/models";
 import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, publicAudio, queueReaderAudio } from "../ai/audio";
 import { synthesize, voiceSampleText } from "../ai/speech";
 import { voiceProblem, VOICES, voicesFor } from "../ai/voices";
 import { backfillBadges } from "../lib/badges";
+import * as input from "../lib/input";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
 
-const providerEnum = z.enum(PROVIDERS);
-
 /** AI settings for the admin page, plus the usage limits that live next to them. */
 const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), tutorDailyLimit: getTutorDailyLimit() });
-const modelChoice = z.object({ provider: providerEnum, model: z.string().min(1) });
-const voiceChoice = z.object({
-  provider: z.enum(VOICE_PROVIDERS),
-  model: z.string().trim().min(1),
-  voice: z.string().trim().min(1),
-  instructions: z.string().max(1000).optional(),
-});
 
 export const admin = new Hono<AppEnv>()
   .use(requireUser, requireAdmin)
@@ -67,6 +59,10 @@ export const admin = new Hono<AppEnv>()
     if (file.size > MAX_UPLOAD) return c.json({ error: "FILE_TOO_LARGE" }, 400);
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf")
       return c.json({ error: "NOT_A_PDF" }, 400);
+    const fields = input.uploadFields.parse({
+      title: typeof body.title === "string" ? body.title : undefined,
+      course: typeof body.course === "string" ? body.course : undefined,
+    });
 
     const id = nanoid();
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -74,9 +70,9 @@ export const admin = new Hono<AppEnv>()
     await Bun.write(pdfPath(id), bytes);
     await db.insert(schema.reader).values({
       id,
-      title: String(body.title || "").trim() || file.name.replace(/\.pdf$/i, ""),
-      course: String(body.course || "").trim() || null,
-      fileName: file.name,
+      title: fields.title || file.name.replace(/\.pdf$/i, "").trim().slice(0, LIMITS.readerTitle.max) || "Reader",
+      course: fields.course || null,
+      fileName: file.name.slice(0, 255),
       createdBy: c.get("user").id,
     });
 
@@ -158,9 +154,7 @@ export const admin = new Hono<AppEnv>()
   })
 
   .patch("/readers/:id", async (c) => {
-    const body = z
-      .object({ title: z.string().min(1).optional(), course: z.string().nullable().optional(), published: z.boolean().optional() })
-      .parse(await c.req.json());
+    const body = input.patchReader.parse(await c.req.json());
     await db.update(schema.reader).set(body).where(eq(schema.reader.id, c.req.param("id")));
     return c.json({ ok: true });
   })
@@ -226,18 +220,7 @@ export const admin = new Hono<AppEnv>()
     const readerId = c.req.param("id");
     const r = await db.query.reader.findFirst({ where: eq(schema.reader.id, readerId) });
     if (!r) return c.json({ error: "NOT_FOUND" }, 404);
-    const lessons = z
-      .array(
-        z.object({
-          id: z.string().optional(),
-          code: z.string().min(1),
-          title: z.string().min(1),
-          week: z.number().int().min(1),
-          startPage: z.number().int().min(1),
-          endPage: z.number().int().min(1),
-        }),
-      )
-      .parse(await c.req.json());
+    const lessons = input.lessonList.parse(await c.req.json());
 
     const before = await db
       .select({ id: schema.lesson.id, startPage: schema.lesson.startPage, endPage: schema.lesson.endPage })
@@ -279,7 +262,7 @@ export const admin = new Hono<AppEnv>()
   })
 
   .post("/readers/:id/generate", limits.adminJobs, async (c) => {
-    const { lessonIds } = z.object({ lessonIds: z.array(z.string()).optional() }).parse(await c.req.json().catch(() => ({})));
+    const { lessonIds } = input.lessonIdsBody.parse(await c.req.json().catch(() => ({})));
     void generateReader(c.req.param("id"), lessonIds);
     return c.json({ ok: true });
   })
@@ -288,9 +271,7 @@ export const admin = new Hono<AppEnv>()
   /** Queue audio for the reader's ready lessons: missing/failed/stale only, or all selected with `force`. */
   .post("/readers/:id/audio", limits.adminJobs, async (c) => {
     const id = c.req.param("id");
-    const body = z
-      .object({ lessonIds: z.array(z.string()).optional(), force: z.boolean().optional() })
-      .parse(await c.req.json().catch(() => ({})));
+    const body = input.readerAudio.parse(await c.req.json().catch(() => ({})));
     if (!(await db.query.reader.findFirst({ where: eq(schema.reader.id, id), columns: { id: true } }))) return c.json({ error: "NOT_FOUND" }, 404);
     const lessonIds = await queueReaderAudio(id, body);
     return c.json({ queued: lessonIds.length, lessonIds });
@@ -334,12 +315,12 @@ export const admin = new Hono<AppEnv>()
     return c.json({ ...l, terms, flashcards, questions });
   })
   .patch("/lessons/:id", async (c) => {
-    const body = z.object({ summary: z.string().optional(), title: z.string().optional() }).parse(await c.req.json());
+    const body = input.patchLesson.parse(await c.req.json());
     await db.update(schema.lesson).set(body).where(eq(schema.lesson.id, c.req.param("id")));
     return c.json({ ok: true });
   })
   .patch("/flashcards/:id", async (c) => {
-    const body = z.object({ front: z.string().min(1), back: z.string().min(1) }).parse(await c.req.json());
+    const body = input.patchFlashcard.parse(await c.req.json());
     await db.update(schema.flashcard).set(body).where(eq(schema.flashcard.id, c.req.param("id")));
     return c.json({ ok: true });
   })
@@ -359,16 +340,7 @@ export const admin = new Hono<AppEnv>()
   // ----- AI settings -----
   .get("/settings/ai", async (c) => c.json(await aiSettingsView()))
   .put("/settings/ai", async (c) => {
-    const body = z
-      .object({
-        generation: modelChoice.optional(),
-        fast: modelChoice.optional(),
-        voice: voiceChoice.optional(),
-        keys: z.partialRecord(providerEnum, z.string().nullable()).optional(),
-        /** Tutor messages per student per day; 0 = unlimited. */
-        tutorDailyLimit: z.number().int().min(0).max(TUTOR_DAILY_LIMIT_MAX).optional(),
-      })
-      .parse(await c.req.json());
+    const body = input.aiSettings.parse(await c.req.json());
     const bad = body.voice && voiceProblem(body.voice);
     if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.voice!.provider, body.voice!.model).map((v) => v.id) }, 400);
     const { tutorDailyLimit, ...ai } = body;
@@ -377,11 +349,11 @@ export const admin = new Hono<AppEnv>()
     return c.json(await aiSettingsView());
   })
   .post("/settings/ai/validate", limits.adminAi, async (c) => {
-    const body = z.object({ provider: providerEnum, apiKey: z.string().optional() }).parse(await c.req.json());
+    const body = input.validateKey.parse(await c.req.json());
     return c.json(await validateKey(body.provider, await resolveApiKey(body.provider, body.apiKey)));
   })
   .post("/settings/ai/models", limits.adminAi, async (c) => {
-    const body = z.object({ provider: providerEnum, apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
+    const body = input.listModels.parse(await c.req.json());
     try {
       return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh }));
     } catch (e) {
@@ -392,7 +364,7 @@ export const admin = new Hono<AppEnv>()
   .get("/settings/ai/voices", (c) => c.json(VOICES))
   /** Live list of the provider's speech (TTS) models. */
   .post("/settings/ai/voice/models", limits.adminAi, async (c) => {
-    const body = z.object({ provider: z.enum(VOICE_PROVIDERS), apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
+    const body = input.listVoiceModels.parse(await c.req.json());
     try {
       return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh, kind: "speech" }));
     } catch (e) {
@@ -401,7 +373,7 @@ export const admin = new Hono<AppEnv>()
   })
   /** "Probeer stem": a short MP3 sample with the given (unsaved) voice settings. */
   .post("/settings/ai/voice/sample", limits.adminAi, async (c) => {
-    const body = voiceChoice.extend({ apiKey: z.string().optional(), language: z.enum(["nl", "en"]).optional() }).parse(await c.req.json());
+    const body = input.voiceSample.parse(await c.req.json());
     const bad = voiceProblem(body);
     if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.provider, body.model).map((v) => v.id) }, 400);
     try {
@@ -413,7 +385,7 @@ export const admin = new Hono<AppEnv>()
     }
   })
   .post("/settings/ai/test", limits.adminAi, async (c) => {
-    const body = modelChoice.extend({ apiKey: z.string().optional() }).parse(await c.req.json());
+    const body = input.testModel.parse(await c.req.json());
     try {
       const model = body.apiKey ? createModel(body.provider, body.model, body.apiKey) : await getModelFor(body);
       const started = Date.now();
@@ -443,7 +415,7 @@ export const admin = new Hono<AppEnv>()
     return c.json(users.map((u) => ({ ...u, envAdmin: env.adminEmails.includes(u.email.toLowerCase()) })));
   })
   .patch("/users/:id", async (c) => {
-    const { role } = z.object({ role: z.enum(["user", "admin"]) }).parse(await c.req.json());
+    const { role } = input.patchUser.parse(await c.req.json());
     const id = c.req.param("id");
     if (id === c.get("user").id && role !== "admin") return c.json({ error: "CANNOT_DEMOTE_SELF" }, 400);
     await db.update(schema.user).set({ role }).where(eq(schema.user.id, id));

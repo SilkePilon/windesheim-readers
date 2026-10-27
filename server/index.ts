@@ -22,6 +22,8 @@ console.log(`API listening on http://localhost:${env.port}`);
 export default {
   port: env.port,
   fetch: app.fetch,
-  websocket,
+  // Backstop only: live/battle.ts already refuses messages over LIMITS.battleMessage (4 KB).
+  // Bun closes a connection that sends a frame over this size.
+  websocket: { ...websocket, maxPayloadLength: 64 * 1024 },
   idleTimeout: 120, // seconds; AI generation requests can take a while
 };

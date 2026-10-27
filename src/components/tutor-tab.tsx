@@ -9,13 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/markdown";
 import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
-import { rateLimitText } from "@/lib/error-text";
+import { requestErrorText } from "@/lib/error-text";
+import { CharCounter } from "@/components/char-counter";
+import { LIMITS } from "@shared/limits";
 import { api } from "@/lib/api";
 import type { TutorQuota } from "@/lib/types";
 
 const QUOTA_KEY = ["me", "tutor-quota"];
 /** The remaining-questions counter only shows once it gets this low. */
 const SHOW_REMAINING_AT = 10;
+/** Messages sent per request (the server takes at most LIMITS.tutorMessages and uses 20). */
+const TUTOR_HISTORY = 20;
 
 /** True when a chat request failed on the daily tutor limit (the error message is the JSON body). */
 export function isTutorLimitError(e: unknown) {
@@ -38,7 +42,14 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
   const refreshQuota = () => void qc.invalidateQueries({ queryKey: QUOTA_KEY });
   const { messages, sendMessage, regenerate, status, stop, setMessages, error } = useChat({
     id: `tutor-${lessonId}`,
-    transport: new DefaultChatTransport({ api: `/api/lessons/${lessonId}/chat`, credentials: "include" }),
+    transport: new DefaultChatTransport({
+      api: `/api/lessons/${lessonId}/chat`,
+      credentials: "include",
+      // Only the recent history: the server caps it (and uses the last 20 messages anyway).
+      prepareSendMessagesRequest: ({ id, messages, trigger, messageId }) => ({
+        body: { id, messages: messages.slice(-TUTOR_HISTORY), trigger, messageId },
+      }),
+    }),
     onFinish: refreshQuota,
     onError: refreshQuota,
   });
@@ -67,8 +78,9 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
     };
   }, []);
 
-  const send = (text: string) => {
-    if (!text.trim() || busy || limitReached) return;
+  const send = (raw: string) => {
+    const text = raw.trim().slice(0, LIMITS.tutorMessage.max);
+    if (!text || busy || limitReached) return;
     follow.current = true;
     // Count the question right away; the server's number replaces it when the answer is done.
     if (quota) qc.setQueryData(QUOTA_KEY, { tutor: { ...quota, used: quota.used + 1, remaining: Math.max(0, quota.remaining - 1) } });
@@ -135,7 +147,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
         ) : error && (
           <Notice
             title={t("tutor.failed")}
-            description={rateLimitText(error, t) ?? t("common.errorHint")}
+            description={requestErrorText(error, t, t("common.errorHint"))}
             action={
               <Button variant="chunky" size="lg" onClick={() => void regenerate()} disabled={busy}>
                 {t("common.retry")}
@@ -162,6 +174,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            maxLength={LIMITS.tutorMessage.max}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -185,6 +198,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
         </form>
         <p className="flex justify-between gap-2 px-2 pt-1 text-[11px] text-muted-foreground">
           <span>{t("tutor.disclaimer")}</span>
+          <CharCounter value={input} max={LIMITS.tutorMessage.max} />
           {showRemaining && (
             <span className="shrink-0 font-bold text-foreground/70 tabular-nums" aria-live="polite">
               {t("tutor.remaining", { count: quota.remaining })}

@@ -10,7 +10,7 @@ import { PageSpinner } from "@/components/page";
 import { PlayerAvatar } from "@/components/game/player-avatar";
 import { Pill } from "@/components/admin/status-pill";
 import { api } from "@/lib/api";
-import { rateLimitText } from "@/lib/error-text";
+import { errorText } from "@/lib/error-text";
 import { useMe } from "@/lib/queries";
 
 interface UserRow {
@@ -38,7 +38,7 @@ export default function AdminUsersPage() {
       await api.patch(`/admin/users/${id}`, { role });
       await refetch();
     } catch (e) {
-      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
+      notify.error(errorText(e, t));
     } finally {
       setSaving(null);
     }

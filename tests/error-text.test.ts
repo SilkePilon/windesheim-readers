@@ -55,3 +55,19 @@ describe("rate limits (429)", async () => {
     expect(parseRetryAfter({ retryAfter: "x" })).toBeUndefined();
   });
 });
+
+test("refused input (400 VALIDATION, 413 PAYLOAD_TOO_LARGE) gets friendly text", async () => {
+  const { inputErrorText, requestErrorText } = await import("../src/lib/error-text");
+  expect(errorText(new ApiError(400, "VALIDATION"), t)).toBe("t:errors.VALIDATION");
+  expect(errorText(new ApiError(413, "PAYLOAD_TOO_LARGE"), t)).toBe("t:errors.PAYLOAD_TOO_LARGE");
+  expect(inputErrorText(new ApiError(413, "HTTP_413"), t)).toBe("t:errors.PAYLOAD_TOO_LARGE");
+  // The AI SDK chat transport throws the raw JSON body as the message.
+  expect(inputErrorText(new Error('{"error":"VALIDATION","issues":[]}'), t)).toBe("t:errors.VALIDATION");
+  expect(inputErrorText(new ApiError(404, "NOT_FOUND"), t)).toBeNull();
+  expect(requestErrorText(new ApiError(500, "HTTP_500"), t, "fallback")).toBe("fallback");
+  for (const key of ["VALIDATION", "PAYLOAD_TOO_LARGE"]) {
+    expect(nl.errors[key]).toBeTruthy();
+    expect(en.errors[key]).toBeTruthy();
+  }
+  expect(nl.profile.nicknameInvalid).toBe("2–24 tekens, alleen letters, cijfers en spaties");
+});

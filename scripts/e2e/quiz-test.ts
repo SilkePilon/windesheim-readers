@@ -11,7 +11,9 @@ const readers = await j("GET", "/readers");
 const lid = readers[0].lessons[1].id;
 const { sessionId, questions } = await j("GET", `/lessons/${lid}/quiz?n=5`);
 for (const q of questions) {
-  const c = await j("POST", `/questions/${q.id}/check`, { sessionId, answer: "wrong" });
+  // A well-formed answer of the question's own type (the server refuses other shapes).
+  const guess = q.type === "mc" ? 0 : q.type === "tf" ? true : q.type === "order" ? q.items : "wrong";
+  const c = await j("POST", `/questions/${q.id}/check`, { sessionId, answer: guess });
   await j("POST", `/questions/${q.id}/check`, { sessionId, answer: c.correctAnswer });
 }
 console.log("cheat submit:", await j("POST", `/lessons/${lid}/quiz/submit`, { sessionId }));

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PublicQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { LIMITS } from "@shared/limits";
 
 export interface Reveal {
   correct: boolean;
@@ -147,6 +148,7 @@ export function QuestionInput({
             }
           }}
           disabled={locked}
+          maxLength={LIMITS.fillAnswer.max}
           placeholder={t("quiz.fillPlaceholder")}
           autoCapitalize="off"
           autoCorrect="off"

@@ -244,7 +244,8 @@ console.log("ws errors:", errs);
       h.send({ t: "next" });
       await Bun.sleep(250);
     }
-    await Bun.sleep(300);
+    // Awarding XP and badges takes a moment (longer on a busy machine): wait for the podium.
+    for (let w = 0; w < 50 && !h.msgs.some((m) => m.t === "end"); w++) await Bun.sleep(100);
     const end = h.msgs.find((m) => m.t === "end");
     for (const c of [h, a, b]) c.s.close();
     return { results, end, settings: rs, rooms: h.msgs.filter((m) => m.t === "room") };

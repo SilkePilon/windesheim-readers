@@ -57,7 +57,7 @@ import { AudioPill, LessonPill, StatusPill, audioBusy, canRetry } from "@/compon
 import { SaveBar } from "@/components/admin/save-bar";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api, ApiError } from "@/lib/api";
-import { errorText } from "@/lib/error-text";
+import { errorText, rateLimitText } from "@/lib/error-text";
 import type { AdminLessonRow, AdminReader } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -417,7 +417,7 @@ export default function AdminReaderPage() {
       await refetch();
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
     } finally {
       setSaving(false);
     }

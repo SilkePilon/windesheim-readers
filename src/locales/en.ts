@@ -19,6 +19,14 @@ const en: Messages = {
     xp: "{{n}} XP",
     level: "Level {{n}}",
     levelOf: "Level {{n}} of 5",
+    wait: {
+      seconds_one: "{{count}} second",
+      seconds_other: "{{count}} seconds",
+      minutes_one: "{{count}} minute",
+      minutes_other: "{{count}} minutes",
+      hours_one: "{{count}} hour",
+      hours_other: "{{count}} hours",
+    },
   },
   errors: {
     ALREADY_RUNNING: "This is already being made",
@@ -27,6 +35,8 @@ const en: Messages = {
     NOT_FOUND: "Not found",
     UNAUTHORIZED: "Please log in again",
     FORBIDDEN: "You're not allowed to do that",
+    RATE_LIMITED: "Too many requests. Try again in {{time}}.",
+    RATE_LIMITED_SOON: "Too many requests. Wait a moment and try again.",
   } as Record<string, string>,
   nav: {
     path: "Path",
@@ -51,6 +61,7 @@ const en: Messages = {
     otherEmail: "Use a different email",
     domainErrorTitle: "Use your Windesheim email",
     domainError: "Only @windesheim.nl and @student.windesheim.nl addresses are allowed.",
+    rateLimitedTitle: "Hold on a moment",
     linkErrorTitle: "This sign-in link doesn't work",
     linkError: "It's invalid or expired. Request a new one below.",
   },
@@ -282,6 +293,7 @@ const en: Messages = {
       KICKED: { title: "You were removed from the battle", description: "The host took you out of the lobby." },
       CLOSED: { title: "The host ended the battle", description: "Join with a new code or start a battle yourself." },
       UNAUTHORIZED: { title: "You're signed out", description: "Sign in again to play." },
+      RATE_LIMITED: { title: "Slow down a little", description: "Too many tries in a row. Wait a minute and try again." },
       GENERIC: { title: "Something went wrong", description: "Please try again." },
     },
     endConfirm: {

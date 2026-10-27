@@ -11,7 +11,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Notice } from "@/components/notice";
 import { Equalizer } from "@/components/listen/equalizer";
 import { ModelCombobox } from "@/components/admin/model-combobox";
-import { api } from "@/lib/api";
+import { api, ApiError, parseRetryAfter } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 import type { VoiceChoice, VoiceInfo, VoiceProviderId } from "@/lib/types";
 
 const VOICE_PROVIDERS: { id: VoiceProviderId; name: string }[] = [
@@ -127,9 +128,14 @@ export function VoiceCard({
           }),
         });
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; validVoices?: string[] };
+          const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; validVoices?: string[]; retryAfter?: number };
+          const limited =
+            res.status === 429
+              ? rateLimitText(new ApiError(429, "RATE_LIMITED", body, parseRetryAfter(body, res.headers.get("Retry-After"))), t)
+              : null;
           // Provider errors come as readable text; a bare code (or none) gets the generic message.
-          const text = body.message ?? (body.error && !/^[A-Z0-9_]+$/.test(body.error) ? body.error : t("common.error"));
+          const text =
+            limited ?? body.message ?? (body.error && !/^[A-Z0-9_]+$/.test(body.error) ? body.error : t("common.error"));
           throw { message: text, validVoices: body.validVoices } satisfies VoiceError;
         }
         const blob = await res.blob();

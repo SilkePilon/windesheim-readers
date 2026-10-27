@@ -15,6 +15,7 @@ import { PlayerAvatar } from "@/components/game/player-avatar";
 import { InstallDrawer } from "@/components/install-drawer";
 import { useInstall } from "@/lib/install";
 import { api } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 import { setLocale } from "@/lib/i18n";
 import { useBadges, useInvalidateProgress, useMe } from "@/lib/queries";
 import { levelTitleIndex } from "@shared/game";
@@ -39,8 +40,8 @@ export default function ProfilePage() {
       await api.patch("/me", body);
       invalidate();
       notify.success(t("common.saved"));
-    } catch {
-      notify.error(t("common.error"));
+    } catch (e) {
+      notify.error(rateLimitText(e, t) ?? t("common.error"));
     }
   };
 

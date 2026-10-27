@@ -281,3 +281,21 @@ export const questProgress = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.dayKey, t.questId] })],
 );
+
+// ---------- abuse protection ----------
+
+/** Every sign-in email the server agreed to send; the hard email rate limits count these rows. */
+export const emailSendLog = sqliteTable(
+  "email_send_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(), // trimmed, lowercased
+    ip: text("ip").notNull(), // rate-limit bucket of the client IP (IPv6 collapsed to /64)
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("email_send_log_email_idx").on(t.email, t.createdAt),
+    index("email_send_log_ip_idx").on(t.ip, t.createdAt),
+    index("email_send_log_created_idx").on(t.createdAt),
+  ],
+);

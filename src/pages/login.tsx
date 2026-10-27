@@ -13,6 +13,8 @@ import { Notice } from "@/components/notice";
 import { completeEmail, STUDENT_DOMAIN, STAFF_DOMAIN, type EmailDomainKind } from "@shared/email";
 import { cn } from "@/lib/utils";
 import { storageGet, storageSet } from "@/lib/storage";
+import { ApiError, parseRetryAfter } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 
 const ALLOWED = /@(student\.)?windesheim\.nl$/i;
 const LAST_EMAIL = "wr.login.email";
@@ -35,7 +37,7 @@ export default function LoginPage() {
   const [value, setValue] = useState(initial.value);
   const [override, setOverride] = useState<EmailDomainKind | undefined>(initial.override);
   // `field`: a typo hint under the input; otherwise a notice (wrong domain, or the server said no).
-  const [error, setError] = useState<{ kind: "field" | "domain" | "server"; text: string } | null>(null);
+  const [error, setError] = useState<{ kind: "field" | "domain" | "limited" | "server"; text: string } | null>(null);
   const [linkError, setLinkError] = useState(!!params.get("error"));
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -69,13 +71,19 @@ export default function LoginPage() {
       errorCallbackURL: "/login?error=link",
     });
     setSending(false);
-    if (error)
+    if (error) {
+      // Our limits answer {error: "RATE_LIMITED", retryAfter}; better-auth's own limiter just 429.
+      const body = error as unknown as Record<string, unknown>;
+      const limited =
+        error.status === 429 ? rateLimitText(new ApiError(429, "RATE_LIMITED", body, parseRetryAfter(body)), t) : null;
       setError(
-        error.message === "EMAIL_DOMAIN_NOT_ALLOWED"
-          ? { kind: "domain", text: t("login.domainError") }
-          : { kind: "server", text: error.message ?? t("common.errorHint") },
+        limited
+          ? { kind: "limited", text: limited }
+          : error.message === "EMAIL_DOMAIN_NOT_ALLOWED"
+            ? { kind: "domain", text: t("login.domainError") }
+            : { kind: "server", text: error.message ?? t("common.errorHint") },
       );
-    else {
+    } else {
       storageSet(LAST_EMAIL, email);
       setSentTo(email);
     }
@@ -166,8 +174,14 @@ export default function LoginPage() {
               <Notice
                 id="email-error"
                 variant="inset"
-                tone={error.kind === "domain" ? "warning" : "danger"}
-                title={error.kind === "domain" ? t("login.domainErrorTitle") : t("common.error")}
+                tone={error.kind === "server" ? "danger" : "warning"}
+                title={
+                  error.kind === "domain"
+                    ? t("login.domainErrorTitle")
+                    : error.kind === "limited"
+                      ? t("login.rateLimitedTitle")
+                      : t("common.error")
+                }
                 description={error.text}
                 className="mt-4"
               />

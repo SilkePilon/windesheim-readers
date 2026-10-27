@@ -8,3 +8,11 @@ data:
   ADMIN_EMAILS: "you@windesheim.nl"
   ALLOWED_EMAIL_DOMAINS: "windesheim.nl,student.windesheim.nl"
   EMAIL_FROM: "Windesheim Readers <noreply@example.com>"
+  # Header carrying the real client IP, used by the rate limits. Cloudflare (also through a
+  # Cloudflare Tunnel) always sets cf-connecting-ip. Without Cloudflare, use a header your
+  # ingress overwrites (e.g. x-forwarded-for; its first entry is used). Never name a header
+  # clients can reach the app with directly, or they can choose their own IP.
+  CLIENT_IP_HEADER: "cf-connecting-ip"
+  # Global cap on sign-in emails per rolling hour / day (Resend's free tier: 100 a day).
+  # EMAIL_LIMIT_HOURLY: "30"
+  # EMAIL_LIMIT_DAILY: "100"

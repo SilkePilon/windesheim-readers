@@ -11,6 +11,8 @@ import { displayName } from "../middleware";
 import type { SessionUser } from "../auth";
 import { XP, type BadgeId } from "../../shared/game";
 import { env } from "../env";
+import { RateLimiter } from "../lib/rate-limit";
+import { BATTLE_LIMITS } from "../limits";
 import {
   COUNT_MAX,
   COUNT_MIN,
@@ -269,9 +271,49 @@ const clientMsg = z.discriminatedUnion("t", [
   z.object({ t: z.literal("end") }),
 ]);
 
+// Per user, across connections: creating rooms, and joining (guards the 6-digit codes).
+const createLimiter = new RateLimiter(BATTLE_LIMITS.create);
+const joinLimiter = new RateLimiter(BATTLE_LIMITS.join);
+
+/**
+ * Message flood guard for one connection: true when this message may be handled. Messages
+ * over the cap are dropped; a connection that keeps overflowing is closed with 4429.
+ */
+export function messageGuard(now: () => number = Date.now) {
+  const { messages, strikes: maxStrikes, strikeWindowMs } = BATTLE_LIMITS;
+  let windowStart = 0;
+  let count = 0;
+  let struckThisWindow = false;
+  let strikes: number[] = [];
+  return (ws: Pick<WSContext, "close">): boolean => {
+    if (env.rateLimitDisabled) return true;
+    const t = now();
+    if (t - windowStart >= messages.windowMs) {
+      windowStart = t;
+      count = 0;
+      struckThisWindow = false;
+    }
+    if (++count <= messages.limit) return true;
+    if (!struckThisWindow) {
+      struckThisWindow = true;
+      strikes = [...strikes.filter((s) => t - s < strikeWindowMs), t];
+      if (strikes.length >= maxStrikes) ws.close(4429, "rate limited");
+    }
+    return false;
+  };
+}
+
 /** One instance per websocket connection. */
 export function battleConnection(user: SessionUser) {
   let room: Room | null = null;
+  const allowMessage = messageGuard();
+  const limited = (ws: WSContext, limiter: RateLimiter) => {
+    if (env.rateLimitDisabled) return false;
+    const r = limiter.hit(user.id);
+    if (r.ok) return false;
+    send(ws, { t: "error", error: "RATE_LIMITED", retryAfter: Math.ceil(r.retryAfterMs / 1000) });
+    return true;
+  };
   const name = displayName({ nickname: user.nickname ?? null, name: user.name, email: user.email });
 
   const attachPlayer = (r: Room, ws: WSContext) => {
@@ -286,6 +328,7 @@ export function battleConnection(user: SessionUser) {
 
   return {
     async onMessage(raw: string, ws: WSContext) {
+      if (!allowMessage(ws)) return;
       let msg: z.infer<typeof clientMsg>;
       try {
         msg = clientMsg.parse(JSON.parse(raw));
@@ -294,6 +337,7 @@ export function battleConnection(user: SessionUser) {
       }
 
       if (msg.t === "create") {
+        if (limited(ws, createLimiter)) return;
         const lessons = await db
           .select({ id: schema.lesson.id, code: schema.lesson.code, published: schema.reader.published })
           .from(schema.lesson)
@@ -332,6 +376,7 @@ export function battleConnection(user: SessionUser) {
       }
 
       if (msg.t === "join") {
+        if (limited(ws, joinLimiter)) return;
         const r = rooms.get(msg.code);
         if (!r) return send(ws, { t: "error", error: "ROOM_NOT_FOUND" });
         if (r.state === "ended") return send(ws, { t: "error", error: "ROOM_ENDED" });

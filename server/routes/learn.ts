@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
 import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
 import { db, schema } from "../db";
+import { limits } from "../limits";
 import { displayName, requireUser, type AppEnv } from "../middleware";
 import { checkAnswer, correctAnswer, explanationOf, publicQuestion, shuffle } from "../lib/answers";
 import {
@@ -200,7 +201,7 @@ export const learn = new Hono<AppEnv>()
   /** Every badge in catalogue order: earnedAt (or null) and, for locked counted ones, progress. */
   .get("/me/badges", async (c) => c.json(await badgeOverview(c.get("user").id)))
 
-  .patch("/me", async (c) => {
+  .patch("/me", limits.writes, async (c) => {
     const body = z
       .object({
         nickname: z.string().trim().max(24).nullable().optional(),
@@ -314,7 +315,7 @@ export const learn = new Hono<AppEnv>()
     });
   })
 
-  .post("/lessons/:id/read", async (c) => {
+  .post("/lessons/:id/read", limits.writes, async (c) => {
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
@@ -359,7 +360,7 @@ export const learn = new Hono<AppEnv>()
    * `heardMs` (media time actually played, if the client tracks it) or else the position decides
    * whether ≥ 90% was listened, which marks the summary read once (same XP path as /read).
    */
-  .post("/lessons/:id/audio/progress", async (c) => {
+  .post("/lessons/:id/audio/progress", limits.writes, async (c) => {
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
@@ -447,7 +448,7 @@ export const learn = new Hono<AppEnv>()
     );
   })
 
-  .post("/review", async (c) => {
+  .post("/review", limits.writes, async (c) => {
     const u = c.get("user");
     const { flashcardId, rating } = z.object({ flashcardId: z.string(), rating: z.number().int().min(1).max(4) }).parse(await c.req.json());
     const card = await db.query.flashcard.findFirst({ where: eq(schema.flashcard.id, flashcardId) });
@@ -489,7 +490,7 @@ export const learn = new Hono<AppEnv>()
     return c.json({ sessionId, questions: picked.map(publicQuestion), xpPerCorrect });
   })
 
-  .post("/questions/:id/check", async (c) => {
+  .post("/questions/:id/check", limits.writes, async (c) => {
     const u = c.get("user");
     const { sessionId, answer } = z.object({ sessionId: z.string(), answer: z.unknown() }).parse(await c.req.json());
     const session = quizSessions.get(sessionId);
@@ -502,7 +503,7 @@ export const learn = new Hono<AppEnv>()
     return c.json({ correct, correctAnswer: correctAnswer(q.data), explanation: explanationOf(q.data) });
   })
 
-  .post("/lessons/:id/quiz/submit", async (c) => {
+  .post("/lessons/:id/quiz/submit", limits.writes, async (c) => {
     const u = c.get("user");
     const lessonId = c.req.param("id");
     const { sessionId } = z.object({ sessionId: z.string() }).parse(await c.req.json());
@@ -536,7 +537,7 @@ export const learn = new Hono<AppEnv>()
     return c.json(qs.map(publicQuestion));
   })
 
-  .post("/questions/:id/grade", async (c) => {
+  .post("/questions/:id/grade", limits.ai, async (c) => {
     const u = c.get("user");
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, c.req.param("id")) });
     if (!q || q.data.type !== "open") return c.json({ error: "NOT_FOUND" }, 404);
@@ -554,7 +555,7 @@ export const learn = new Hono<AppEnv>()
   })
 
   // ----- explain it back (Feynman) -----
-  .post("/lessons/:id/explain", async (c) => {
+  .post("/lessons/:id/explain", limits.ai, async (c) => {
     const u = c.get("user");
     const lessonId = c.req.param("id");
     const row = await visibleLesson(lessonId, u.role === "admin");
@@ -573,7 +574,7 @@ export const learn = new Hono<AppEnv>()
   })
 
   // ----- AI tutor chat (streaming) -----
-  .post("/lessons/:id/chat", async (c) => {
+  .post("/lessons/:id/chat", limits.ai, async (c) => {
     const u = c.get("user");
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);

@@ -73,9 +73,47 @@ All configuration is through environment variables.
 | `PORT` | | `3000` | Port the server listens on. |
 | `DATABASE_PATH` | | `/app/data/app.db` in the image | SQLite database file. |
 | `UPLOAD_DIR` | | `/app/data/uploads` in the image | Uploaded PDFs and generated audio. |
+| `CLIENT_IP_HEADER` | recommended behind a proxy | | Header holding the real client IP, used by the rate limits: `cf-connecting-ip` behind Cloudflare, `x-forwarded-for` (first entry is used) behind a proxy that overwrites it. Empty: the socket address. Only name a header your proxy always sets, or clients can pick their own IP. |
+| `EMAIL_LIMIT_HOURLY` | | `30` | Most sign-in emails the server sends per rolling hour, all addresses together. |
+| `EMAIL_LIMIT_DAILY` | | `100` | Same, per rolling 24 hours (Resend's free tier is 100 a day). |
 | `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | | | Optional fallback AI keys. Keys entered under **Admin → AI settings** take precedence. |
 
 The container keeps everything under **`/app/data`**. Mount a volume there, or you lose your data when the container is replaced.
+
+### Rate limits
+
+All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMITED","retryAfter":<seconds>}` and a `Retry-After` header; the app shows a "try again in …" message.
+
+**Sign-in emails** have hard limits that are stored in the database, so a restart doesn't reset them. Every check-and-reserve is one SQLite transaction, so parallel requests can't slip past. The answer is the same whether or not an account exists.
+
+| Sign-in emails | Limit |
+|---|---|
+| Per address | 1 per minute, 3 per 15 minutes, 6 per day |
+| Per IP | 5 per 15 minutes, 20 per day |
+| Everyone together | `EMAIL_LIMIT_HOURLY` per hour, `EMAIL_LIMIT_DAILY` per day |
+
+**Everything else** is counted in memory (it resets on restart). IPv6 addresses count per /64.
+
+| What | Per | Limit |
+|---|---|---|
+| Every `/api` request (except `/api/health`) | IP | 600 per minute |
+| `/api/auth/*` (sign-in, link checks, sign-out) | IP | 30 per 10 minutes |
+| Sign-in requests | IP | 10 per 10 minutes |
+| `GET /api/auth/get-session` | IP | 300 per minute |
+| AI: tutor chat, open-answer grading, explain grading (one shared bucket) | user | 20 per 5 minutes, 150 per day |
+| Progress and XP writes (reviews, quiz checks and submits, read, listen progress, profile) | user | 120 per minute |
+| Admin AI calls (key checks, model lists, test prompt, voice models and samples) | admin | 30 per 10 minutes |
+| Admin uploads and jobs (upload, retry, restructure, generate, audio, badge backfill) | admin | 30 per hour |
+| Battle connections | IP | 30 per minute |
+| Battle messages | connection | 20 per 2 seconds; extra ones are dropped, repeat offenders are disconnected |
+| Creating a battle | user | 10 per 10 minutes |
+| Joining a battle | user | 20 per minute |
+
+better-auth's own limiter stays on as well (for example 3 sign-in requests per 10 seconds per IP).
+
+Set `CLIENT_IP_HEADER` when the app runs behind a proxy. Without it, every visitor looks like the proxy and shares one budget. Many students behind one campus NAT address also share the per-IP budgets; the per-user limits are not affected.
+
+The limits are in `server/limits.ts` and `server/lib/email-gate.ts`. For local testing only, `RATE_LIMIT_DISABLED=1` turns them all off; it is ignored when `NODE_ENV=production`.
 
 ### Option 1: Docker
 
@@ -119,7 +157,7 @@ readers.example.com {
 
 Ready-made manifests are in [`deploy/kubernetes`](deploy/kubernetes): a namespace, ConfigMap, PersistentVolumeClaim, Deployment, Service and Ingress, combined with Kustomize.
 
-1. **Settings**: edit `deploy/kubernetes/configmap.yaml` (`APP_URL`, `ADMIN_EMAILS`, `EMAIL_FROM`). Then edit the host names in `ingress.yaml`. It is written for ingress-nginx; with cert-manager, uncomment the issuer annotation.
+1. **Settings**: edit `deploy/kubernetes/configmap.yaml` (`APP_URL`, `ADMIN_EMAILS`, `EMAIL_FROM`, `CLIENT_IP_HEADER`). Then edit the host names in `ingress.yaml`. It is written for ingress-nginx; with cert-manager, uncomment the issuer annotation.
 2. **Image tag**: optionally pin a version in `kustomization.yaml` (`newTag: 1.2.3`).
 3. **Secret**: create it once. It is deliberately kept out of the kustomization, so it never lands in git:
    ```bash
@@ -194,7 +232,7 @@ Without `RESEND_API_KEY`, sign-in links are printed in the API console. Sign in 
 | `bun run dev` | API (with reload) and Vite dev server |
 | `bun run typecheck` | TypeScript check |
 | `bun test` | Unit tests. They use a temporary database and never touch `./data`. |
-| `bun run test:e2e` | API end-to-end tests against a throwaway server on port 3200 with a stub AI provider |
+| `bun run test:e2e` | API end-to-end tests against a throwaway server on port 3200 with a stub AI provider and rate limits off (`tests/rate-limit-app.test.ts` covers the app with them on) |
 | `bun run build` | Typecheck and production build of the web app into `dist/` |
 | `bun run start` | Production server (serves `dist/`) |
 | `bun run db:generate` | Create a migration after changing `server/db/schema.ts` |

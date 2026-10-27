@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/markdown";
 import { Notice } from "@/components/notice";
 import { cn } from "@/lib/utils";
+import { rateLimitText } from "@/lib/error-text";
 
 export function TutorTab({ lessonId, code }: { lessonId: string; code: string }) {
   const { t } = useTranslation();
@@ -105,7 +106,7 @@ export function TutorTab({ lessonId, code }: { lessonId: string; code: string })
         {error && (
           <Notice
             title={t("tutor.failed")}
-            description={t("common.errorHint")}
+            description={rateLimitText(error, t) ?? t("common.errorHint")}
             action={
               <Button variant="chunky" size="lg" onClick={() => void regenerate()} disabled={busy}>
                 {t("common.retry")}

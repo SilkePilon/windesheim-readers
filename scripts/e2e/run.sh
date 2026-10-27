@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Runs the API regression tests against a throwaway server (port 3200, temp DB).
 # Never touches the demo on port 3000 or ./data.
+# Rate limits are off here (RATE_LIMIT_DISABLED, ignored in production): the suite signs in and
+# hammers endpoints from one IP. tests/rate-limit-app.test.ts covers the app with limits on.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 DIR=/tmp/wr-e2e
@@ -8,7 +10,7 @@ export E2E_PORT=${E2E_PORT:-3200} E2E_LOG=$DIR/srv.log
 rm -rf "$DIR" && mkdir -p "$DIR/uploads"
 env -u RESEND_API_KEY PORT=$E2E_PORT DATABASE_PATH=$DIR/app.db UPLOAD_DIR=$DIR/uploads \
   APP_URL=http://localhost:5173 APP_SECRET=e2e-secret-e2e-secret-e2e-secret-00 \
-  ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development BATTLE_COUNTDOWN_MS=300 AI_STUB=1 \
+  ADMIN_EMAILS=admin@windesheim.nl NODE_ENV=development BATTLE_COUNTDOWN_MS=300 AI_STUB=1 RATE_LIMIT_DISABLED=1 \
   bun server/index.ts > "$E2E_LOG" 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT

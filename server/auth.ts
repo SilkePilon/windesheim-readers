@@ -5,6 +5,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { db, schema } from "./db";
 import { env, isAllowedEmail } from "./env";
 import { sendMagicLinkEmail } from "./lib/email";
+import { AUTH_IP_HEADER } from "./lib/client-ip";
 
 export const auth = betterAuth({
   baseURL: env.appUrl,
@@ -21,6 +22,13 @@ export const auth = betterAuth({
       showOnLeaderboard: { type: "boolean", defaultValue: true },
       locale: { type: "string", required: false, defaultValue: null },
     },
+  },
+  // better-auth's own limiter (per IP, in memory) stays on as an extra layer behind ours.
+  // It reads the IP our handler wrapper puts in AUTH_IP_HEADER (see server/app.ts), so both
+  // agree on the address; CLIENT_IP_HEADER is listed too for calls that skip the wrapper.
+  rateLimit: { enabled: !env.rateLimitDisabled },
+  advanced: {
+    ipAddress: { ipAddressHeaders: [AUTH_IP_HEADER, ...(env.clientIpHeader ? [env.clientIpHeader] : [])] },
   },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
   // Magic link is the only sign-in method; clicking the link verifies the email address.

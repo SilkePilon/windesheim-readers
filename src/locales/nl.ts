@@ -17,6 +17,14 @@ const nl = {
     xp: "{{n}} XP",
     level: "Level {{n}}",
     levelOf: "Niveau {{n}} van 5",
+    wait: {
+      seconds_one: "{{count}} seconde",
+      seconds_other: "{{count}} seconden",
+      minutes_one: "{{count}} minuut",
+      minutes_other: "{{count}} minuten",
+      hours_one: "{{count}} uur",
+      hours_other: "{{count}} uur",
+    },
   },
   errors: {
     ALREADY_RUNNING: "Dit wordt al gemaakt",
@@ -25,6 +33,8 @@ const nl = {
     NOT_FOUND: "Niet gevonden",
     UNAUTHORIZED: "Log opnieuw in",
     FORBIDDEN: "Dat mag je niet doen",
+    RATE_LIMITED: "Te veel aanvragen. Probeer het over {{time}} opnieuw.",
+    RATE_LIMITED_SOON: "Te veel aanvragen. Wacht even en probeer het opnieuw.",
   } as Record<string, string>,
   nav: {
     path: "Pad",
@@ -49,6 +59,7 @@ const nl = {
     otherEmail: "Ander e-mailadres gebruiken",
     domainErrorTitle: "Gebruik je Windesheim-mail",
     domainError: "Alleen @windesheim.nl en @student.windesheim.nl adressen zijn toegestaan.",
+    rateLimitedTitle: "Even geduld",
     linkErrorTitle: "Deze inloglink werkt niet",
     linkError: "Hij is ongeldig of verlopen. Vraag hieronder een nieuwe aan.",
   },
@@ -280,6 +291,7 @@ const nl = {
       KICKED: { title: "Je bent verwijderd uit de battle", description: "De host heeft je uit de lobby gehaald." },
       CLOSED: { title: "De host heeft de battle beëindigd", description: "Doe mee met een nieuwe code of start zelf een battle." },
       UNAUTHORIZED: { title: "Je bent uitgelogd", description: "Log opnieuw in om mee te doen." },
+      RATE_LIMITED: { title: "Even rustig aan", description: "Te veel pogingen achter elkaar. Wacht een minuut en probeer het opnieuw." },
       GENERIC: { title: "Er ging iets mis", description: "Probeer het nog een keer." },
     } as Record<string, { title: string; description?: string }>,
     endConfirm: {

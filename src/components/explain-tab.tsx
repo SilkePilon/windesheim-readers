@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
 import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, LessonDetail } from "@/lib/types";
@@ -21,26 +22,26 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
   const [text, setText] = useState("");
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const pick = (c: string) => {
     setConcept(c);
     setGrade(null);
     setText("");
-    setError(false);
+    setError(null);
   };
 
   const submit = async () => {
     if (!concept || text.trim().length < 20) return;
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const res = await api.post<GradeResult>(`/lessons/${lesson.id}/explain`, { concept, explanation: text });
       setGrade(res);
       celebrate(res, { quietXp: true });
       invalidate();
-    } catch {
-      setError(true);
+    } catch (e) {
+      setError(rateLimitText(e, t) ?? t("common.errorHint"));
     } finally {
       setLoading(false);
     }
@@ -105,7 +106,7 @@ export function ExplainTab({ lesson }: { lesson: LessonDetail }) {
               {loading ? <Spinner /> : <Sparkles />} {loading ? t("explain.grading") : t("explain.submit")}
             </Button>
           </div>
-          {error && <Notice variant="inset" title={t("explain.gradeFailed")} description={t("common.errorHint")} />}
+          {error && <Notice variant="inset" title={t("explain.gradeFailed")} description={error} />}
         </Card>
       )}
       {grade && <GradeCard grade={grade} />}

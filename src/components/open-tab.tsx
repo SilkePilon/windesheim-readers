@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
 import { Notice } from "@/components/notice";
 import { api } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { GradeResult, PublicQuestion } from "@/lib/types";
@@ -19,18 +20,18 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
   const [answer, setAnswer] = useState("");
   const [grade, setGrade] = useState<GradeResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer });
       setGrade(res);
       celebrate(res, { quietXp: true });
       invalidate();
-    } catch {
-      setError(true);
+    } catch (e) {
+      setError(rateLimitText(e, t) ?? t("common.errorHint"));
     } finally {
       setLoading(false);
     }
@@ -57,7 +58,7 @@ function OpenQuestion({ q, n }: { q: PublicQuestion; n: number }) {
             {loading ? <Spinner /> : <Sparkles />} {t("open.submit")}
           </Button>
         </div>
-        {error && <Notice variant="inset" title={t("open.gradeFailed")} description={t("common.errorHint")} />}
+        {error && <Notice variant="inset" title={t("open.gradeFailed")} description={error} />}
       </Card>
       {grade && <GradeCard grade={grade} />}
     </div>

@@ -16,6 +16,7 @@ import { StatusPill, canRetry, readerPillState } from "@/components/admin/status
 import { AdminActions } from "@/pages/admin/layout";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 import type { AdminReader } from "@/lib/types";
 import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -71,7 +72,7 @@ function UploadDialog({
       setCourse("");
       navigate(`/admin/readers/${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("common.error"));
+      setError(rateLimitText(err, t) ?? (err instanceof Error ? err.message : t("common.error")));
     } finally {
       setBusy(false);
     }

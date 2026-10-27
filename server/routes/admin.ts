@@ -6,6 +6,7 @@ import { generateText } from "ai";
 import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, schema } from "../db";
+import { limits } from "../limits";
 import { env } from "../env";
 import { requireAdmin, requireUser, type AppEnv } from "../middleware";
 import { extractAndStructure, extractPdf, generateReader, proposeStructure } from "../ai/pipeline";
@@ -33,7 +34,7 @@ export const admin = new Hono<AppEnv>()
   .use(requireUser, requireAdmin)
 
   /** Re-run the (idempotent, silent) badge backfill for every user; normally runs once at start. */
-  .post("/badges/backfill", async (c) => c.json(await backfillBadges({ force: true })))
+  .post("/badges/backfill", limits.adminJobs, async (c) => c.json(await backfillBadges({ force: true })))
 
   // ----- readers -----
   .get("/readers", async (c) => {
@@ -55,7 +56,7 @@ export const admin = new Hono<AppEnv>()
     );
   })
 
-  .post("/readers", async (c) => {
+  .post("/readers", limits.adminJobs, async (c) => {
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) return c.json({ error: "NO_FILE" }, 400);
@@ -169,7 +170,7 @@ export const admin = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
-  .post("/readers/:id/retry", async (c) => {
+  .post("/readers/:id/retry", limits.adminJobs, async (c) => {
     const id = c.req.param("id");
     const r = await db.query.reader.findFirst({ where: eq(schema.reader.id, id) });
     if (!r) return c.json({ error: "NOT_FOUND" }, 404);
@@ -211,7 +212,7 @@ export const admin = new Hono<AppEnv>()
     return c.json({ action: action.kind });
   })
 
-  .post("/readers/:id/restructure", async (c) => {
+  .post("/readers/:id/restructure", limits.adminJobs, async (c) => {
     void proposeStructure(c.req.param("id"));
     return c.json({ ok: true });
   })
@@ -273,7 +274,7 @@ export const admin = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
-  .post("/readers/:id/generate", async (c) => {
+  .post("/readers/:id/generate", limits.adminJobs, async (c) => {
     const { lessonIds } = z.object({ lessonIds: z.array(z.string()).optional() }).parse(await c.req.json().catch(() => ({})));
     void generateReader(c.req.param("id"), lessonIds);
     return c.json({ ok: true });
@@ -281,7 +282,7 @@ export const admin = new Hono<AppEnv>()
 
   // ----- luisterles (audio summary) -----
   /** Queue audio for the reader's ready lessons: missing/failed/stale only, or all selected with `force`. */
-  .post("/readers/:id/audio", async (c) => {
+  .post("/readers/:id/audio", limits.adminJobs, async (c) => {
     const id = c.req.param("id");
     const body = z
       .object({ lessonIds: z.array(z.string()).optional(), force: z.boolean().optional() })
@@ -291,7 +292,7 @@ export const admin = new Hono<AppEnv>()
     return c.json({ queued: lessonIds.length, lessonIds });
   })
   /** Regenerate one lesson's audio ("Opnieuw"). */
-  .post("/lessons/:id/audio", async (c) => {
+  .post("/lessons/:id/audio", limits.adminJobs, async (c) => {
     const id = c.req.param("id");
     const l = await db.query.lesson.findFirst({ where: eq(schema.lesson.id, id) });
     if (!l) return c.json({ error: "NOT_FOUND" }, 404);
@@ -367,11 +368,11 @@ export const admin = new Hono<AppEnv>()
     await updateAiSettings(body);
     return c.json(await getAiSettingsPublic());
   })
-  .post("/settings/ai/validate", async (c) => {
+  .post("/settings/ai/validate", limits.adminAi, async (c) => {
     const body = z.object({ provider: providerEnum, apiKey: z.string().optional() }).parse(await c.req.json());
     return c.json(await validateKey(body.provider, await resolveApiKey(body.provider, body.apiKey)));
   })
-  .post("/settings/ai/models", async (c) => {
+  .post("/settings/ai/models", limits.adminAi, async (c) => {
     const body = z.object({ provider: providerEnum, apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
     try {
       return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh }));
@@ -382,7 +383,7 @@ export const admin = new Hono<AppEnv>()
   /** Voice catalogue for the "Stem" role, per provider. */
   .get("/settings/ai/voices", (c) => c.json(VOICES))
   /** Live list of the provider's speech (TTS) models. */
-  .post("/settings/ai/voice/models", async (c) => {
+  .post("/settings/ai/voice/models", limits.adminAi, async (c) => {
     const body = z.object({ provider: z.enum(VOICE_PROVIDERS), apiKey: z.string().optional(), refresh: z.boolean().optional() }).parse(await c.req.json());
     try {
       return c.json(await listModels(body.provider, await resolveApiKey(body.provider, body.apiKey), { refresh: body.refresh, kind: "speech" }));
@@ -391,7 +392,7 @@ export const admin = new Hono<AppEnv>()
     }
   })
   /** "Probeer stem": a short MP3 sample with the given (unsaved) voice settings. */
-  .post("/settings/ai/voice/sample", async (c) => {
+  .post("/settings/ai/voice/sample", limits.adminAi, async (c) => {
     const body = voiceChoice.extend({ apiKey: z.string().optional(), language: z.enum(["nl", "en"]).optional() }).parse(await c.req.json());
     const bad = voiceProblem(body);
     if (bad) return c.json({ error: "INVALID_VOICE", message: bad, validVoices: voicesFor(body.provider, body.model).map((v) => v.id) }, 400);
@@ -403,7 +404,7 @@ export const admin = new Hono<AppEnv>()
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
     }
   })
-  .post("/settings/ai/test", async (c) => {
+  .post("/settings/ai/test", limits.adminAi, async (c) => {
     const body = modelChoice.extend({ apiKey: z.string().optional() }).parse(await c.req.json());
     try {
       const model = body.apiKey ? createModel(body.provider, body.model, body.apiKey) : await getModelFor(body);

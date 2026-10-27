@@ -27,7 +27,7 @@ import { SaveBar } from "@/components/admin/save-bar";
 import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/model-combobox";
 import { VoiceCard, sameVoice, type VoiceError } from "@/components/admin/voice-card";
 import { api, ApiError } from "@/lib/api";
-import { errorText } from "@/lib/error-text";
+import { errorText, rateLimitText } from "@/lib/error-text";
 import type { AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
 
 const PROVIDERS: { id: ProviderId; name: string; url: string }[] = [
@@ -302,7 +302,7 @@ export default function AdminSettingsPage() {
       await put({ keys: { [p]: null } });
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
     }
   };
 

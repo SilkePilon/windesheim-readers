@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { notify } from "@/lib/notify";
 import { api } from "@/lib/api";
+import { rateLimitText } from "@/lib/error-text";
 
 /** POST /retry and tell the admin what it did. Shared by the grid and the reader page. */
 export function useRetryReader() {
@@ -20,7 +21,7 @@ export function useRetryReader() {
         qc.invalidateQueries({ queryKey: ["admin", "reader", id] }),
       ]);
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(rateLimitText(e, t) ?? (e instanceof Error ? e.message : t("common.error")));
     } finally {
       setPending(null);
     }

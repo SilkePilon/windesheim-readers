@@ -97,7 +97,9 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
 
   const H = layout.height;
   return (
-    <div className="-mx-4 mt-2 md:mx-0">
+    // Mobile: run the world on behind the floating dock to the bottom of the screen, eating
+    // the page's bottom padding (home py-4 + layout pb 96px + safe area) instead of leaving a gap.
+    <div className="-mx-4 mt-2 -mb-[calc(112px+env(safe-area-inset-bottom))] md:mx-0 md:mb-0">
       <div
         className="relative mx-auto w-full max-w-[520px] overflow-hidden rounded-t-[28px] md:rounded-[28px]"
         style={{

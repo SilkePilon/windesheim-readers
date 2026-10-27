@@ -150,7 +150,7 @@ export const battleMessage = z.discriminatedUnion("t", [
   z
     .object({
       t: z.literal("create"),
-      lessonIds: z.array(id).min(1).max(30),
+      lessonIds: z.array(id).min(1).max(LIMITS.lessonIds.max),
       count: z.number().int().min(COUNT_MIN).max(COUNT_MAX).default(DEFAULT_BATTLE_SETTINGS.count),
       hostPlays: z.boolean().default(true),
     })

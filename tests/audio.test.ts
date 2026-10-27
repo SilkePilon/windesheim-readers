@@ -66,6 +66,13 @@ describe("TTS input chunking", () => {
     }
   });
 
+  test("never drops text: leading punctuation, ellipses, a tail without full stop", () => {
+    const text = `...${"Zin met inhoud. ".repeat(30)}Wacht even… nog een staart zonder punt`;
+    const chunks = chunkText(text, 120);
+    expect(chunks.every((c) => c.length <= 120)).toBe(true);
+    expect(chunks.join(" ").replace(/\s+/g, "")).toBe(text.replace(/\s+/g, ""));
+  });
+
   test("an over-long sentence falls back to words, an over-long word is hard-cut", () => {
     const long = Array.from({ length: 300 }, () => "woord").join(" ");
     const chunks = chunkText(long, 100);

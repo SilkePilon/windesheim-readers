@@ -174,7 +174,11 @@ export async function queueReaderAudio(readerId: string, opts: { lessonIds?: str
     .map((l) => l.id);
   for (const id of ids) await upsertAudio(id, { status: "pending", error: null });
   void (async () => {
-    for (const id of ids) await generateLessonAudio(id);
+    for (const id of ids) {
+      // Another queue may have handled it meanwhile (it is no longer "pending" then).
+      const row = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, id), columns: { status: true } });
+      if (row?.status === "pending") await generateLessonAudio(id);
+    }
   })().catch((e) => console.error("[audio] queue failed", e));
   return ids;
 }
@@ -224,7 +228,7 @@ export function publicAudio(lessonId: string, row: AudioRow | undefined) {
 }
 
 /** Admin lessons-list view. */
-export function adminAudioSummary(row: AudioRow | undefined | null) {
+export function adminAudioSummary(row: Pick<AudioRow, "status" | "stale" | "chapters" | "error" | "generatedAt"> | undefined | null) {
   return {
     status: row?.status ?? ("none" as const),
     stale: row?.stale ?? false,

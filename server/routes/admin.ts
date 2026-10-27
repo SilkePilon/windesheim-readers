@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, notInArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { generateText } from "ai";
 import { mkdir, unlink } from "node:fs/promises";
@@ -112,7 +112,8 @@ export const admin = new Hono<AppEnv>()
       .where(eq(schema.lesson.readerId, id))
       .orderBy(asc(schema.lesson.position));
     const ids = lessons.map((l) => l.id);
-    const audio = ids.length ? await db.select().from(schema.lessonAudio).where(inArray(schema.lessonAudio.lessonId, ids)) : [];
+    const { script: _script, ...audioCols } = getTableColumns(schema.lessonAudio);
+    const audio = ids.length ? await db.select(audioCols).from(schema.lessonAudio).where(inArray(schema.lessonAudio.lessonId, ids)) : [];
     const [cards, qs] = ids.length
       ? await Promise.all([
           db

@@ -111,7 +111,7 @@ export function chunkText(text: string, max: number): string[] {
       add(para.trim(), "\n\n");
       continue;
     }
-    for (const sentence of para.match(/[^.!?…]+(?:[.!?…]+["')\]]*|$)\s*/g) ?? [para]) {
+    for (const sentence of para.match(/[^.!?…]*[.!?…]+["')\]]*\s*|[^.!?…]+$/g) ?? [para]) {
       const s = sentence.trim();
       if (!s) continue;
       if (s.length <= max) {

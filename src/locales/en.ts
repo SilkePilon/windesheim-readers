@@ -20,6 +20,14 @@ const en: Messages = {
     level: "Level {{n}}",
     levelOf: "Level {{n}} of 5",
   },
+  errors: {
+    ALREADY_RUNNING: "This is already being made",
+    LESSON_NOT_READY: "Generate this lesson's content first",
+    AUDIO_NOT_READY: "This audio lesson isn't ready yet",
+    NOT_FOUND: "Not found",
+    UNAUTHORIZED: "Please log in again",
+    FORBIDDEN: "You're not allowed to do that",
+  } as Record<string, string>,
   nav: {
     path: "Path",
     review: "Review",
@@ -135,7 +143,6 @@ const en: Messages = {
     goPart: "Go to part {{n}} of {{total}}",
     position: "Position",
     positionText: "{{at}} of {{total}}",
-    remaining: "{{time}} left",
     speed: "Speed",
     done: "Listened",
     xpHint: "Listen to the end for +{{xp}} XP",

@@ -18,6 +18,14 @@ const nl = {
     level: "Level {{n}}",
     levelOf: "Niveau {{n}} van 5",
   },
+  errors: {
+    ALREADY_RUNNING: "Dit wordt al gemaakt",
+    LESSON_NOT_READY: "Maak eerst de content van deze les",
+    AUDIO_NOT_READY: "Deze luisterles is nog niet klaar",
+    NOT_FOUND: "Niet gevonden",
+    UNAUTHORIZED: "Log opnieuw in",
+    FORBIDDEN: "Dat mag je niet doen",
+  } as Record<string, string>,
   nav: {
     path: "Pad",
     review: "Herhalen",
@@ -133,7 +141,6 @@ const nl = {
     goPart: "Naar deel {{n}} van {{total}}",
     position: "Positie",
     positionText: "{{at}} van {{total}}",
-    remaining: "Nog {{time}}",
     speed: "Snelheid",
     done: "Geluisterd",
     xpHint: "Luister de les uit voor +{{xp}} XP",

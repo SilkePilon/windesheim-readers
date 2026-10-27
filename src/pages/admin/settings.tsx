@@ -27,6 +27,7 @@ import { SaveBar } from "@/components/admin/save-bar";
 import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/model-combobox";
 import { VoiceCard, sameVoice, type VoiceError } from "@/components/admin/voice-card";
 import { api, ApiError } from "@/lib/api";
+import { errorText } from "@/lib/error-text";
 import type { AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
 
 const PROVIDERS: { id: ProviderId; name: string; url: string }[] = [
@@ -290,7 +291,7 @@ export default function AdminSettingsPage() {
         const message = typeof e.data.message === "string" ? e.data.message : e.code;
         setVoiceError({ message, validVoices: Array.isArray(e.data.validVoices) ? (e.data.validVoices as string[]) : undefined });
         notify.error(t("admin.ai.voiceInvalid"), { description: message });
-      } else notify.error(e instanceof Error ? e.message : t("common.error"));
+      } else notify.error(errorText(e, t));
     } finally {
       setSaving(false);
     }

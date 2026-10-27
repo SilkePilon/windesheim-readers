@@ -9,6 +9,7 @@ import { Notice } from "@/components/notice";
 import { AudioPill, Pill, audioBusy, formatAudioLength } from "@/components/admin/status-pill";
 import { api, ApiError } from "@/lib/api";
 import { notify } from "@/lib/notify";
+import { errorText } from "@/lib/error-text";
 import type { AdminLessonAudio } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ export function AudioScriptSection({ lessonId, lessonReady }: { lessonId: string
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "";
       notify.error(
-        code === "ALREADY_RUNNING" ? t("admin.audio.alreadyRunning") : code === "LESSON_NOT_READY" ? t("admin.audio.lessonNotReady") : e instanceof Error ? e.message : t("common.error"),
+        code === "ALREADY_RUNNING" ? t("admin.audio.alreadyRunning") : errorText(e, t),
       );
     } finally {
       setQueueing(false);

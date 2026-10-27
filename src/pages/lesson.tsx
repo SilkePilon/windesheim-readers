@@ -30,7 +30,8 @@ import { LevelBar } from "@/components/game/level-bar";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress, useLesson, useLessonAudio } from "@/lib/queries";
-import { formatClock, resumeAt } from "@/lib/listen";
+import { formatClock } from "@/lib/listen";
+import { resumePosition } from "@/components/listen/use-listen-player";
 import type { LessonDetail, XpResult } from "@/lib/types";
 import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -90,7 +91,8 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
   const audioReady = audio?.status === "ready";
   const { level, step, cardsLeft, hint } = useNextStep(lesson, audioReady);
   const pct = (v: number) => Math.round(v * 100);
-  const resume = audioReady ? resumeAt(audio.listenMs, audio.totalMs) : 0;
+  // Same rule as the player: the server position, or a newer one that only this device has.
+  const resume = audioReady ? resumePosition(lesson.id, audio) : 0;
 
   const activities: { id: ActivityId; icon: LucideIcon; tone: ActivityTone; status: string }[] = [
     {

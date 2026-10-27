@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Headphones, Pause, Play, RotateCcw, RotateCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Notice } from "@/components/notice";
 import { Segmented } from "@/components/game/segmented";
 import { Equalizer } from "@/components/listen/equalizer";
-import { useListenPlayer, type ListenPlayer } from "@/components/listen/use-listen-player";
+import { useListenPlayer, type ListenControls, type ListenPlayer } from "@/components/listen/use-listen-player";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { notify } from "@/lib/notify";
+import { errorText } from "@/lib/error-text";
 import { useInvalidateProgress, useLessonAudio, useMe } from "@/lib/queries";
 import { SKIP_MS, SLIDER_STEP_MS, SPEEDS, formatClock, type Speed } from "@/lib/listen";
 import type { LessonAudio, LessonDetail } from "@/lib/types";
@@ -60,7 +61,7 @@ function NotReady({ lessonId, audio, onQueued }: { lessonId: string; audio: Less
       notify.success(t("admin.audio.queued", { count: 1 }));
       onQueued();
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(errorText(e, t));
     } finally {
       setQueueing(false);
     }
@@ -93,7 +94,7 @@ function ownsKey(target: EventTarget | null, key: string) {
 }
 
 function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const invalidate = useInvalidateProgress();
   const [listened, setListened] = useState(audio.summaryRead || lesson.progress.summaryRead);
   const meta = useMemo(
@@ -112,8 +113,8 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
   });
 
   // Space toggles, ←/→ skip 15 s, anywhere on the page unless a control owns the key.
-  const ctl = useRef(p);
-  ctl.current = p;
+  const ctl = useRef(p.controls);
+  ctl.current = p.controls;
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || ownsKey(e.target, e.key)) return;
@@ -127,7 +128,7 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const fmtRate = (v: number) => `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(v)}×`;
+  const c = p.controls;
 
   return (
     <Card className="gap-0 overflow-hidden px-0 py-0">
@@ -136,17 +137,17 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
         <ChapterDots player={p} />
         <Scrubber player={p} />
         <div className="flex items-center justify-center gap-6 sm:gap-8">
-          <SkipButton dir={-1} onClick={() => p.skip(-SKIP_MS)} label={t("listen.back15")} />
+          <SkipButton dir={-1} onClick={c.skip} delta={-SKIP_MS} label={t("listen.back15")} />
           <Button
             variant="chunky"
-            onClick={p.toggle}
+            onClick={c.toggle}
             aria-label={p.playing ? t("listen.pause") : t("listen.play")}
             className="relative size-20 rounded-full [--press:6px] [&_svg:not([class*='size-'])]:size-9"
           >
             {p.playing ? <Pause className="fill-current" strokeWidth={2.2} /> : <Play className="ml-1 fill-current" strokeWidth={2.2} />}
             {p.playing && p.buffering && <Spinner aria-hidden className="absolute -inset-1.5 size-[calc(100%+12px)] text-primary opacity-60" />}
           </Button>
-          <SkipButton dir={1} onClick={() => p.skip(SKIP_MS)} label={t("listen.forward15")} />
+          <SkipButton dir={1} onClick={c.skip} delta={SKIP_MS} label={t("listen.forward15")} />
         </div>
         {p.failed && (
           <Notice
@@ -154,24 +155,13 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
             title={t("listen.playFailed")}
             description={t("listen.playFailedHint")}
             action={
-              <Button variant="chunky" size="lg" onClick={p.play}>
+              <Button variant="chunky" size="lg" onClick={c.play}>
                 {t("common.retry")}
               </Button>
             }
           />
         )}
-        <div className="flex flex-col gap-2">
-          <span aria-hidden className="text-center font-sans text-xs font-bold text-muted-foreground">
-            {t("listen.speed")}
-          </span>
-          <Segmented<string>
-            label={t("listen.speed")}
-            value={String(p.rate)}
-            onChange={(v) => p.setRate(Number(v) as Speed)}
-            options={SPEEDS.map((v) => ({ value: String(v), label: fmtRate(v) }))}
-            className="mx-auto w-full max-w-sm"
-          />
-        </div>
+        <SpeedPicker rate={p.rate} setRate={c.setRate} />
         <div className="flex justify-center">
           {listened ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-success px-3 py-1 font-heading text-sm font-semibold text-success-foreground">
@@ -187,7 +177,7 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
 }
 
 /** The "album art": the lesson code on a primary tile with a soft equaliser. */
-function Cover({ code, title, playing }: { code: string; title: string; playing: boolean }) {
+const Cover = memo(function Cover({ code, title, playing }: { code: string; title: string; playing: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="relative isolate overflow-hidden bg-primary px-5 pt-5 pb-5 text-primary-foreground md:px-8 md:pb-6">
@@ -207,19 +197,38 @@ function Cover({ code, title, playing }: { code: string; title: string; playing:
       </div>
     </div>
   );
-}
+});
 
-function SkipButton({ dir, onClick, label }: { dir: 1 | -1; onClick: () => void; label: string }) {
+const SpeedPicker = memo(function SpeedPicker({ rate, setRate }: { rate: Speed; setRate: ListenControls["setRate"] }) {
+  const { t, i18n } = useTranslation();
+  const fmt = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 });
+  return (
+    <div className="flex flex-col gap-2">
+      <span aria-hidden className="text-center font-sans text-xs font-bold text-muted-foreground">
+        {t("listen.speed")}
+      </span>
+      <Segmented<string>
+        label={t("listen.speed")}
+        value={String(rate)}
+        onChange={(v) => setRate(Number(v) as Speed)}
+        options={SPEEDS.map((v) => ({ value: String(v), label: `${fmt.format(v)}×` }))}
+        className="mx-auto w-full max-w-sm"
+      />
+    </div>
+  );
+});
+
+const SkipButton = memo(function SkipButton({ dir, delta, onClick, label }: { dir: 1 | -1; delta: number; onClick: (delta: number) => void; label: string }) {
   const Icon = dir < 0 ? RotateCcw : RotateCw;
   return (
-    <Button variant="chunky-surface" onClick={onClick} aria-label={label} title={label} className="relative size-14 rounded-full [--press:4px]">
+    <Button variant="chunky-surface" onClick={() => onClick(delta)} aria-label={label} title={label} className="relative size-14 rounded-full [--press:4px]">
       <Icon className="size-8" strokeWidth={2} />
       <span aria-hidden className="absolute inset-0 grid place-items-center pt-px font-heading text-[11px] font-bold">
         15
       </span>
     </Button>
   );
-}
+});
 
 /** "Deel 2 van 6" with one tappable dot per chapter; the current one fills as it plays. */
 function ChapterDots({ player: p }: { player: ListenPlayer }) {
@@ -232,15 +241,15 @@ function ChapterDots({ player: p }: { player: ListenPlayer }) {
       <span className="font-heading text-base font-semibold" aria-live="polite">
         {t("listen.part", { n: cur + 1, total: n })}
       </span>
-      <div role="group" aria-label={t("listen.parts")} className="flex flex-wrap items-center justify-center">
+      <div role="group" aria-label={t("listen.parts")} className="-my-2.5 flex flex-wrap items-center justify-center">
         {p.chapters.map((c, i) => (
           <button
             key={c.n}
             type="button"
-            onClick={() => p.goChapter(i)}
+            onClick={() => p.controls.goChapter(i)}
             aria-label={t("listen.goPart", { n: i + 1, total: n })}
             aria-current={i === cur ? "step" : undefined}
-            className="group grid h-7 place-items-center rounded-full px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="group grid h-11 min-w-11 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <span
               className={cn(
@@ -270,12 +279,15 @@ function Scrubber({ player: p }: { player: ListenPlayer }) {
     const rect = track.current!.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * p.total;
   };
+  const c = p.controls;
+  // Screen readers get whole 10-second steps while playing, not a new value every tick.
+  const spoken = p.playing && drag === null ? Math.floor(shown / 10_000) * 10_000 : shown;
   const onKey = (e: KeyboardEvent) => {
     const step = { ArrowLeft: -SLIDER_STEP_MS, ArrowDown: -SLIDER_STEP_MS, ArrowRight: SLIDER_STEP_MS, ArrowUp: SLIDER_STEP_MS, PageDown: -30_000, PageUp: 30_000 }[e.key];
-    if (step !== undefined) p.seekTo(p.position + step);
-    else if (e.key === "Home") p.seekTo(0);
-    else if (e.key === "End") p.seekTo(p.total - 500);
-    else if (e.key === " ") p.toggle();
+    if (step !== undefined) c.seekTo(p.position + step);
+    else if (e.key === "Home") c.seekTo(0);
+    else if (e.key === "End") c.seekTo(p.total - 500);
+    else if (e.key === " ") c.toggle();
     else return;
     e.preventDefault();
   };
@@ -289,17 +301,18 @@ function Scrubber({ player: p }: { player: ListenPlayer }) {
         aria-label={t("listen.position")}
         aria-valuemin={0}
         aria-valuemax={Math.floor(p.total / 1000)}
-        aria-valuenow={Math.floor(shown / 1000)}
-        aria-valuetext={t("listen.positionText", { at: formatClock(shown), total: formatClock(p.total) })}
+        aria-valuenow={Math.floor(spoken / 1000)}
+        aria-valuetext={t("listen.positionText", { at: formatClock(spoken), total: formatClock(p.total) })}
         onKeyDown={onKey}
         onPointerDown={(e) => {
+          if (e.button !== 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           setDrag(at(e));
         }}
         onPointerMove={(e) => drag !== null && setDrag(at(e))}
         onPointerUp={(e) => {
           if (drag === null) return;
-          p.seekTo(at(e));
+          c.seekTo(at(e));
           setDrag(null);
         }}
         onPointerCancel={() => setDrag(null)}
@@ -322,9 +335,9 @@ function Scrubber({ player: p }: { player: ListenPlayer }) {
           style={{ left: `${pct}%` }}
         />
       </div>
-      <div className="flex justify-between font-sans text-xs font-bold text-muted-foreground tabular-nums">
+      <div aria-hidden className="flex justify-between font-sans text-xs font-bold text-muted-foreground tabular-nums">
         <span>{formatClock(shown)}</span>
-        <span aria-label={t("listen.remaining", { time: formatClock(p.total - shown) })}>−{formatClock(p.total - shown)}</span>
+        <span>−{formatClock(p.total - shown)}</span>
       </div>
     </div>
   );

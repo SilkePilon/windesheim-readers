@@ -57,6 +57,7 @@ import { AudioPill, LessonPill, StatusPill, audioBusy, canRetry } from "@/compon
 import { SaveBar } from "@/components/admin/save-bar";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api, ApiError } from "@/lib/api";
+import { errorText } from "@/lib/error-text";
 import type { AdminLessonRow, AdminReader } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -435,7 +436,7 @@ export default function AdminReaderPage() {
       else notify.info(t("admin.audio.nothingToDo"));
       await refetch();
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(errorText(e, t));
     } finally {
       setQueueingAudio(false);
     }
@@ -447,7 +448,7 @@ export default function AdminReaderPage() {
       await refetch();
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "";
-      notify.error(code === "ALREADY_RUNNING" ? t("admin.audio.alreadyRunning") : code === "LESSON_NOT_READY" ? t("admin.audio.lessonNotReady") : e instanceof Error ? e.message : t("common.error"));
+      notify.error(code === "ALREADY_RUNNING" ? t("admin.audio.alreadyRunning") : errorText(e, t));
     }
   };
 

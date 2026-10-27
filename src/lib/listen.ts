@@ -108,5 +108,70 @@ export class HeardTracker {
   }
 }
 
-/** Largest forward step (ms of media time) between two playback ticks that still counts as listening, not a seek. */
-export const MAX_TICK_MS = 2_500;
+/**
+ * How far a playback step from `fromMs` to `toMs` (media time) counts as heard, given the
+ * wall-clock time since the previous tick. Seeks never reach here (they reset the tick), so
+ * a big step is just throttled JS (lock screen, background tab): it counts, but never more
+ * than the wall time allows at this speed (+ a little slack). Returns the end to count to.
+ */
+export function countableEnd(fromMs: number, toMs: number, wallMs: number, rate: number) {
+  if (toMs <= fromMs) return fromMs;
+  return Math.min(toMs, fromMs + Math.max(0, wallMs) * rate * 1.1 + 100);
+}
+
+/**
+ * Where to resume. The server position is the shared truth, but a local position that the
+ * server never acknowledged (failed or cut-off report) is newer, so it wins.
+ */
+export function pickResume(serverMs: number, local: { pos: number; synced?: boolean } | null, totalMs: number) {
+  const ms = local && !local.synced ? local.pos : serverMs || local?.pos || 0;
+  return resumeAt(ms, totalMs);
+}
+
+/**
+ * The two alternating <audio> slots: which chapter each holds, which one plays, and whether
+ * the idle one has been "primed" (played muted once) for its current source. iOS only lets
+ * an element start without a tap after that, so every new source in the idle slot needs it.
+ */
+export class Slots {
+  holds: [number, number] = [-1, -1];
+  primed: [boolean, boolean] = [false, false];
+  active: 0 | 1 = 0;
+
+  get idle(): 0 | 1 {
+    return this.active === 0 ? 1 : 0;
+  }
+
+  /** Put chapter `chapter` in `slot`. True when that is a new source (to be loaded and primed). */
+  load(slot: 0 | 1, chapter: number) {
+    if (this.holds[slot] === chapter) return false;
+    this.holds[slot] = chapter;
+    this.primed[slot] = false;
+    return true;
+  }
+
+  /** The slot holding `chapter`, else the idle slot after loading it there. */
+  slotFor(chapter: number): { slot: 0 | 1; fresh: boolean } {
+    const held = this.holds.indexOf(chapter);
+    if (held === 0 || held === 1) return { slot: held, fresh: false };
+    const slot = this.idle;
+    return { slot, fresh: this.load(slot, chapter) };
+  }
+
+  /** The chapter to preload into the idle slot after chapter `index` (null: none, or already there). */
+  nextToPreload(index: number, count: number) {
+    const next = index + 1;
+    return next < count && !this.holds.includes(next) ? next : null;
+  }
+
+  /** The idle slot holds a source that still needs priming. */
+  needsPrime() {
+    return this.holds[this.idle] >= 0 && !this.primed[this.idle];
+  }
+
+  activate(slot: 0 | 1) {
+    this.active = slot;
+    // A slot that starts playing after a tap (or a primed one) is unlocked for its source.
+    this.primed[slot] = true;
+  }
+}

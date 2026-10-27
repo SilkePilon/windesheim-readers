@@ -71,17 +71,32 @@ export function VoiceCard({
   const [sampleError, setSampleError] = useState<{ for: string; error: VoiceError } | null>(null);
   const choiceKey = JSON.stringify([value.provider, value.model, value.voice, (value.instructions ?? "").trim()]);
 
-  useEffect(
-    () => () => {
-      audio.current?.pause();
-      if (cache.current) URL.revokeObjectURL(cache.current.url);
-    },
-    [],
-  );
-  // A different choice stops the old sample.
+  // Async steps bail out when the card unmounted or the choice changed meanwhile.
+  const mounted = useRef(true);
+  const currentKey = useRef(choiceKey);
+  currentKey.current = choiceKey;
+  const fetching = useRef<AbortController | null>(null);
   useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      fetching.current?.abort();
+      const el = audio.current;
+      if (el) {
+        el.onended = el.onpause = null;
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+      if (cache.current) URL.revokeObjectURL(cache.current.url);
+      cache.current = null;
+    };
+  }, []);
+  // A different choice stops the old sample (and a sample still loading for it).
+  useEffect(() => {
+    fetching.current?.abort();
     audio.current?.pause();
-    setSample((s) => (s === "playing" ? "idle" : s));
+    setSample("idle");
   }, [choiceKey]);
 
   const play = async () => {
@@ -93,10 +108,14 @@ export function VoiceCard({
     setSampleError(null);
     const key = choiceKey;
     let url = cache.current?.key === key ? cache.current.url : null;
+    const stale = () => !mounted.current || currentKey.current !== key;
     if (!url) {
       setSample("loading");
+      const ctrl = new AbortController();
+      fetching.current = ctrl;
       try {
         const res = await fetch("/api/admin/settings/ai/voice/sample", {
+          signal: ctrl.signal,
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
@@ -109,14 +128,19 @@ export function VoiceCard({
         });
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; validVoices?: string[] };
-          throw { message: body.message ?? body.error ?? `HTTP ${res.status}`, validVoices: body.validVoices } satisfies VoiceError;
+          // Provider errors come as readable text; a bare code (or none) gets the generic message.
+          const text = body.message ?? (body.error && !/^[A-Z0-9_]+$/.test(body.error) ? body.error : t("common.error"));
+          throw { message: text, validVoices: body.validVoices } satisfies VoiceError;
         }
-        url = URL.createObjectURL(await res.blob());
+        const blob = await res.blob();
+        if (stale()) return;
+        url = URL.createObjectURL(blob);
         if (cache.current) URL.revokeObjectURL(cache.current.url);
         cache.current = { key, url };
       } catch (e) {
+        if (stale()) return;
         setSample("idle");
-        const err = e instanceof Error ? { message: e.message } : (e as VoiceError);
+        const err = e instanceof Error ? { message: e instanceof TypeError ? t("common.error") : e.message } : (e as VoiceError);
         setSampleError({ for: key, error: err });
         return;
       }
@@ -128,8 +152,13 @@ export function VoiceCard({
     el.src = url;
     try {
       await el.play();
+      if (stale()) {
+        el.pause();
+        return;
+      }
       setSample("playing");
     } catch (e) {
+      if (stale()) return;
       setSample("idle");
       setSampleError({ for: key, error: { message: e instanceof Error ? e.message : String(e) } });
     }

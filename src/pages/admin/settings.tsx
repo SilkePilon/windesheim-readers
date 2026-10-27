@@ -25,8 +25,9 @@ import { Notice } from "@/components/notice";
 import { Pill } from "@/components/admin/status-pill";
 import { SaveBar } from "@/components/admin/save-bar";
 import { ModelCombobox, keyFingerprint, useModels } from "@/components/admin/model-combobox";
-import { api } from "@/lib/api";
-import type { AiSettings, KeyValidation, ModelChoice, ProviderId } from "@/lib/types";
+import { VoiceCard, sameVoice, type VoiceError } from "@/components/admin/voice-card";
+import { api, ApiError } from "@/lib/api";
+import type { AiSettings, KeyValidation, ModelChoice, ProviderId, VoiceChoice } from "@/lib/types";
 
 const PROVIDERS: { id: ProviderId; name: string; url: string }[] = [
   {
@@ -189,6 +190,8 @@ export default function AdminSettingsPage() {
   });
   // Unsaved edits: role choices only exist here once changed; typed keys until saved.
   const [draft, setDraft] = useState<Partial<Record<Role, ModelChoice>>>({});
+  const [voiceDraft, setVoiceDraft] = useState<VoiceChoice | null>(null);
+  const [voiceError, setVoiceError] = useState<VoiceError | null>(null);
   const [typed, setTyped] = useState<Keys>({});
   const [checked, setChecked] = useState<Keys>({});
   const [saving, setSaving] = useState(false);
@@ -215,7 +218,9 @@ export default function AdminSettingsPage() {
   const current = (role: Role) => draft[role] ?? data![role];
   const rolesDirty = !!data && (["generation", "fast"] as const).some((r) => draft[r] && !sameChoice(draft[r]!, data[r]));
   const keysDirty = PROVIDERS.some((p) => key(p.id) !== "");
-  const dirty = rolesDirty || keysDirty;
+  const voice = voiceDraft ?? data?.voice;
+  const voiceDirty = !!data && !!voiceDraft && !sameVoice(voiceDraft, data.voice);
+  const dirty = rolesDirty || keysDirty || voiceDirty;
 
   // Guard unsaved edits on in-app navigation and reload, like the structure editor.
   const leaving = useRef(false);
@@ -233,7 +238,7 @@ export default function AdminSettingsPage() {
 
   if (isLoading || !data) return <PageSpinner />;
 
-  const put = async (body: { generation?: ModelChoice; fast?: ModelChoice; keys?: Partial<Record<ProviderId, string | null>> }) => {
+  const put = async (body: { generation?: ModelChoice; fast?: ModelChoice; voice?: VoiceChoice; keys?: Partial<Record<ProviderId, string | null>> }) => {
     const res = await api.put<AiSettings>("/admin/settings/ai", body);
     qc.setQueryData(SETTINGS_KEY, res);
     // Saved keys changed: re-check them and reload model lists that used the saved key.
@@ -270,14 +275,22 @@ export default function AdminSettingsPage() {
       await put({
         generation: current("generation"),
         fast: current("fast"),
+        // Only a changed voice is sent, so an untouched default stays "unset" (and follows the keys).
+        voice: voiceDirty && voice ? { ...voice, instructions: voice.instructions?.trim() || undefined } : undefined,
         keys: Object.keys(keys).length ? keys : undefined,
       });
       setDraft({});
+      setVoiceDraft(null);
+      setVoiceError(null);
       setTyped({});
       setChecked({});
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : t("common.error"));
+      if (e instanceof ApiError && e.code === "INVALID_VOICE") {
+        const message = typeof e.data.message === "string" ? e.data.message : e.code;
+        setVoiceError({ message, validVoices: Array.isArray(e.data.validVoices) ? (e.data.validVoices as string[]) : undefined });
+        notify.error(t("admin.ai.voiceInvalid"), { description: message });
+      } else notify.error(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSaving(false);
     }
@@ -294,6 +307,8 @@ export default function AdminSettingsPage() {
 
   const reset = () => {
     setDraft({});
+    setVoiceDraft(null);
+    setVoiceError(null);
     setTyped({});
     setChecked({});
   };
@@ -340,6 +355,19 @@ export default function AdminSettingsPage() {
               />
             );
           })}
+          {voice && (
+            <VoiceCard
+              value={voice}
+              onChange={(v) => {
+                setVoiceDraft(v);
+                setVoiceError(null);
+              }}
+              defaults={data.voiceDefaults}
+              error={voiceError}
+              typedKey={key(voice.provider) || undefined}
+              checkedKey={checkedKey(voice.provider)}
+            />
+          )}
         </div>
 
         <Card variant="flat">

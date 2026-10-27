@@ -24,8 +24,11 @@ export function formatContext(n: number) {
   return String(n);
 }
 
-const fetchModels = (provider: ProviderId, apiKey: string | undefined, refresh: boolean) =>
-  api.post<ModelInfo[]>("/admin/settings/ai/models", {
+/** "text": chat/generation models; "speech": the provider's TTS models (the "Stem" role). */
+export type ModelKind = "text" | "speech";
+
+const fetchModels = (provider: ProviderId, apiKey: string | undefined, refresh: boolean, kind: ModelKind) =>
+  api.post<ModelInfo[]>(kind === "speech" ? "/admin/settings/ai/voice/models" : "/admin/settings/ai/models", {
     provider,
     apiKey: apiKey || undefined,
     refresh: refresh || undefined,
@@ -35,12 +38,13 @@ const fetchModels = (provider: ProviderId, apiKey: string | undefined, refresh: 
  * Live model list for a provider. Uses the typed (unsaved) key when given, otherwise the
  * server falls back to the stored or .env key. `refresh()` bypasses the server cache.
  */
-export function useModels(provider: ProviderId, apiKey?: string) {
+export function useModels(provider: ProviderId, apiKey?: string, kind: ModelKind = "text") {
   const qc = useQueryClient();
-  const queryKey = ["admin", "ai", "models", provider, apiKey ? keyFingerprint(apiKey) : "saved"];
+  // Index 4 stays the key fingerprint ("saved" is invalidated after a save, see settings.tsx).
+  const queryKey = ["admin", "ai", kind === "speech" ? "speech-models" : "models", provider, apiKey ? keyFingerprint(apiKey) : "saved"];
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchModels(provider, apiKey, false),
+    queryFn: () => fetchModels(provider, apiKey, false, kind),
     staleTime: 10 * 60_000,
     retry: false,
     refetchOnWindowFocus: false,
@@ -51,7 +55,7 @@ export function useModels(provider: ProviderId, apiKey?: string) {
     try {
       await qc.fetchQuery({
         queryKey,
-        queryFn: () => fetchModels(provider, apiKey, true),
+        queryFn: () => fetchModels(provider, apiKey, true, kind),
         staleTime: 0,
         retry: false,
       });
@@ -75,17 +79,19 @@ export function ModelCombobox({
   apiKey,
   value,
   onChange,
+  kind = "text",
 }: {
   id?: string;
   provider: ProviderId;
   apiKey?: string;
   value: string;
   onChange: (model: string) => void;
+  kind?: ModelKind;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const { data: models, isFetching, error, refresh, refreshing } = useModels(provider, apiKey);
+  const { data: models, isFetching, error, refresh, refreshing } = useModels(provider, apiKey, kind);
 
   // NO_API_KEY is the server's code for "no key saved or typed" (server/ai/models.ts).
   const errorText = !error ? "" : error.message === "NO_API_KEY" ? t("admin.ai.modelsNoKey") : t("admin.ai.modelsError", { error: error.message });

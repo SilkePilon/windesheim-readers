@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ActivityTone = "primary" | "info" | "success" | "hard" | "danger" | "gold";
+export type ActivityTone = "primary" | "info" | "success" | "hard" | "danger" | "gold" | "listen";
 
 const ICON_BG: Record<ActivityTone, string> = {
   primary: "bg-primary text-primary-foreground",
@@ -10,6 +10,8 @@ const ICON_BG: Record<ActivityTone, string> = {
   hard: "bg-hard text-white",
   danger: "bg-danger text-white",
   gold: "bg-gold text-gold-foreground",
+  // Luisteren: its own fuchsia, distinct from the primary violet and the danger pink.
+  listen: "bg-[#c43fe0] text-white",
 };
 
 /**

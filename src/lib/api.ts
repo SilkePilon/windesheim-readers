@@ -2,6 +2,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
+    /** The full JSON error body (e.g. `INVALID_VOICE` carries `message` and `validVoices`). */
+    public data: Record<string, unknown> = {},
   ) {
     super(code);
   }
@@ -16,7 +18,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? data.message ?? `HTTP_${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, data.error ?? data.message ?? `HTTP_${res.status}`, data);
   return data as T;
 }
 

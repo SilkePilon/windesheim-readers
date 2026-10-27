@@ -164,6 +164,46 @@ export interface AdminLessonRow {
   generatedAt: string | null;
   flashcards: number;
   questions: number;
+  audio: AdminAudioSummary;
+}
+
+export type AudioStatus = "none" | "pending" | "generating" | "ready" | "error";
+/** Per-lesson luisterles state in the admin structure table. */
+export interface AdminAudioSummary {
+  status: AudioStatus;
+  stale: boolean;
+  /** > 0 means a complete, playable set is on disk (also while regenerating or after a failed rerun). */
+  chapters: number;
+  totalMs: number;
+  error: string | null;
+  generatedAt: string | null;
+}
+export interface AudioChapter {
+  n: number;
+  durationMs: number;
+  url: string;
+}
+/** GET /admin/lessons/:id/audio (quality control, incl. the internal script). */
+export interface AdminLessonAudio extends AdminAudioSummary {
+  running: boolean;
+  provider: string | null;
+  model: string | null;
+  voice: string | null;
+  chapterList: AudioChapter[];
+  script: { chapters: { kind: "hook" | "roadmap" | "idea" | "recap" | "quiz"; title: string; text: string }[]; grounded: boolean; sources: string[] } | null;
+}
+/** GET /lessons/:id/audio (student; never any text). */
+export interface LessonAudio {
+  status: "ready" | "generating" | "none";
+  chapters: AudioChapter[];
+  totalMs: number;
+  listenMs: number;
+  summaryRead: boolean;
+}
+export interface ListenProgress {
+  listenMs: number;
+  summaryRead: boolean;
+  award: XpResult | null;
 }
 
 export type ProviderId = "google" | "anthropic" | "openai" | "openrouter";
@@ -176,6 +216,23 @@ export interface AiSettings {
   fast: ModelChoice;
   keys: Record<ProviderId, { stored: boolean; env: boolean }>;
   defaults: Record<ProviderId, string>;
+  /** The "Stem" (TTS) role: stored choice or the default. */
+  voice: VoiceChoice;
+  voiceDefaults: Record<VoiceProviderId, VoiceChoice>;
+}
+export type VoiceProviderId = "google" | "openai";
+export interface VoiceChoice {
+  provider: VoiceProviderId;
+  model: string;
+  voice: string;
+  instructions?: string;
+}
+export interface VoiceInfo {
+  id: string;
+  /** Provider style label (English, e.g. "Warm"). */
+  style: string;
+  /** The voice only works with model ids starting with this. */
+  modelPrefix?: string;
 }
 /** One entry of a provider's live model list (`POST /admin/settings/ai/models`). */
 export interface ModelInfo {

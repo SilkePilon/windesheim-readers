@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { Spinner } from "@/components/ui/spinner";
-import type { AdminReader, LessonStatus } from "@/lib/types";
+import type { AdminAudioSummary, AdminReader, LessonStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type PillTone = "success" | "warning" | "danger" | "track" | "busy";
@@ -106,4 +106,45 @@ export function LessonPill({ status, flashcards, questions }: { status: LessonSt
     );
   if (status === "error") return <Pill tone="danger">{t("admin.lessonPill.error")}</Pill>;
   return <Pill tone="track">{t("admin.lessonPill.pending")}</Pill>;
+}
+
+/** "6 min", "45 s": the luisterles length for admin pills. */
+export function formatAudioLength(ms: number) {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`;
+}
+
+export const audioBusy = (a: Pick<AdminAudioSummary, "status">) => a.status === "pending" || a.status === "generating";
+
+/**
+ * Per-lesson luisterles pill (structure table): none / bezig / klaar / verouderd / fout.
+ * Stale audio is still playable; a failed rerun keeps the previous audio (noted in the title).
+ */
+export function AudioPill({ audio }: { audio: AdminAudioSummary }) {
+  const { t } = useTranslation();
+  if (audioBusy(audio))
+    return (
+      <Pill tone="busy" spin>
+        {t("admin.audio.busy")}
+      </Pill>
+    );
+  if (audio.status === "error")
+    return (
+      <Pill tone="danger" title={audio.error ?? undefined}>
+        {t("admin.audio.error")}
+      </Pill>
+    );
+  if (audio.status === "ready" && audio.stale)
+    return (
+      <Pill tone="warning" title={t("admin.audio.staleHint")}>
+        {t("admin.audio.stale")}
+      </Pill>
+    );
+  if (audio.status === "ready")
+    return (
+      <Pill tone="success" dot={false}>
+        {t("admin.audio.ready", { length: formatAudioLength(audio.totalMs) })}
+      </Pill>
+    );
+  return <Pill tone="track">{t("admin.audio.none")}</Pill>;
 }

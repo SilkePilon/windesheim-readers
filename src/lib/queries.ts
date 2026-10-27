@@ -2,12 +2,13 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
 import { setLocale } from "./i18n";
-import type { BadgeStatus, Leaderboard, LessonDetail, Me, ReaderWithLessons } from "./types";
+import type { BadgeStatus, Leaderboard, LessonAudio, LessonDetail, Me, ReaderWithLessons } from "./types";
 
 export const qk = {
   me: ["me"] as const,
   readers: ["readers"] as const,
   lesson: (id: string) => ["lesson", id] as const,
+  lessonAudio: (id: string) => ["lesson", id, "audio"] as const,
   leaderboard: (p: string) => ["leaderboard", p] as const,
   badges: ["me", "badges"] as const,
 };
@@ -42,6 +43,15 @@ export function useReaders() {
 
 export function useLesson(id: string) {
   return useQuery({ queryKey: qk.lesson(id), queryFn: () => api.get<LessonDetail>(`/lessons/${id}`) });
+}
+
+/** Luisterles status, chapters and resume position (never any text). Polls while it is being made. */
+export function useLessonAudio(id: string, opts: { poll?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.lessonAudio(id),
+    queryFn: () => api.get<LessonAudio>(`/lessons/${id}/audio`),
+    refetchInterval: (q) => (opts.poll && q.state.data?.status === "generating" ? 3000 : false),
+  });
 }
 
 /** Every badge with earnedAt / progress (GET /me/badges). Under the "me" key, so progress invalidation refreshes it. */

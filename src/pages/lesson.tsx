@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Headphones,
   Layers,
   Lightbulb,
   MessageSquareText,
@@ -23,18 +24,20 @@ import { Markdown } from "@/components/markdown";
 import { ExplainTab } from "@/components/explain-tab";
 import { OpenTab } from "@/components/open-tab";
 import { TutorTab } from "@/components/tutor-tab";
+import { ListenView } from "@/components/listen/listen-view";
 import { ActivityTile, type ActivityTone } from "@/components/game/activity-tile";
 import { LevelBar } from "@/components/game/level-bar";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
-import { useInvalidateProgress, useLesson } from "@/lib/queries";
+import { useInvalidateProgress, useLesson, useLessonAudio } from "@/lib/queries";
+import { formatClock, resumeAt } from "@/lib/listen";
 import type { LessonDetail, XpResult } from "@/lib/types";
 import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { XP } from "@shared/game";
 import { lessonLevel, nextStep, nextStepHint } from "@shared/levels";
 
-const VIEWS = ["read", "explain", "open", "tutor"] as const;
+const VIEWS = ["read", "listen", "explain", "open", "tutor"] as const;
 type View = (typeof VIEWS)[number];
 type ActivityId = "cards" | View | "quiz";
 
@@ -56,8 +59,8 @@ export default function LessonPage() {
   return view ? <SubView lesson={lesson} view={view} /> : <Overview lesson={lesson} />;
 }
 
-/** Recommended next step and the hint line under the level bar. */
-function useNextStep(lesson: LessonDetail) {
+/** Recommended next step and the hint line under the level bar ("listen" wording when a luisterles is ready). */
+function useNextStep(lesson: LessonDetail, canListen = false) {
   const { t } = useTranslation();
   const p = lesson.progress;
   const level = lessonLevel(p.mastery);
@@ -72,7 +75,8 @@ function useNextStep(lesson: LessonDetail) {
   });
 
   const h = nextStepHint({ mastery: p.mastery, flashcardCount: lesson.flashcardCount, cardsLeft, step });
-  const hint = h ? t(`lesson.next.${h.key}`, { n: "n" in h ? h.n : undefined, level: "level" in h ? h.level : undefined }) : undefined;
+  const key = h && canListen && (h.key === "read" || h.key === "readNoLevel") ? h.key.replace("read", "listen") : h?.key;
+  const hint = h ? t(`lesson.next.${key}`, { n: "n" in h ? h.n : undefined, level: "level" in h ? h.level : undefined }) : undefined;
 
   return { level, step, cardsLeft, hint };
 }
@@ -82,8 +86,11 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
   const navigate = useNavigate();
   const [, setParams] = useSearchParams();
   const p = lesson.progress;
-  const { level, step, cardsLeft, hint } = useNextStep(lesson);
+  const { data: audio } = useLessonAudio(lesson.id);
+  const audioReady = audio?.status === "ready";
+  const { level, step, cardsLeft, hint } = useNextStep(lesson, audioReady);
   const pct = (v: number) => Math.round(v * 100);
+  const resume = audioReady ? resumeAt(audio.listenMs, audio.totalMs) : 0;
 
   const activities: { id: ActivityId; icon: LucideIcon; tone: ActivityTone; status: string }[] = [
     {
@@ -103,6 +110,18 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
       icon: BookOpen,
       tone: "info",
       status: p.summaryRead ? t("lesson.status.read") : t("lesson.status.summary"),
+    },
+    {
+      id: "listen",
+      icon: Headphones,
+      tone: "listen",
+      status: !audio
+        ? "\u00a0"
+        : !audioReady
+          ? t("lesson.status.listenSoon")
+          : resume > 0
+            ? t("lesson.status.listenResume", { time: formatClock(resume) })
+            : t("lesson.status.listenLength", { n: Math.max(1, Math.round(audio.totalMs / 60_000)) }),
     },
     {
       id: "quiz",
@@ -135,12 +154,14 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
     if (a === "cards" || a === "quiz") navigate(`/lesson/${lesson.id}/${a}`);
     else setParams({ view: a });
   };
-  const highlighted = step?.kind ?? null;
+  // Not read yet and there is a luisterles: listening is the recommended way in (it counts as read).
+  const highlighted = step?.kind === "read" && audioReady ? "listen" : (step?.kind ?? null);
   const hot = activities.find((a) => a.id === highlighted);
   // On desktop the recommended tile becomes the "next step" button, so the grid shows
   // the rest; with an odd count the last tile spans both columns instead of sitting alone.
   const desktopTiles = activities.filter((a) => a.id !== highlighted);
   const wideOnDesktop = desktopTiles.length % 2 === 1 ? desktopTiles.at(-1)?.id : undefined;
+  const wideOnMobile = activities.length % 2 === 1 ? activities.at(-1)?.id : undefined;
   const intro = useEntrance();
 
   return (
@@ -192,7 +213,11 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
                 status={a.status}
                 highlighted={a.id === highlighted}
                 onClick={() => open(a.id)}
-                className={cn(a.id === highlighted && "md:hidden", a.id === wideOnDesktop && "md:col-span-2")}
+                className={cn(
+                  a.id === highlighted && "md:hidden",
+                  a.id === wideOnMobile && "max-md:col-span-2",
+                  a.id === wideOnDesktop && "md:col-span-2",
+                )}
               />
             ))}
           </div>
@@ -229,6 +254,7 @@ function SubView({ lesson, view }: { lesson: LessonDetail; view: View }) {
   const { t } = useTranslation();
   let body: ReactNode;
   if (view === "read") body = <ReadView lesson={lesson} />;
+  else if (view === "listen") body = <ListenView lesson={lesson} />;
   else if (view === "explain") body = <ExplainTab lesson={lesson} />;
   else if (view === "open") body = <OpenTab lessonId={lesson.id} />;
   else body = <TutorTab lessonId={lesson.id} code={lesson.code} />;

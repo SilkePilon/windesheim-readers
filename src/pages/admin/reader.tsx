@@ -20,6 +20,7 @@ import {
   Eye,
   FileText,
   GripVertical,
+  Headphones,
   MoreVertical,
   Pencil,
   Plus,
@@ -52,10 +53,10 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PageSpinner } from "@/components/page";
-import { LessonPill, StatusPill, canRetry } from "@/components/admin/status-pill";
+import { AudioPill, LessonPill, StatusPill, audioBusy, canRetry } from "@/components/admin/status-pill";
 import { SaveBar } from "@/components/admin/save-bar";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { AdminLessonRow, AdminReader } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,10 @@ type Detail = Omit<AdminReader, "lessonCount" | "readyCount" | "failedCount"> & 
 type Row = { id?: string; key: string; code: string; title: string; week: number; startPage: number; endPage: number };
 
 const BUSY = ["extracting", "structuring", "generating"];
+const audioRunning = (d: Detail) => d.lessons.some((l) => audioBusy(l.audio));
+/** Lessons "Genereer audio" (missing only) would queue; mirrors queueReaderAudio on the server. */
+const audioMissing = (d: Detail) =>
+  d.lessons.filter((l) => l.status === "ready" && !audioBusy(l.audio) && (l.audio.chapters === 0 || l.audio.stale || l.audio.status !== "ready"));
 let keySeq = 0;
 
 function toRows(lessons: AdminLessonRow[]): Row[] {
@@ -192,6 +197,7 @@ function SortableRow({
   onAddAfter,
   onPreview,
   onRegenerate,
+  onRegenerateAudio,
 }: {
   row: Row;
   lesson?: AdminLessonRow;
@@ -203,6 +209,7 @@ function SortableRow({
   onAddAfter: () => void;
   onPreview: () => void;
   onRegenerate: () => void;
+  onRegenerateAudio: () => void;
 }) {
   const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: row.key });
@@ -274,6 +281,7 @@ function SortableRow({
           <span className="text-muted-foreground">{t("admin.newLesson")}</span>
         )}
       </TableCell>
+      <TableCell className="w-32">{lesson && <AudioPill audio={lesson.audio} />}</TableCell>
       <TableCell className="w-11 pr-2 pl-0 text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -292,6 +300,11 @@ function SortableRow({
             {lesson && (
               <DropdownMenuItem disabled={busy || dirty} onClick={onRegenerate}>
                 <RefreshCw /> {t("admin.regenerate")}
+              </DropdownMenuItem>
+            )}
+            {lesson && (
+              <DropdownMenuItem disabled={dirty || lesson.status !== "ready" || audioBusy(lesson.audio)} onClick={onRegenerateAudio}>
+                <Headphones /> {lesson.audio.status === "none" ? t("admin.audio.generateOne") : t("admin.audio.regenerate")}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={onPreview}>
@@ -320,13 +333,15 @@ export default function AdminReaderPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["admin", "reader", id],
     queryFn: () => api.get<Detail>(`/admin/readers/${id}`),
-    refetchInterval: (q) => (q.state.data && BUSY.includes(q.state.data.status) ? 2500 : false),
+    // Poll while content or any luisterles is being made.
+    refetchInterval: (q) => (q.state.data && (BUSY.includes(q.state.data.status) || audioRunning(q.state.data)) ? 2500 : false),
   });
 
   const [rows, setRows] = useState<Row[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<number | null>(null);
+  const [queueingAudio, setQueueingAudio] = useState(false);
 
   // Sync from server unless the admin is editing.
   useEffect(() => {
@@ -412,6 +427,30 @@ export default function AdminReaderPage() {
     await refetch();
   };
 
+  const generateAudio = async () => {
+    setQueueingAudio(true);
+    try {
+      const { queued } = await api.post<{ queued: number }>(`/admin/readers/${id}/audio`, {});
+      if (queued) notify.success(t("admin.audio.queued", { count: queued }));
+      else notify.info(t("admin.audio.nothingToDo"));
+      await refetch();
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : t("common.error"));
+    } finally {
+      setQueueingAudio(false);
+    }
+  };
+  const regenerateAudio = async (lessonId: string) => {
+    try {
+      await api.post(`/admin/lessons/${lessonId}/audio`);
+      notify.success(t("admin.audio.queued", { count: 1 }));
+      await refetch();
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : "";
+      notify.error(code === "ALREADY_RUNNING" ? t("admin.audio.alreadyRunning") : code === "LESSON_NOT_READY" ? t("admin.audio.lessonNotReady") : e instanceof Error ? e.message : t("common.error"));
+    }
+  };
+
   const patchReader = async (body: Record<string, unknown>) => {
     await api.patch(`/admin/readers/${id}`, body);
     await refetch();
@@ -441,6 +480,8 @@ export default function AdminReaderPage() {
     return !o || o.i !== i || o.code !== r.code || o.title !== r.title || o.week !== r.week || o.startPage !== r.startPage || o.endPage !== r.endPage;
   };
   const genDisabled = busy || dirty || !data.lessons.length;
+  const audioTodo = audioMissing(data).length;
+  const audioBusyCount = data.lessons.filter((l) => audioBusy(l.audio)).length;
 
   return (
     <>
@@ -478,6 +519,15 @@ export default function AdminReaderPage() {
           )}
           <Button variant="chunky" onClick={() => generate(partial ? missing : undefined)} disabled={genDisabled} title={dirty ? t("admin.saveFirst") : undefined}>
             <Sparkles /> {partial ? `${t("admin.generateMissing")} (${missing.length})` : t("admin.generateAll")}
+          </Button>
+          <Button
+            variant="flat"
+            onClick={generateAudio}
+            disabled={dirty || queueingAudio || !audioTodo}
+            title={dirty ? t("admin.saveFirst") : !audioTodo ? t("admin.audio.allDone") : t("admin.audio.generateHint")}
+          >
+            {queueingAudio ? <Spinner /> : <Headphones />} {t("admin.audio.generate")}
+            {audioTodo > 0 && <span className="text-muted-foreground tabular-nums">({audioTodo})</span>}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -537,6 +587,13 @@ export default function AdminReaderPage() {
           )}
         </Alert>
       )}
+      {audioBusyCount > 0 && !busy && (
+        <Alert className="mb-4">
+          <Spinner />
+          <AlertTitle>{t("admin.audio.running")}</AlertTitle>
+          <AlertDescription>{t("admin.audio.runningHint", { count: audioBusyCount })}</AlertDescription>
+        </Alert>
+      )}
       {data.error && !busy && (
         <Notice
           variant="flat"
@@ -553,7 +610,7 @@ export default function AdminReaderPage() {
           <p className="text-xs text-muted-foreground">{t("admin.structureHint")}</p>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={onDragEnd}>
-          <Table className="min-w-[720px] table-fixed">
+          <Table className="min-w-[848px] table-fixed">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-9" />
@@ -562,6 +619,7 @@ export default function AdminReaderPage() {
                 <TableHead className="w-16 text-xs font-bold text-muted-foreground">{t("admin.weekCol")}</TableHead>
                 <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.pages")}</TableHead>
                 <TableHead className="w-48 text-xs font-bold text-muted-foreground">{t("admin.content")}</TableHead>
+                <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.audio.column")}</TableHead>
                 <TableHead className="w-11" />
               </TableRow>
             </TableHeader>
@@ -580,12 +638,13 @@ export default function AdminReaderPage() {
                     onAddAfter={() => addAfter(r.key)}
                     onPreview={() => setPreview(r.startPage)}
                     onRegenerate={() => generate([r.id!])}
+                    onRegenerateAudio={() => regenerateAudio(r.id!)}
                   />
                 ))}
               </SortableContext>
               {!rows.length && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     {t("admin.noLessons")}
                   </TableCell>
                 </TableRow>

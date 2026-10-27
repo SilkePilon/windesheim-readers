@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageSpinner } from "@/components/page";
 import { Pill } from "@/components/admin/status-pill";
 import { Markdown } from "@/components/markdown";
+import { AudioScriptSection } from "@/components/admin/audio-script";
 import { api } from "@/lib/api";
 
 interface QuestionRow {
@@ -25,6 +26,7 @@ interface LessonFull {
   readerId: string;
   code: string;
   title: string;
+  status: string;
   summary: string | null;
   terms: { id: string; term: string; definition: string }[];
   flashcards: { id: string; front: string; back: string }[];
@@ -133,6 +135,7 @@ export default function AdminLessonPage() {
           </Link>
         </Button>
       </div>
+      <AudioScriptSection lessonId={data.id} lessonReady={data.status === "ready"} />
       <Tabs defaultValue="summary">
         <TabsList className="mb-2 grid h-auto w-full group-data-horizontal/tabs:h-auto grid-cols-2 gap-1 rounded-xl bg-track p-[3px] sm:inline-flex sm:w-fit">
           <TabsTrigger value="summary" className={TAB}>{t("lesson.tabs.summary")}</TabsTrigger>

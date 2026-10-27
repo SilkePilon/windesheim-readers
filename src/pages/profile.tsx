@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { Check, ChevronRight, Download, LogOut } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,9 +38,9 @@ export default function ProfilePage() {
     try {
       await api.patch("/me", body);
       invalidate();
-      toast.success(t("common.saved"));
+      notify.success(t("common.saved"));
     } catch {
-      toast.error(t("common.error"));
+      notify.error(t("common.error"));
     }
   };
 

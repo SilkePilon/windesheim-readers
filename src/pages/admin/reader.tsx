@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Link, useBlocker, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import {
   DndContext,
   KeyboardSensor,
@@ -399,9 +399,9 @@ export default function AdminReaderPage() {
       );
       setDirty(false);
       await refetch();
-      toast.success(t("common.saved"));
+      notify.success(t("common.saved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSaving(false);
     }

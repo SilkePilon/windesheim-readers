@@ -260,3 +260,36 @@
   --track: rgb(255 255 255 / 0.15);
   --chunky: #110c24;
 }
+
+/* Toasts (sonner + `@/components/app-toast`). Unlayered and doubly scoped so they win over
+   sonner's injected styles. Enter/leave: 200ms slide + fade with a slight overshoot;
+   sonner itself turns every transition off under prefers-reduced-motion. */
+[data-sonner-toaster] [data-sonner-toast]:not([data-swiping="true"]) {
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.45, 0.64, 1),
+    opacity 200ms ease,
+    height 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+[data-sonner-toaster] [data-sonner-toast] > * {
+  transition: opacity 200ms ease;
+}
+/* Collapsed stack: the cards behind the front one peek out as empty chunky cards. */
+[data-sonner-toaster] [data-sonner-toast] > [data-app-toast] {
+  height: 100%;
+}
+[data-sonner-toaster] [data-sonner-toast][data-expanded="false"][data-front="false"] [data-app-toast] > * {
+  opacity: 0;
+}
+@media (min-width: 601px) {
+  [data-sonner-toaster] [data-sonner-toast]:not([data-styled="true"]) {
+    width: var(--width);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toaster] [data-sonner-toast],
+  [data-sonner-toaster] [data-sonner-toast] > *,
+  [data-sonner-toaster] [data-app-toast] > * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

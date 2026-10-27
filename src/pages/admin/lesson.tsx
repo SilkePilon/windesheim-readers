@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { Check, ChevronLeft, ExternalLink, Eye, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -161,7 +161,7 @@ export default function AdminLessonPage() {
                   onClick={async () => {
                     await api.patch(`/admin/lessons/${id}`, { summary });
                     await refetch();
-                    toast.success(t("common.saved"));
+                    notify.success(t("common.saved"));
                   }}
                 >
                   {t("common.save")}

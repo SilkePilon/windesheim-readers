@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { ExternalLink, KeyRound, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -275,9 +275,9 @@ export default function AdminSettingsPage() {
       setDraft({});
       setTyped({});
       setChecked({});
-      toast.success(t("common.saved"));
+      notify.success(t("common.saved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSaving(false);
     }
@@ -286,9 +286,9 @@ export default function AdminSettingsPage() {
   const removeKey = async (p: ProviderId) => {
     try {
       await put({ keys: { [p]: null } });
-      toast.success(t("common.saved"));
+      notify.success(t("common.saved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(e instanceof Error ? e.message : t("common.error"));
     }
   };
 

@@ -411,7 +411,6 @@ const nl = {
 
   quests: {
     title: "Quests",
-    done: "Quest voltooid: {{name}} +{{xp}} XP",
     reward: "+{{n}} XP",
     completed: "Voltooid",
     names: {
@@ -424,7 +423,9 @@ const nl = {
     },
   },
   celebrate: {
-    levelUp: "Level up! Je bent nu level {{n}}",
+    levelUpKicker: "Level up!",
+    levelUpTitle: "Level {{n}}!",
+    questDone: "Quest voltooid",
     badge: "Nieuwe badge: {{name}}",
   },
   world: {

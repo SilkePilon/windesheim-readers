@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { FileUp, RotateCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -252,10 +252,10 @@ export default function AdminReadersPage() {
     // One reader per upload: take the first PDF and say so when more were dropped.
     const f = files.find(isPdf);
     if (!f) {
-      toast.error(t("admin.dropNotPdf"));
+      notify.error(t("admin.dropNotPdf"));
       return;
     }
-    if (files.length > 1) toast.info(t("admin.dropOnlyOne", { name: f.name }));
+    if (files.length > 1) notify.info(t("admin.dropOnlyOne", { name: f.name }));
     setFile(f);
     setOpen(true);
   });

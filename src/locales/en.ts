@@ -413,7 +413,6 @@ const en: Messages = {
 
   quests: {
     title: "Quests",
-    done: "Quest complete: {{name}} +{{xp}} XP",
     reward: "+{{n}} XP",
     completed: "Completed",
     names: {
@@ -426,7 +425,9 @@ const en: Messages = {
     },
   },
   celebrate: {
-    levelUp: "Level up! You're now level {{n}}",
+    levelUpKicker: "Level up!",
+    levelUpTitle: "Level {{n}}!",
+    questDone: "Quest complete",
     badge: "New badge: {{name}}",
   },
   world: {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notify } from "@/lib/notify";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
       await api.patch(`/admin/users/${id}`, { role });
       await refetch();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("common.error"));
+      notify.error(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSaving(null);
     }

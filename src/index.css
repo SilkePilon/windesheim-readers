@@ -347,13 +347,19 @@
 /* ---------- View transitions (`@/lib/motion`) ----------
    Pages: the content (root) fades + slides 12 px, from the right going forward and from
    the left going back (<html data-nav-dir>). Dock, rail, the StudyShell header, the home
-   chips and the admin header have their own names: when both pages have them only the
+   chips, the admin header and the toaster have their own names: when both pages have them only the
    live new one shows, so they stay put (and the dock pill still slides). */
 .vt-dock { view-transition-name: dock; }
 .vt-rail { view-transition-name: rail; }
 .vt-study-header { view-transition-name: study-header; }
 .vt-chips { view-transition-name: chips; }
 .vt-admin-header { view-transition-name: admin-header; }
+/* Sonner's single toaster list (one position at a time): toasts stay put, not slide along.
+   The list itself is 0 px tall (the toasts hang out of it, anchored to its top or bottom
+   edge), and a 0-tall snapshot shows nothing, so it gets room while a transition runs;
+   it is click-through, so the extra height never blocks anything. */
+[data-sonner-toaster] { view-transition-name: toasts; }
+html:active-view-transition [data-sonner-toaster] { height: 50dvh; }
 /* Scoped transitions name their element only while they run. */
 html[data-vt="quiz"] .vt-quiz-question { view-transition-name: quiz-question; }
 
@@ -373,7 +379,8 @@ html[data-vt="quiz"] .vt-quiz-question { view-transition-name: quiz-question; }
 ::view-transition-old(rail),
 ::view-transition-old(study-header),
 ::view-transition-old(chips),
-::view-transition-old(admin-header) {
+::view-transition-old(admin-header),
+::view-transition-old(toasts) {
   animation: none;
   opacity: 0;
 }
@@ -381,14 +388,16 @@ html[data-vt="quiz"] .vt-quiz-question { view-transition-name: quiz-question; }
 ::view-transition-new(rail),
 ::view-transition-new(study-header),
 ::view-transition-new(chips),
-::view-transition-new(admin-header) {
+::view-transition-new(admin-header),
+::view-transition-new(toasts) {
   animation: none;
 }
 ::view-transition-group(dock),
 ::view-transition-group(rail),
 ::view-transition-group(study-header),
 ::view-transition-group(chips),
-::view-transition-group(admin-header) {
+::view-transition-group(admin-header),
+::view-transition-group(toasts) {
   animation-duration: 0s;
 }
 

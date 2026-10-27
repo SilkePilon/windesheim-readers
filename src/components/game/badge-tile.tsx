@@ -57,6 +57,35 @@ function ProgressBar({ value, target, className }: { value: number; target: numb
   );
 }
 
+// Shared by BadgeCell and its loading skeleton, so the skeleton takes exactly the same space.
+const CELL = "group flex min-w-0 flex-col items-center gap-1.5 rounded-[20px] text-center";
+// Names wrap between words only (no hyphenation, balanced lines); every name fits a
+// 360px-wide phone's cell (checked in the P1 fix round).
+const CELL_NAME = "-mx-1 line-clamp-2 w-[calc(100%+0.5rem)] text-[10.5px] leading-tight font-bold text-balance hyphens-none";
+const CELL_PROGRESS = "-mt-0.5 flex w-full flex-col items-center gap-0.5";
+const CELL_PROGRESS_TEXT = "text-[10px] leading-none font-bold tabular-nums";
+
+/**
+ * Loading stand-in for a BadgeCell, built from the catalogue: a pulsing tile, the name
+ * (transparent, so it wraps to the same lines) and the progress row a locked badge has.
+ */
+export function BadgeCellSkeleton({ id }: { id: BadgeId }) {
+  const { t } = useTranslation();
+  const target = BADGES[id].progress?.target;
+  return (
+    <div aria-hidden className={CELL}>
+      <span className="aspect-square w-full animate-pulse rounded-[20px] bg-track shadow-[0_4px_0_var(--chunky)] motion-reduce:animate-none" />
+      <span className={cn(CELL_NAME, "text-transparent")}>{t(`badges.${id}.name`)}</span>
+      {target != null && (
+        <span className={CELL_PROGRESS}>
+          <span className="block h-1.5 w-full max-w-14 rounded-full bg-track" />
+          <span className={cn(CELL_PROGRESS_TEXT, "text-transparent")}>{t("profile.badgeProgress", { value: 0, target })}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Profile grid cell: the medal, its name, a progress bar when locked; tap → details. */
 export function BadgeCell({ badge }: { badge: BadgeStatus }) {
   const { t, i18n } = useTranslation();
@@ -69,7 +98,7 @@ export function BadgeCell({ badge }: { badge: BadgeStatus }) {
     <Popover>
       <PopoverTrigger
         aria-label={earnedAt ? name : `${name}, ${t("profile.lockedBadge")}${progressText ? ` (${progressText})` : ""}`}
-        className="group flex min-w-0 flex-col items-center gap-1.5 rounded-[20px] text-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className={cn(CELL, "outline-none focus-visible:ring-3 focus-visible:ring-ring/50")}
       >
         <BadgeIconTile
           id={id}
@@ -80,19 +109,14 @@ export function BadgeCell({ badge }: { badge: BadgeStatus }) {
           )}
         />
         <span
-          className={cn(
-            // Names wrap between words only (no hyphenation, balanced lines); every name fits a
-            // 360px-wide phone's cell (checked in the P1 fix round).
-            "-mx-1 line-clamp-2 w-[calc(100%+0.5rem)] text-[10.5px] leading-tight font-bold text-balance hyphens-none",
-            !earnedAt && "text-muted-foreground",
-          )}
+          className={cn(CELL_NAME, !earnedAt && "text-muted-foreground")}
         >
           {name}
         </span>
         {!earnedAt && progress && (
-          <span className="-mt-0.5 flex w-full flex-col items-center gap-0.5">
+          <span className={CELL_PROGRESS}>
             <ProgressBar value={progress.value} target={progress.target} className="max-w-14" />
-            <span className="text-[10px] leading-none font-bold text-muted-foreground tabular-nums">{progressText}</span>
+            <span className={cn(CELL_PROGRESS_TEXT, "text-muted-foreground")}>{progressText}</span>
           </span>
         )}
       </PopoverTrigger>

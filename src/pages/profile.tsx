@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Page, PageSpinner } from "@/components/page";
+import { Page } from "@/components/page";
 import { PlayerAvatar } from "@/components/game/player-avatar";
 import { InstallDrawer } from "@/components/install-drawer";
 import { useInstall } from "@/lib/install";
@@ -18,9 +18,8 @@ import { api } from "@/lib/api";
 import { setLocale } from "@/lib/i18n";
 import { useBadges, useInvalidateProgress, useMe } from "@/lib/queries";
 import { levelTitleIndex } from "@shared/game";
-import { BADGE_CATEGORIES, BADGES } from "@shared/badges";
-import { BadgeCell } from "@/components/game/badge-tile";
-import type { BadgeStatus } from "@/lib/types";
+import { BADGE_CATEGORIES, BADGE_LIST, BADGES } from "@shared/badges";
+import { BadgeCell, BadgeCellSkeleton } from "@/components/game/badge-tile";
 import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +30,7 @@ export default function ProfilePage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  if (!me) return <PageSpinner />;
+  if (!me) return <ProfileSkeleton />;
   const s = me.stats;
   const num = (n: number) => n.toLocaleString(i18n.language);
 
@@ -117,6 +116,28 @@ export default function ProfilePage() {
   );
 }
 
+/** Loading stand-in: the header and stat tiles at their real sizes (the badges have their own). */
+function ProfileSkeleton() {
+  return (
+    <Page className="max-w-xl md:max-w-3xl lg:max-w-4xl">
+      <div aria-hidden className="animate-pulse motion-reduce:animate-none">
+        <div className="flex items-center gap-3">
+          <div className="size-[58px] shrink-0 rounded-full bg-track" />
+          <div className="flex flex-col gap-1.5">
+            <div className="h-[22px] w-40 rounded-md bg-track" />
+            <div className="h-3.5 w-28 rounded-md bg-track" />
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-[67.25px] rounded-[20px] bg-track" />
+          ))}
+        </div>
+      </div>
+    </Page>
+  );
+}
+
 const SELECT =
   "-mr-2 h-9 border-0 bg-transparent font-bold text-muted-foreground shadow-none hover:text-foreground dark:bg-transparent dark:hover:bg-transparent";
 
@@ -142,28 +163,43 @@ function BadgeSection() {
         {badges && <span className="text-[13px] text-muted-foreground">{t("profile.badgeCount", { n: earned, total: badges.length })}</span>}
       </h2>
       {BADGE_CATEGORIES.map((category) => {
-        const list = (badges ?? []).filter((b) => BADGES[b.id]?.category === category);
+        const title = t(`badgeCategories.${category}`);
+        // While loading, skeleton cells from the catalogue hold the grid's final size.
+        if (!badges) {
+          const ids = BADGE_LIST.filter((d) => d.category === category).map((d) => d.id);
+          return (
+            <BadgeGroup key={category} title={title}>
+              {ids.map((id) => (
+                <BadgeCellSkeleton key={id} id={id} />
+              ))}
+            </BadgeGroup>
+          );
+        }
+        const list = badges.filter((b) => BADGES[b.id]?.category === category);
         if (!list.length) return null;
-        return <BadgeGroup key={category} title={t(`badgeCategories.${category}`)} list={list} intro={intro} />;
+        const count = t("profile.badgeCount", { n: list.filter((b) => b.earnedAt).length, total: list.length });
+        return (
+          <BadgeGroup key={category} title={title} count={count} intro={intro}>
+            {list.map((b) => (
+              <BadgeCell key={b.id} badge={b} />
+            ))}
+          </BadgeGroup>
+        );
       })}
     </section>
   );
 }
 
-function BadgeGroup({ title, list, intro }: { title: string; list: BadgeStatus[]; intro: boolean }) {
-  const { t } = useTranslation();
-  const earned = list.filter((b) => b.earnedAt).length;
+function BadgeGroup({ title, count, intro, children }: { title: string; count?: string; intro?: boolean; children: ReactNode }) {
   return (
     <div className="mt-4">
       <h3 className="flex items-baseline justify-between gap-2 text-[13px] font-extrabold text-muted-foreground">
         <span>{title}</span>
-        <span className="text-xs tabular-nums">{t("profile.badgeCount", { n: earned, total: list.length })}</span>
+        <span className="text-xs tabular-nums">{count ?? "\u00a0"}</span>
       </h3>
       {/* The badges fade up in turn, once, when they arrive. */}
       <div className={cn("mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3 md:grid-cols-6 lg:grid-cols-8", intro && "stagger-in")}>
-        {list.map((b) => (
-          <BadgeCell key={b.id} badge={b} />
-        ))}
+        {children}
       </div>
     </div>
   );

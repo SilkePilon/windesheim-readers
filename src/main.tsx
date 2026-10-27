@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { RouterProvider, createBrowserRouter } from "react-router";
+import { RouterProvider, ScrollRestoration, createBrowserRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import "@fontsource/fredoka/600.css";
@@ -33,7 +33,21 @@ if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
 
 // A data router (one catch-all route; App keeps its declarative <Routes>) so pages can
 // use `useBlocker`, e.g. the admin structure editor's unsaved-changes guard.
-const router = createBrowserRouter([{ path: "*", element: <App /> }]);
+// <ScrollRestoration>: a new page (push/replace) starts at the top, back/forward restores
+// where you were (keyed per history entry; keyed by pathname, a push to a page visited
+// before would restore its old position). It scrolls in a layout effect, so inside a
+// page transition the new page is captured at its new scroll position.
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: (
+      <>
+        <ScrollRestoration />
+        <App />
+      </>
+    ),
+  },
+]);
 // Every navigation is a view transition (content slides, dock/rail stay put).
 installPageTransitions(router);
 

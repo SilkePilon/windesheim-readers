@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { StudyShell } from "@/components/shell/study-shell";
 import { Notice } from "@/components/notice";
 import { FeedbackSheet } from "@/components/game/feedback-sheet";
+import { autoAdvanceMs } from "@/lib/quiz-timing";
 import { Chip } from "@/components/game/chip";
 import { QuestionInput, correctAnswerText, isAnswered, type Reveal } from "@/components/question-input";
 import { api } from "@/lib/api";
@@ -35,10 +36,6 @@ export function QuestionPrompt({ text, className }: { text: string; className?: 
 type QuizResult = XpResult & { correct: number; max: number };
 type Phase = "loading" | "playing" | "result" | "error";
 
-/** After checking, the next button fills and moves on by itself: quick when right, a little
- * longer when wrong so the correct answer can be read. Tapping the sheet stops it. */
-const AUTO_NEXT_CORRECT_MS = 1000;
-const AUTO_NEXT_WRONG_MS = 2500;
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || (t instanceof HTMLElement && t.isContentEditable);
@@ -258,7 +255,7 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
             nextLabel={isLast ? t("quiz.result") : t("common.next")}
             onNext={() => void next()}
             busy={busy}
-            autoAdvanceMs={reveal.correct ? AUTO_NEXT_CORRECT_MS : AUTO_NEXT_WRONG_MS}
+            autoAdvanceMs={autoAdvanceMs(reveal.correct, `${answerText ?? ""} ${reveal.explanation ?? ""}`)}
           />
         ) : tapToAnswer ? null : (
           <div className="sticky bottom-0 bg-gradient-to-t from-background from-70% to-transparent pt-1 pb-[calc(4px+env(safe-area-inset-bottom))]">

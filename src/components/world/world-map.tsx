@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { PathGroup, PathNode } from "@shared/path";
 import { LevelBar } from "@/components/game/level-bar";
 import { bubbleBox, composeWorld, WORLD_WIDTH } from "@/lib/world/compose";
+import { afterViewTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { REGISTRY } from "./registry";
 import { renderWorldSvg } from "./render";
@@ -90,7 +91,8 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
   useEffect(() => {
     if (!currentId) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    currentRef.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    // After a page transition has finished: scrolling during one shifts its snapshots.
+    return afterViewTransition(() => currentRef.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" }));
   }, [currentId]);
 
   const H = layout.height;

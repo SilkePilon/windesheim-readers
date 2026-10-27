@@ -17,7 +17,7 @@ export function DesktopRail({ items }: { items: NavItem[] }) {
   return (
     <nav
       aria-label={t("app.name")}
-      className="fixed top-1/2 left-4 z-30 hidden -translate-y-1/2 flex-col items-center gap-1.5 rounded-[22px] bg-card p-2 shadow-[0_4px_0_var(--chunky)] md:flex"
+      className="vt-rail fixed top-1/2 left-4 z-30 hidden -translate-y-1/2 flex-col items-center gap-1.5 rounded-[22px] bg-card p-2 shadow-[0_4px_0_var(--chunky)] md:flex"
     >
       <Link
         to="/"

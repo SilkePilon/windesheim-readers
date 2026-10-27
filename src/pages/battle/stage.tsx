@@ -7,6 +7,7 @@ import { QuestionPrompt } from "@/components/quiz";
 import { PlayerAvatar } from "@/components/game/player-avatar";
 import { Podium } from "@/components/game/podium";
 import type { PublicQuestion } from "@/lib/types";
+import { useCountUp } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { BattleSettings } from "@shared/battle";
 import { SettingsCard, SettingsChips } from "./settings";
@@ -305,16 +306,17 @@ function AnswerBlocks({
         const isPicked = picked === c.value;
         const isCorrect = !!reveal && reveal.correctAnswer === c.value;
         const count = reveal?.counts[JSON.stringify(c.value)] ?? 0;
-        // Waiting: the other blocks fade once you've answered. Reveal: the right one stays,
-        // your wrong pick half-fades (so its ✕ still reads), the rest fade out.
+        // Waiting: the other blocks fade once you've answered. Reveal: the right one stays
+        // (and bounces), your wrong pick fades a little less (so its ✕ still reads) than
+        // the other wrong ones (~50 %).
         const fade = reveal
           ? isCorrect
             ? null
             : isPicked
               ? "disabled:opacity-60"
-              : "disabled:opacity-35"
+              : "disabled:opacity-50"
           : picked !== undefined && !isPicked
-            ? "disabled:opacity-35"
+            ? "disabled:opacity-50"
             : null;
         return (
           <Button
@@ -323,6 +325,8 @@ function AnswerBlocks({
             disabled={locked || !!reveal || picked !== undefined}
             onClick={() => onPick(c.value)}
             aria-pressed={isPicked}
+            // New question: the blocks pop in 40 ms apart, after the prompt.
+            style={reveal ? undefined : { animationDelay: `${80 + i * 40}ms` }}
             className={cn(
               "relative h-auto flex-col items-stretch justify-between gap-3 rounded-[20px] p-3 text-left font-sans text-[15px] leading-snug font-bold whitespace-normal [--press:6px] md:p-4 md:text-lg",
               tall ? "min-h-32 md:min-h-44" : "min-h-28 md:min-h-40",
@@ -330,6 +334,10 @@ function AnswerBlocks({
               c.block.cls,
               fade ?? "disabled:opacity-100",
               isPicked && "ring-4 ring-white",
+              // Fades ease over 300 ms (the chunky press keeps its own quick transition).
+              "transition-[translate,box-shadow,background-color,color,filter,opacity] [transition-duration:100ms,100ms,100ms,100ms,100ms,300ms] motion-reduce:transition-none",
+              reveal && isCorrect ? "animate-bounce-correct" : "animate-pop [animation-fill-mode:backwards]",
+              "motion-reduce:animate-none",
             )}
           >
             <span className="flex items-start justify-between gap-2">
@@ -392,6 +400,9 @@ export function Play({
   const points = usePoints();
   const me = room.players.find((p) => p.id === meId);
   const myResult = reveal && meId ? reveal.results[meId] : null;
+  // Points count up: your score in the corner and the "+N" on the result banner.
+  const score = useCountUp(me?.score ?? 0);
+  const gained = useCountUp(myResult?.correct ? myResult.points : 0, { from: 0 });
   const isLast = q.index + 1 >= q.total;
   const answeredCount = progress?.answered ?? 0;
   const playerCount = progress?.total ?? room.players.length;
@@ -402,19 +413,22 @@ export function Play({
         <span className="text-[13px] font-bold text-muted-foreground md:text-base">{t("quiz.question", { i: q.index + 1, n: q.total })}</span>
         <Countdown endsAt={q.endsAt} durationMs={q.durationMs} stopped={!!reveal} />
         <span className="justify-self-end text-right font-heading text-[15px] font-semibold text-gold tabular-nums md:text-xl">
-          {me ? points(me.score) : null}
+          {me ? points(score) : null}
         </span>
       </div>
 
-      {q.doubled && (
-        <p className="mt-4 inline-flex animate-pop items-center gap-1.5 self-center rounded-full bg-gold px-4 py-1.5 font-heading text-base font-semibold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)] motion-reduce:animate-none md:text-lg">
-          <Zap className="size-4 fill-current" aria-hidden /> {t("battle.doublePoints")}
-        </p>
-      )}
-      <QuestionPrompt
-        text={q.question.prompt}
-        className={cn("text-[22px] leading-tight md:text-[32px]", q.doubled ? "mt-3 md:mt-5" : "mt-5 md:mt-8")}
-      />
+      {/* Each new question slides up and fades in. */}
+      <div key={`prompt-${q.index}`} className="flex animate-question-in flex-col motion-reduce:animate-none">
+        {q.doubled && (
+          <p className="mt-4 inline-flex animate-pop items-center gap-1.5 self-center rounded-full bg-gold px-4 py-1.5 font-heading text-base font-semibold text-gold-foreground shadow-[0_4px_0_var(--gold-shade)] motion-reduce:animate-none md:text-lg">
+            <Zap className="size-4 fill-current" aria-hidden /> {t("battle.doublePoints")}
+          </p>
+        )}
+        <QuestionPrompt
+          text={q.question.prompt}
+          className={cn("text-[22px] leading-tight md:text-[32px]", q.doubled ? "mt-3 md:mt-5" : "mt-5 md:mt-8")}
+        />
+      </div>
       {!reveal && (
         <p className="mt-2.5 text-[13px] font-bold text-muted-foreground md:text-[15px]" aria-live="polite">
           {t("battle.answered", { count: answeredCount, n: playerCount })}
@@ -451,7 +465,19 @@ export function Play({
                     : "bg-card shadow-[0_5px_0_var(--chunky)]",
               )}
             >
-              {myResult ? (myResult.correct ? t("battle.correctLabel", { n: myResult.points }) : t("battle.wrongLabel")) : t("battle.noAnswer")}
+              {myResult ? (
+                myResult.correct ? (
+                  // The tween is visual only; the status region reads the final number once.
+                  <>
+                    <span aria-hidden>{t("battle.correctLabel", { n: gained })}</span>
+                    <span className="sr-only">{t("battle.correctLabel", { n: myResult.points })}</span>
+                  </>
+                ) : (
+                  t("battle.wrongLabel")
+                )
+              ) : (
+                t("battle.noAnswer")
+              )}
             </div>
           )}
           {reveal.explanation && <p className="text-sm leading-relaxed font-semibold text-muted-foreground">{reveal.explanation}</p>}
@@ -532,6 +558,7 @@ export function Results({ end, meId, onPlayAgain }: { end: EndMsg; meId?: string
         <h1 className="font-heading text-3xl font-semibold">{t("battle.podium")}</h1>
       </div>
       <Podium
+        rise
         className="mt-6"
         entries={end.ranking.slice(0, 3).map((p) => ({ name: p.name, value: points(p.score), me: p.id === meId }))}
       />

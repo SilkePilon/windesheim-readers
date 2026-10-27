@@ -62,12 +62,15 @@ export function FlashcardSession({
   const [busy, setBusy] = useState(false);
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
+  // A card that just came up (after a rating) slides in; turning one back pops.
+  const [entering, setEntering] = useState(true);
 
   const reset = useCallback((cards: QueueCard[]) => {
     setQueue(cards);
     setInitial(cards.length);
     setDone(0);
     setFlipped(false);
+    setEntering(true);
     setDx(0);
   }, []);
 
@@ -76,6 +79,10 @@ export function FlashcardSession({
   }, [data, reset]);
 
   const card = queue[0];
+  const flip = useCallback((to?: boolean) => {
+    setEntering(false);
+    setFlipped((f) => to ?? !f);
+  }, []);
   // Synchronous guard against double ratings (keys, taps and a swipe's fly-off delay).
   const lock = useRef(false);
 
@@ -91,6 +98,7 @@ export function FlashcardSession({
         });
         celebrate(res, { quietXp: true });
         setFlipped(false);
+        setEntering(true);
         // "Again" (or anything due within 10 min) comes back later in this session.
         const soon = new Date(res.due).getTime() - Date.now() < 10 * 60_000;
         setQueue((q) => {
@@ -116,14 +124,14 @@ export function FlashcardSession({
         if (e.target instanceof HTMLElement && e.target.closest("button, a")) return;
         e.preventDefault();
         if (e.repeat) return; // holding Space must not flicker the card
-        setFlipped((f) => !f);
+        flip();
       } else if (flipped && ["1", "2", "3", "4"].includes(e.key)) {
         void rate(Number(e.key));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [card, flipped, rate]);
+  }, [card, flipped, rate, flip]);
 
   // When a session finishes, refresh XP/due counters.
   useEffect(() => {
@@ -246,8 +254,11 @@ export function FlashcardSession({
         <div className="flex flex-1 flex-col [perspective:1200px] md:flex-none">
           {/* Re-keyed per card and side: a new card pops in, flipping swings the card round. */}
           <div
-            key={`${card.id}:${flipped}`}
-            className={cn("flex flex-1 flex-col motion-reduce:animate-none", flipped ? "animate-card-flip" : "animate-pop")}
+            key={`${card.id}:${flipped}:${entering}`}
+            className={cn(
+              "flex flex-1 flex-col motion-reduce:animate-none",
+              flipped ? "animate-card-flip" : entering ? "animate-card-in" : "animate-pop",
+            )}
           >
           <div
             role="button"
@@ -260,7 +271,7 @@ export function FlashcardSession({
                 dragged.current = false;
                 return;
               }
-              setFlipped((f) => !f);
+              flip();
             }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -355,7 +366,7 @@ export function FlashcardSession({
               </div>
             </>
           ) : (
-            <Button variant="chunky" size="xl" className="w-full" onClick={() => setFlipped(true)}>
+            <Button variant="chunky" size="xl" className="w-full" onClick={() => flip(true)}>
               {t("cards.showAnswer")}
             </Button>
           )}

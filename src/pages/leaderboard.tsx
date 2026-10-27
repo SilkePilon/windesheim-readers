@@ -8,6 +8,7 @@ import { Podium } from "@/components/game/podium";
 import { Segmented } from "@/components/game/segmented";
 import { useLeaderboard, useMe } from "@/lib/queries";
 import type { LeaderboardEntry } from "@/lib/types";
+import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type Period = "week" | "all";
@@ -25,6 +26,8 @@ export default function LeaderboardPage() {
   // Your own row below the list when you're not in the shown top (rank > 50).
   const meBelow = data?.me && !data.top.some((e) => e.me) ? data.me : null;
   const hidden = me ? !me.user.showOnLeaderboard : false;
+  // Rows fade up once when the board first shows, not again on a period switch.
+  const intro = useEntrance(!!data?.top.length);
 
   return (
     <Page className="max-w-xl">
@@ -56,7 +59,7 @@ export default function LeaderboardPage() {
           />
 
           {(rest.length > 0 || meBelow) && (
-            <Card className="mt-4 gap-0 p-1">
+            <Card className={cn("mt-4 gap-0 p-1", intro && "stagger-in")}>
               {rest.map((e) => (
                 <Row key={`${e.rank}-${e.name}`} e={e} label={label(e)} xp={xp(e.xp)} hidden={e.me && hidden} />
               ))}

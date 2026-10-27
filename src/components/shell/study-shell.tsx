@@ -34,7 +34,7 @@ export function StudyShell({
 
   return (
     <div className="flex min-h-dvh flex-col overflow-x-clip bg-background">
-      <header className="sticky top-0 z-30 bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+      <header className="vt-study-header sticky top-0 z-30 bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
         <div className={cn("mx-auto flex w-full items-center gap-3 px-4 py-3", width)}>
           <Button variant="chunky-surface" size="icon-xl" aria-label={t("common.close")} onClick={onClose} className="[--press:3px]">
             <X strokeWidth={2.5} />

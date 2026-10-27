@@ -17,6 +17,30 @@
     0% { transform: scale(0.8); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
   }
+  /* Motion (spec §2): 150–300 ms, transform/opacity only. Entrance animations use
+     `backwards` fill so they let go of `transform` once done (presses keep working). */
+  --ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-up: fade-up 260ms var(--ease-soft) backwards;
+  --animate-question-in: question-in 280ms var(--ease-soft) backwards;
+  --animate-card-in: card-in 260ms var(--ease-soft) backwards;
+  --animate-bounce-correct: bounce-correct 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-rise: rise 280ms var(--ease-soft) backwards;
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+  }
+  @keyframes question-in {
+    from { opacity: 0; transform: translateY(16px); }
+  }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  }
+  @keyframes bounce-correct {
+    0%, 100% { transform: scale(1); }
+    45% { transform: scale(1.06); }
+  }
+  @keyframes rise {
+    from { transform: scaleY(0); }
+  }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-6px); }
@@ -296,6 +320,133 @@
   [data-sonner-toaster] [data-sonner-toast] > *,
   [data-sonner-toaster] [data-app-toast] > * {
     transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* First-mount stagger for lists and tiles (with `useEntrance`): children fade up 30 ms
+   apart; from the 8th on they come in together. */
+@utility stagger-in {
+  & > * {
+    animation: var(--animate-fade-up);
+  }
+  & > :nth-child(2) { animation-delay: 30ms; }
+  & > :nth-child(3) { animation-delay: 60ms; }
+  & > :nth-child(4) { animation-delay: 90ms; }
+  & > :nth-child(5) { animation-delay: 120ms; }
+  & > :nth-child(6) { animation-delay: 150ms; }
+  & > :nth-child(7) { animation-delay: 180ms; }
+  & > :nth-child(n + 8) { animation-delay: 210ms; }
+  @media (prefers-reduced-motion: reduce) {
+    & > * {
+      animation: none;
+    }
+  }
+}
+
+/* ---------- View transitions (`@/lib/motion`) ----------
+   Pages: the content (root) fades + slides 12 px, from the right going forward and from
+   the left going back (<html data-nav-dir>). Dock, rail, the StudyShell header, the home
+   chips and the admin header have their own names: when both pages have them only the
+   live new one shows, so they stay put (and the dock pill still slides). */
+.vt-dock { view-transition-name: dock; }
+.vt-rail { view-transition-name: rail; }
+.vt-study-header { view-transition-name: study-header; }
+.vt-chips { view-transition-name: chips; }
+.vt-admin-header { view-transition-name: admin-header; }
+/* Scoped transitions name their element only while they run. */
+html[data-vt="quiz"] .vt-quiz-question { view-transition-name: quiz-question; }
+
+::view-transition-group(*) {
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-soft);
+}
+::view-transition-old(*):only-child {
+  animation: 150ms var(--ease-soft) both vt-fade-out;
+}
+::view-transition-new(*):only-child {
+  animation: 260ms var(--ease-soft) both vt-fade-in;
+}
+/* Paired (on both pages): hide the old snapshot and show the live new one unanimated.
+   Alone (only one page has it) the `:only-child` fades above win on specificity. */
+::view-transition-old(dock),
+::view-transition-old(rail),
+::view-transition-old(study-header),
+::view-transition-old(chips),
+::view-transition-old(admin-header) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(dock),
+::view-transition-new(rail),
+::view-transition-new(study-header),
+::view-transition-new(chips),
+::view-transition-new(admin-header) {
+  animation: none;
+}
+::view-transition-group(dock),
+::view-transition-group(rail),
+::view-transition-group(study-header),
+::view-transition-group(chips),
+::view-transition-group(admin-header) {
+  animation-duration: 0s;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  animation: 150ms var(--ease-soft) both vt-out-left;
+}
+::view-transition-new(root) {
+  animation: 260ms var(--ease-soft) both vt-in-right;
+}
+html[data-nav-dir="back"]::view-transition-old(root) {
+  animation-name: vt-out-right;
+}
+html[data-nav-dir="back"]::view-transition-new(root) {
+  animation-name: vt-in-left;
+}
+/* Same page (only state changed) and in-page transitions: the root swaps instantly. */
+html[data-nav-dir="none"]:not([data-vt])::view-transition-group(*),
+html[data-nav-dir="none"]:not([data-vt])::view-transition-old(*),
+html[data-nav-dir="none"]:not([data-vt])::view-transition-new(*),
+html[data-vt]::view-transition-old(root),
+html[data-vt]::view-transition-new(root) {
+  animation: none;
+}
+html[data-vt]::view-transition-old(root) {
+  display: none;
+}
+/* Quiz: the old question leaves to the left, the next one comes in from the right. */
+html[data-vt="quiz"]::view-transition-group(quiz-question) {
+  animation: none;
+}
+html[data-vt="quiz"]::view-transition-old(quiz-question),
+html[data-vt="quiz"]::view-transition-new(quiz-question) {
+  mix-blend-mode: normal;
+}
+html[data-vt="quiz"]::view-transition-old(quiz-question) {
+  animation: 180ms var(--ease-soft) both vt-out-left-far;
+}
+html[data-vt="quiz"]::view-transition-new(quiz-question) {
+  animation: 280ms var(--ease-soft) 60ms both vt-in-right-far;
+}
+
+@keyframes vt-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-out-left { to { opacity: 0; transform: translateX(-12px); } }
+@keyframes vt-out-right { to { opacity: 0; transform: translateX(12px); } }
+@keyframes vt-in-right { from { opacity: 0; transform: translateX(12px); } }
+@keyframes vt-in-left { from { opacity: 0; transform: translateX(-12px); } }
+@keyframes vt-out-left-far { to { opacity: 0; transform: translateX(-48px); } }
+@keyframes vt-in-right-far { from { opacity: 0; transform: translateX(48px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none !important;
   }
 }

@@ -19,12 +19,16 @@ const STEPS = [
   { order: "order-3", h: "h-[46px]", fill: "bg-[#E59B62] shadow-[inset_0_-5px_0_rgb(0_0_0/0.14)]", avatar: "size-[46px] text-[17px]" },
 ] as const;
 
+// `rise` start delay (ms) per place: 3rd first, 1st last.
+const RISE_DELAY = [300, 150, 0];
+
 /**
  * Podium for the top 3 (`entries` in rank order; fewer than 3 is fine). Shown as 2nd,
  * 1st, 3rd via CSS order, so the DOM (and screen readers) keep rank order. Reused by the
- * leaderboard and the battle result.
+ * leaderboard and the battle result. With `rise` the steps grow up in sequence (3rd, 2nd,
+ * then 1st), each player fading in on top of their step.
  */
-export function Podium({ entries, className }: { entries: PodiumEntry[]; className?: string }) {
+export function Podium({ entries, className, rise }: { entries: PodiumEntry[]; className?: string; rise?: boolean }) {
   return (
     <ol className={cn("grid grid-cols-3 items-end gap-2 text-center", className)}>
       {[0, 1, 2].map((place) => {
@@ -33,18 +37,23 @@ export function Podium({ entries, className }: { entries: PodiumEntry[]; classNa
         return (
           <li key={place} className={cn("flex min-w-0 flex-col items-center", step.order, !e && "invisible")} aria-hidden={!e}>
             {e && (
-              <>
+              <div
+                className={cn("flex w-full flex-col items-center", rise && "animate-fade-up motion-reduce:animate-none")}
+                style={rise ? { animationDelay: `${RISE_DELAY[place]! + 180}ms` } : undefined}
+              >
                 <PlayerAvatar name={e.avatarName ?? e.name} me={e.me} className={cn("mb-1.5", step.avatar)} />
                 <span className={cn("w-full px-0.5 text-[13px] leading-tight font-bold break-words hyphens-auto", e.me && "text-primary")}>{e.name}</span>
                 <span className="font-heading text-xs font-semibold text-muted-foreground tabular-nums">{e.value}</span>
-              </>
+              </div>
             )}
             <div
               className={cn(
                 "mt-1.5 w-full rounded-t-[14px] rounded-b-md pt-2 font-heading text-[22px] leading-none font-bold text-white [text-shadow:0_2px_0_rgb(0_0_0/0.12)]",
                 step.h,
                 step.fill,
+                rise && "origin-bottom animate-rise motion-reduce:animate-none",
               )}
+              style={rise ? { animationDelay: `${RISE_DELAY[place]}ms` } : undefined}
             >
               {place + 1}
             </div>

@@ -70,7 +70,7 @@ export function FloatingDock({ items }: { items: NavItem[] }) {
   return (
     <nav
       aria-label={t("app.name")}
-      className="fixed inset-x-4 bottom-[calc(16px+env(safe-area-inset-bottom))] z-30 rounded-[26px] bg-card p-2 shadow-[0_5px_0_var(--chunky),0_14px_28px_-12px_rgba(36,26,74,0.35)] md:hidden dark:shadow-[0_5px_0_var(--chunky),0_14px_28px_-10px_rgba(0,0,0,0.6)]"
+      className="vt-dock fixed inset-x-4 bottom-[calc(16px+env(safe-area-inset-bottom))] z-30 rounded-[26px] bg-card p-2 shadow-[0_5px_0_var(--chunky),0_14px_28px_-12px_rgba(36,26,74,0.35)] md:hidden dark:shadow-[0_5px_0_var(--chunky),0_14px_28px_-10px_rgba(0,0,0,0.6)]"
     >
       <div ref={rowRef} className="relative flex items-center justify-between">
         {/* Hidden measurer for the active label's natural width. */}

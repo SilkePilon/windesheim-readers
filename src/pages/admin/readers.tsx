@@ -17,6 +17,7 @@ import { AdminActions } from "@/pages/admin/layout";
 import { useRetryReader } from "@/components/admin/use-retry-reader";
 import { api } from "@/lib/api";
 import type { AdminReader } from "@/lib/types";
+import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const BUSY = ["extracting", "structuring", "generating"];
@@ -247,6 +248,8 @@ export default function AdminReadersPage() {
     queryFn: () => api.get<AdminReader[]>("/admin/readers"),
     refetchInterval: (q) => (q.state.data?.some((r) => BUSY.includes(r.status)) ? 3000 : false),
   });
+  // The cards fade up once on arrival, not on every poll.
+  const intro = useEntrance(!isLoading);
 
   const dragging = usePageDrop((files) => {
     // One reader per upload: take the first PDF and say so when more were dropped.
@@ -271,7 +274,7 @@ export default function AdminReadersPage() {
       {isLoading ? (
         <PageSpinner />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className={cn("grid gap-3 md:grid-cols-2 lg:grid-cols-3", intro && "stagger-in")}>
           {data?.map((r) => (
             <ReaderCard key={r.id} r={r} onRetry={() => retry(r.id)} retrying={pending === r.id} />
           ))}

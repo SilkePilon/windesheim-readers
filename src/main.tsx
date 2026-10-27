@@ -14,6 +14,7 @@ import { App } from "./App";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { captureInstallPrompt } from "@/lib/install";
+import { installPageTransitions } from "@/lib/motion";
 
 // Before React mounts, so an early `beforeinstallprompt` is kept for the install drawer.
 captureInstallPrompt();
@@ -33,6 +34,8 @@ if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
 // A data router (one catch-all route; App keeps its declarative <Routes>) so pages can
 // use `useBlocker`, e.g. the admin structure editor's unsaved-changes guard.
 const router = createBrowserRouter([{ path: "*", element: <App /> }]);
+// Every navigation is a view transition (content slides, dock/rail stay put).
+installPageTransitions(router);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

@@ -29,6 +29,7 @@ import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress, useLesson } from "@/lib/queries";
 import type { LessonDetail, XpResult } from "@/lib/types";
+import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { XP } from "@shared/game";
 import { lessonLevel, nextStep, nextStepHint } from "@shared/levels";
@@ -140,6 +141,7 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
   // the rest; with an odd count the last tile spans both columns instead of sitting alone.
   const desktopTiles = activities.filter((a) => a.id !== highlighted);
   const wideOnDesktop = desktopTiles.length % 2 === 1 ? desktopTiles.at(-1)?.id : undefined;
+  const intro = useEntrance();
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-8">
@@ -180,7 +182,7 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
               <ChevronRight strokeWidth={2.5} className="ml-auto" />
             </Button>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn("grid grid-cols-2 gap-3", intro && "stagger-in")}>
             {activities.map((a) => (
               <ActivityTile
                 key={a.id}
@@ -353,7 +355,8 @@ function LessonLink({
       variant="chunky-surface"
       className={cn("h-full min-w-0 gap-2 rounded-[18px] px-3 py-3 whitespace-normal", dir === "next" ? "justify-end" : "justify-start")}
     >
-      <Link to={`/lesson/${to.id}?view=read`}>
+      {/* The previous lesson slides in from the left (see navDirection). */}
+      <Link to={`/lesson/${to.id}?view=read`} state={dir === "prev" ? { navDir: "back" } : undefined}>
         {dir === "prev" && <ChevronLeft className="size-5" strokeWidth={2.5} />}
         <span className={cn("min-w-0", dir === "next" ? "text-right" : "text-left")}>
           <span className="block font-sans text-xs font-bold text-muted-foreground">{label}</span>

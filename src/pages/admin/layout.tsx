@@ -38,7 +38,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <Page wide className="text-sm">
-      <header className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 md:mb-6">
+      <header className="vt-admin-header mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 md:mb-6">
         <div className="flex items-center gap-2.5">
           <img src="/brand/logo-mono-navy.svg" alt="" className="size-7 dark:hidden" />
           <img src="/brand/logo-mono-white.svg" alt="" className="hidden size-7 dark:block" />

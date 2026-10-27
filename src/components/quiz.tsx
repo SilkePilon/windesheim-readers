@@ -11,6 +11,7 @@ import { Chip } from "@/components/game/chip";
 import { QuestionInput, correctAnswerText, isAnswered, type Reveal } from "@/components/question-input";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
+import { withViewTransition } from "@/lib/motion";
 import { useInvalidateProgress } from "@/lib/queries";
 import type { CheckResult, PublicQuestion, XpResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -117,10 +118,13 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
   const next = async () => {
     if (!reveal || lock.current) return;
     if (!isLast) {
-      setIndex(index + 1);
-      setValue(undefined);
-      setReveal(null);
-      window.scrollTo({ top: 0 });
+      // The answered question slides out to the left, the next one in from the right.
+      withViewTransition("quiz", () => {
+        setIndex(index + 1);
+        setValue(undefined);
+        setReveal(null);
+        window.scrollTo({ top: 0 });
+      });
       return;
     }
     lock.current = true;
@@ -206,13 +210,16 @@ export function Quiz({ lessonId, available, onClose }: { lessonId: string; avail
     const answerText = reveal && !reveal.correct ? correctAnswerText(q, reveal.correctAnswer, t) : null;
     body = (
       <div className="flex flex-1 flex-col gap-5 pt-3">
-        <div className="space-y-2">
-          <p className="font-heading text-sm font-semibold text-muted-foreground">
-            {(t("quiz.difficulty", { returnObjects: true }) as string[])[q.difficulty]}
-          </p>
-          <QuestionPrompt text={q.prompt} />
+        {/* Named during the "next question" view transition (see `next`). */}
+        <div className="vt-quiz-question flex flex-col gap-5">
+          <div className="space-y-2">
+            <p className="font-heading text-sm font-semibold text-muted-foreground">
+              {(t("quiz.difficulty", { returnObjects: true }) as string[])[q.difficulty]}
+            </p>
+            <QuestionPrompt text={q.prompt} />
+          </div>
+          <QuestionInput key={q.id} question={q} value={value} onChange={setValue} reveal={reveal} onSubmit={() => void check()} />
         </div>
-        <QuestionInput key={q.id} question={q} value={value} onChange={setValue} reveal={reveal} onSubmit={() => void check()} />
 
         {reveal ? (
           <FeedbackSheet

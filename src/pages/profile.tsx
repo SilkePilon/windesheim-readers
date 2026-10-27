@@ -21,6 +21,7 @@ import { levelTitleIndex } from "@shared/game";
 import { BADGE_CATEGORIES, BADGES } from "@shared/badges";
 import { BadgeCell } from "@/components/game/badge-tile";
 import type { BadgeStatus } from "@/lib/types";
+import { useEntrance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
@@ -133,6 +134,7 @@ function BadgeSection() {
   const { t } = useTranslation();
   const { data: badges } = useBadges();
   const earned = badges?.filter((b) => b.earnedAt).length ?? 0;
+  const intro = useEntrance(!!badges);
   return (
     <section aria-labelledby="badges-title">
       <h2 id="badges-title" className="mt-6 font-heading text-base font-semibold">
@@ -142,13 +144,13 @@ function BadgeSection() {
       {BADGE_CATEGORIES.map((category) => {
         const list = (badges ?? []).filter((b) => BADGES[b.id]?.category === category);
         if (!list.length) return null;
-        return <BadgeGroup key={category} title={t(`badgeCategories.${category}`)} list={list} />;
+        return <BadgeGroup key={category} title={t(`badgeCategories.${category}`)} list={list} intro={intro} />;
       })}
     </section>
   );
 }
 
-function BadgeGroup({ title, list }: { title: string; list: BadgeStatus[] }) {
+function BadgeGroup({ title, list, intro }: { title: string; list: BadgeStatus[]; intro: boolean }) {
   const { t } = useTranslation();
   const earned = list.filter((b) => b.earnedAt).length;
   return (
@@ -157,7 +159,8 @@ function BadgeGroup({ title, list }: { title: string; list: BadgeStatus[] }) {
         <span>{title}</span>
         <span className="text-xs tabular-nums">{t("profile.badgeCount", { n: earned, total: list.length })}</span>
       </h3>
-      <div className="mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3 md:grid-cols-6 lg:grid-cols-8">
+      {/* The badges fade up in turn, once, when they arrive. */}
+      <div className={cn("mt-2 grid grid-cols-4 gap-x-2.5 gap-y-3 md:grid-cols-6 lg:grid-cols-8", intro && "stagger-in")}>
         {list.map((b) => (
           <BadgeCell key={b.id} badge={b} />
         ))}

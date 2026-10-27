@@ -84,7 +84,7 @@ function HeaderChips({ me }: { me: Me }) {
   const { t } = useTranslation();
   const s = me.stats;
   return (
-    <div className="flex items-center gap-2">
+    <div className="vt-chips flex items-center gap-2">
       <Chip tone="streak" aria-label={t("home.streakChip", { count: s.streak })}>
         <Flame className={cn(s.activeToday && "fill-current")} aria-hidden />
         {s.streak}

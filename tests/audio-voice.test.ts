@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { googleModelChain, isModelUnavailable, isRateLimited, makeSpeak, speechParams, synthesize, type SpeakFn } from "../server/ai/speech";
+import { defaultRetryDelay, googleModelChain, isAuthError, isFatalProviderError, isModelUnavailable, isRateLimited, makeSpeak, retryDelayHint, speechParams, synthesize, type SpeakFn } from "../server/ai/speech";
 import { effectiveVoice, supportsInstructions, voiceProblem, voicesFor } from "../server/ai/voices";
 import { pcmToWav, tone } from "../server/lib/audio-codec";
 import type { VoiceChoice } from "../server/ai/providers";
@@ -65,8 +65,10 @@ describe("provider calls", () => {
   test("Gemini falls back 3.8 → 3.1 → 2.5 on model-unavailable errors only", async () => {
     const g: VoiceChoice = { provider: "google", model: "gemini-3.8-flash-tts", voice: "Sulafat" };
     let f = fakeGen((m) => (m === "gemini-2.5-flash-preview-tts" ? null : Object.assign(new Error("models/x is not found for API version v1beta"), { statusCode: 404 })));
-    await f.speak("Hoi", g, "k", "nl");
+    expect((await f.speak("Hoi", g, "k", "nl")).model).toBe("gemini-2.5-flash-preview-tts"); // the model that actually spoke
     expect(f.calls.map((c) => c.model)).toEqual(["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]);
+    const viaSynth = await synthesize("Hoi.", g, "k", "nl", { speak: f.speak });
+    expect(viaSynth.model).toBe("gemini-2.5-flash-preview-tts");
 
     f = fakeGen(() => new Error("This model does not support audio output"));
     await expect(f.speak("Hoi", g, "k", "nl")).rejects.toThrow(/unavailable for this key \(tried gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview, gemini-2.5-flash-preview-tts\)/);
@@ -85,6 +87,25 @@ describe("provider calls", () => {
     expect(isModelUnavailable(new Error("Invalid voice"))).toBe(false);
     expect(isRateLimited({ statusCode: 429 })).toBe(true);
     expect(isRateLimited(new Error("RESOURCE_EXHAUSTED"))).toBe(true);
+    expect(isAuthError({ statusCode: 401 })).toBe(true);
+    expect(isAuthError({ statusCode: 403 })).toBe(true);
+    expect(isAuthError(Object.assign(new Error("Bad request"), { statusCode: 400, responseBody: '{"error":{"message":"API key not valid. Please pass a valid API key."}}' }))).toBe(true);
+    expect(isAuthError({ lastError: { statusCode: 401 } })).toBe(true);
+    expect(isAuthError(new Error("Invalid voice"))).toBe(false);
+    expect(isFatalProviderError({ statusCode: 429 })).toBe(true);
+    expect(isFatalProviderError(new Error("socket hang up"))).toBe(false);
+  });
+
+  test("429 back-off honours Gemini's retryDelay, else waits 20-60 s", () => {
+    const body = '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"37s"}]}}';
+    const gemini = Object.assign(new Error("Resource exhausted"), { statusCode: 429, responseBody: body });
+    expect(retryDelayHint(gemini)).toBe(37_000);
+    expect(defaultRetryDelay(gemini)).toBe(37_000);
+    expect(retryDelayHint(new Error('quota exceeded, retryDelay\\":\\"12.5s'))).toBe(12_500);
+    const plain = defaultRetryDelay({ statusCode: 429 });
+    expect(plain).toBeGreaterThanOrEqual(20_000);
+    expect(plain).toBeLessThanOrEqual(60_000);
+    expect(defaultRetryDelay(new Error("socket hang up"))).toBe(1000);
   });
 
   test("undecodable provider audio gives a clear error naming the model and format", async () => {

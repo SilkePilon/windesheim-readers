@@ -26,7 +26,7 @@ import { isBadgeId } from "../../shared/badges";
 import { getPageText } from "../ai/pipeline";
 import { gradeExplanation, gradeOpenAnswer, tutorInstructions } from "../ai/tutor";
 import { getModel } from "../ai/providers";
-import { chapterPath, publicAudio } from "../ai/audio";
+import { chapterPath, PUBLIC_AUDIO_COLUMNS, publicAudio } from "../ai/audio";
 import { parseRange } from "../lib/audio-codec";
 
 /** Listening at least this share of the luisterles counts as having read the summary. */
@@ -327,7 +327,7 @@ export const learn = new Hono<AppEnv>()
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     const [audio, progress] = await Promise.all([
-      db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) }),
+      db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id), columns: PUBLIC_AUDIO_COLUMNS }),
       db.query.lessonProgress.findFirst({ where: and(eq(schema.lessonProgress.userId, u.id), eq(schema.lessonProgress.lessonId, row.lesson.id)) }),
     ]);
     return c.json({ ...publicAudio(row.lesson.id, audio), listenMs: progress?.listenMs ?? 0, summaryRead: progress?.summaryRead ?? false });
@@ -338,7 +338,7 @@ export const learn = new Hono<AppEnv>()
     const row = await visibleLesson(c.req.param("id"), u.role === "admin");
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     const n = Number.parseInt(c.req.param("file"), 10);
-    const audio = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) });
+    const audio = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id), columns: { chapters: true } });
     const f = Bun.file(chapterPath(row.lesson.id, n));
     if (!audio?.chapters.some((ch) => ch.n === n) || !(await f.exists())) return c.json({ error: "NOT_FOUND" }, 404);
     const size = f.size;
@@ -366,7 +366,10 @@ export const learn = new Hono<AppEnv>()
     const body = z
       .object({ positionMs: z.number().int().min(0).max(6 * 3600_000), heardMs: z.number().int().min(0).max(6 * 3600_000).optional() })
       .parse(await c.req.json());
-    const audio = publicAudio(row.lesson.id, await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id) }));
+    const audio = publicAudio(
+      row.lesson.id,
+      await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id), columns: PUBLIC_AUDIO_COLUMNS }),
+    );
     if (audio.status !== "ready") return c.json({ error: "AUDIO_NOT_READY" }, 409);
     const listenMs = Math.min(body.positionMs, audio.totalMs);
     await getOrCreateProgress(u.id, row.lesson.id);

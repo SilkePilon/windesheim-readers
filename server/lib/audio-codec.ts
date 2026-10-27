@@ -98,17 +98,18 @@ export function tone(ms: number, sampleRate = 24000, hz = 440): Pcm {
 }
 
 /** Concatenate PCM chunks (same sample rate) with an optional silence gap between them. */
-export function concatPcm(parts: Pcm[], gapMs = 0): Pcm {
+export function concatPcm(parts: Pcm[], gapMs: number | number[] = 0): Pcm {
   if (!parts.length) throw new Error("No audio");
   const sampleRate = parts[0]!.sampleRate;
   if (parts.some((p) => p.sampleRate !== sampleRate)) throw new Error("Sample rates differ between chunks");
-  const gap = Math.round((gapMs / 1000) * sampleRate);
-  const total = parts.reduce((a, p) => a + p.samples.length, 0) + gap * (parts.length - 1);
+  // One gap per boundary: a single number applies to every boundary.
+  const gaps = parts.slice(1).map((_, i) => Math.round(((Array.isArray(gapMs) ? (gapMs[i] ?? 0) : gapMs) / 1000) * sampleRate));
+  const total = parts.reduce((a, p) => a + p.samples.length, 0) + gaps.reduce((a, g) => a + g, 0);
   const samples = new Int16Array(total);
   let at = 0;
   parts.forEach((p, i) => {
     samples.set(p.samples, at);
-    at += p.samples.length + (i < parts.length - 1 ? gap : 0);
+    at += p.samples.length + (gaps[i] ?? 0);
   });
   return { sampleRate, samples };
 }

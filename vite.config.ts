@@ -36,7 +36,7 @@ export default defineConfig({
       manifest: false,
       workbox: {
         // App shell: html, js, css, latin fonts (all the UI needs) and the brand assets.
-        globPatterns: ["**/*.{html,js,css,svg,png,ico,webmanifest}", "**/*-latin-*.woff2"],
+        globPatterns: ["**/*.{html,js,css,svg,png,ico,webmanifest}", "brand/maker.jpg", "**/*-latin-*.woff2"],
         // logo-email.png is email-only; og/* are link-preview images for crawlers.
         globIgnores: ["**/*-ext-*.woff2", "brand/logo-email.png", "og/**"],
         navigateFallback: "/index.html",

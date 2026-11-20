@@ -43,7 +43,6 @@ const en: Messages = {
     PAYLOAD_TOO_LARGE: "That's too long. Make it shorter and try again.",
   } as Record<string, string>,
   about: {
-    title: "About Windesheim Readers",
     hero: "Learn your reader the way you want to learn.",
     whyTitle: "Why this exists",
     why: "Readers are thick and exams come fast. I wanted a place where you don't just read a reader but actually learn it: short lessons, flashcards that come back at the right moment, quizzes, listening lessons and battles with your classmates. Made by a student, for students.",

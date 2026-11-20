@@ -42,6 +42,10 @@ describe("meta", () => {
     expect(home.url).toBe(`${APP}/`);
     expect(metaForPath("/", { appUrl: APP, lang: "en" }).image).toBe(`${APP}/og/default-en.png`);
     expect(metaForPath("/login", { appUrl: APP, lang: "nl" }).title).toBe("Inloggen · Windesheim Readers");
+    const about = metaForPath("/about/", { appUrl: APP, lang: "nl" });
+    expect(about.title).toBe("Over Windesheim Readers");
+    expect(about.url).toBe(`${APP}/about`);
+    expect(metaForPath("/about", { appUrl: APP, lang: "en" }).title).toBe("About Windesheim Readers");
     const lesson = metaForPath("/lesson/secret-id/quiz", { appUrl: APP, lang: "nl" });
     expect(lesson.title).toBe("Les in Windesheim Readers");
     // No private data: not even the lesson id.

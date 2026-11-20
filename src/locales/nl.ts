@@ -41,7 +41,6 @@ const nl = {
     PAYLOAD_TOO_LARGE: "Dat is te lang. Maak het korter en probeer het opnieuw.",
   } as Record<string, string>,
   about: {
-    title: "Over Windesheim Readers",
     hero: "Leer je reader zoals jij wilt leren.",
     whyTitle: "Waarom dit bestaat",
     why: "Readers zijn dik en tentamens komen snel. Ik wilde een plek waar je een reader niet alleen leest, maar echt leert: korte lessen, flashcards die terugkomen op het juiste moment, quizzen, luisterlessen en battles met je klasgenoten. Gemaakt door een student, voor studenten.",

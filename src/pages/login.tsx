@@ -198,7 +198,7 @@ export default function LoginPage() {
 
       <Link
         to="/about"
-        className="mt-5 rounded-md text-xs font-bold text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="mt-1 inline-flex min-h-11 items-center rounded-md px-2 text-xs font-bold text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {t("login.about")}
       </Link>

@@ -16,7 +16,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { captureInstallPrompt } from "@/lib/install";
 import { installPageTransitions } from "@/lib/motion";
 import { queryClient } from "@/lib/query-client";
-import { reloadOnceForStaleChunk } from "@/lib/warm-up";
+import { clearStaleChunkFlag, reloadOnceForStaleChunk } from "@/lib/warm-up";
 import { CrashScreen } from "@/components/crash-screen";
 
 // Before React mounts, so an early `beforeinstallprompt` is kept for the install drawer.
@@ -45,7 +45,7 @@ window.addEventListener("vite:preloadError", (e) => {
 });
 setTimeout(() => {
   try {
-    sessionStorage.removeItem("wr-chunk-reload");
+    clearStaleChunkFlag(sessionStorage);
   } catch {
     // ignore
   }

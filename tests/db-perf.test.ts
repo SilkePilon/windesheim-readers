@@ -49,13 +49,11 @@ describe("sqlite pragmas", () => {
 describe("leaderboard query plans", () => {
   test("all-time uses user_stats_xp_idx without a sort", () => {
     const p = plan(allTime());
-    console.log("all-time", p);
     expect(p.some((d) => d.includes("user_stats_xp_idx"))).toBe(true);
     expect(p.some((d) => d.includes("USE TEMP B-TREE FOR ORDER BY"))).toBe(false);
   });
   test("weekly uses xp_event_created_user_idx", () => {
     const p = plan(weekly());
-    console.log("weekly", p);
     expect(p.some((d) => d.includes("xp_event_created_user_idx"))).toBe(true);
   });
 });

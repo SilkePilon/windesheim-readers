@@ -25,7 +25,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   // After first paint, fetch the other pages' chunks while idle so navigating is instant.
   useEffect(
     () =>
-      shouldWarmUp(navigator as never)
+      shouldWarmUp(navigator as Navigator & { connection?: { saveData?: boolean } })
         ? scheduleWarmUp(window, () => Object.values(PAGE_LOADERS).forEach((l) => void l().catch(() => {})))
         : undefined,
     [],

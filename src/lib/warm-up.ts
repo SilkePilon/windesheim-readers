@@ -35,6 +35,11 @@ export function scheduleWarmUp(win: WarmWindow, run: () => void): () => void {
 
 const RELOAD_KEY = "wr-chunk-reload";
 
+/** Forget the reload marker once the page has stayed up. */
+export function clearStaleChunkFlag(storage: Pick<Storage, "removeItem">): void {
+  storage.removeItem(RELOAD_KEY);
+}
+
 /** A chunk 404s after a deploy: reload once to pick up the new build; a second failure falls through. */
 export function reloadOnceForStaleChunk(storage: Pick<Storage, "getItem" | "setItem">, reload: () => void): boolean {
   if (storage.getItem(RELOAD_KEY)) return false;

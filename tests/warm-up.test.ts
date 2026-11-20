@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PAGE_LOADERS, reloadOnceForStaleChunk, scheduleWarmUp, shouldWarmUp } from "../src/lib/warm-up";
+import { clearStaleChunkFlag, PAGE_LOADERS, reloadOnceForStaleChunk, scheduleWarmUp, shouldWarmUp } from "../src/lib/warm-up";
 
 describe("shouldWarmUp", () => {
   test("skips on save-data", () => {
@@ -62,5 +62,15 @@ describe("PAGE_LOADERS", () => {
     expect(Object.keys(PAGE_LOADERS).sort()).toEqual(
       ["battle", "leaderboard", "lesson", "profile", "review", "study", "world"],
     );
+  });
+});
+
+describe("clearStaleChunkFlag", () => {
+  test("lets a later stale chunk reload again", () => {
+    const m = new Map<string, string>();
+    const storage = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
+    expect(reloadOnceForStaleChunk(storage, () => {})).toBe(true);
+    clearStaleChunkFlag(storage);
+    expect(reloadOnceForStaleChunk(storage, () => {})).toBe(true);
   });
 });

@@ -2,7 +2,8 @@
 // AI_STUB=1: the episode script is the deterministic stub; TTS is an injected fake.
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { websocket } from "@hono/bun";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import type { SpeakFn } from "../server/ai/speech";
 import type { AudioJobDeps } from "../server/ai/audio";
@@ -226,6 +227,31 @@ describe("admin episode routes", () => {
     expect(r.status).toBe(204);
     expect(await epRow(2)).toBeUndefined();
     expect(existsSync(ep.episodeDir(R, 2))).toBe(false);
+  });
+});
+
+describe("path safety", () => {
+  test("DELETE /readers/:id with a traversal or slash id touches no files", async () => {
+    const sentinel = join(env.uploadDir, "sentinel", "keep.txt");
+    mkdirSync(join(env.uploadDir, "sentinel"), { recursive: true });
+    writeFileSync(sentinel, "keep");
+    // episodes root is UPLOAD_DIR/audio/episodes: ../../sentinel would be the sentinel folder.
+    for (const id of ["..%2F..%2Fsentinel", "..%2Fx", "a%2Fb", "..%2F.."]) {
+      const r = await call("DELETE", `/readers/${id}`, "admin");
+      expect([400, 404]).toContain(r.status);
+    }
+    expect(existsSync(sentinel)).toBe(true);
+    expect(existsSync(join(env.uploadDir, "audio"))).toBe(true);
+    expect(existsSync(ep.episodeDir(R, 1))).toBe(true);
+  });
+
+  test("episode paths reject unsafe reader ids and weeks", async () => {
+    expect(() => ep.episodeDir("../x", 1)).toThrow(/Invalid reader id/);
+    expect(() => ep.episodeChapterPath("a/b", 1, 1)).toThrow(/Invalid reader id/);
+    expect(() => ep.episodeDir(R, 0)).toThrow(/Invalid week/);
+    await expect(ep.deleteReaderEpisodeFiles("../..")).rejects.toThrow(/Invalid reader id/);
+    expect(await ep.generateEpisode("../..", 1, deps)).toEqual({ status: "skipped" });
+    expect(existsSync(join(env.uploadDir, "sentinel", "keep.txt"))).toBe(true);
   });
 });
 

@@ -42,7 +42,16 @@ import { createModel, getRoleConfig } from "./providers";
 import { aiStubEnabled } from "./speech";
 
 const episodesRoot = () => join(audioRoot(), EPISODES_DIR);
-export const episodeDir = (readerId: string, week: number) => join(episodesRoot(), readerId, String(week));
+/** A reader id that is safe as one path segment (ids are nanoids); anything else never reaches the file system. */
+const SAFE_ID = /^[\w-]+$/;
+function readerFolder(readerId: string) {
+  if (!SAFE_ID.test(readerId)) throw new Error("Invalid reader id");
+  return join(episodesRoot(), readerId);
+}
+export const episodeDir = (readerId: string, week: number) => {
+  if (!Number.isSafeInteger(week) || week < 1) throw new Error("Invalid week");
+  return join(readerFolder(readerId), String(week));
+};
 export const episodeChapterPath = (readerId: string, week: number, n: number) => join(episodeDir(readerId, week), `${n}.mp3`);
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -174,8 +183,8 @@ const usableStored = (s: EpisodeScript | null | undefined, lessons: number): s i
  */
 export async function generateEpisode(readerId: string, week: number, deps: AudioJobDeps = {}): Promise<AudioJobResult> {
   const key = episodeKey(readerId, week);
-  if (!claimAudioJob(key)) return { status: "skipped" };
-  const parent = join(episodesRoot(), readerId);
+  if (!SAFE_ID.test(readerId) || !claimAudioJob(key)) return { status: "skipped" };
+  const parent = readerFolder(readerId);
   const tmp = join(parent, `.tmp-${week}-${nanoid(6)}`);
   const old = join(parent, `.old-${week}-${nanoid(6)}`);
   const label = `episode ${readerId} w${week}`;
@@ -272,7 +281,7 @@ export async function deleteEpisode(readerId: string, week: number) {
 
 /** Remove every episode file of a reader that is being deleted (its rows cascade with the reader). */
 export async function deleteReaderEpisodeFiles(readerId: string) {
-  await rm(join(episodesRoot(), readerId), { recursive: true, force: true }).catch(() => {});
+  await rm(readerFolder(readerId), { recursive: true, force: true }).catch(() => {});
 }
 
 /**

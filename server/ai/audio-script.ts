@@ -201,6 +201,63 @@ export function chunkText(text: string, max: number): string[] {
 /** Spoken-word targets per chapter (checked loosely: only the total is enforced, see `minScriptWords`). */
 export const WORD_TARGETS = { hook: [60, 90], roadmap: [25, 25], idea: [130, 200], recap: [70, 90], quiz: [90, 130] } as const;
 
+/** What the shared rules call the parts of a lesson script or a weekly episode. */
+const RULE_WORDS = {
+  nl: {
+    lesson: { pauseIn: "de quiz", source: "de tekst van de paragraaf", whole: "de hele luisterles" },
+    episode: { pauseIn: "de selftest", source: "de aangeleverde stof van de paragrafen", whole: "de hele aflevering" },
+  },
+  en: {
+    lesson: { pauseIn: "the quiz", source: "the paragraph's text", whole: "the whole lesson" },
+    episode: { pauseIn: "the selftest", source: "the material provided for the paragraphs", whole: "the whole episode" },
+  },
+} as const;
+
+/**
+ * Style (written for the ear) and content rules shared by the luisterles and the weekly episode
+ * prompts: pronunciation, pauses, sources, examples and the reader wording.
+ */
+export function spokenRules(language: string, grounded: boolean, kind: "lesson" | "episode") {
+  const w = RULE_WORDS[language === "en" ? "en" : "nl"][kind];
+  if (language === "en")
+    return `Style (written for the ear):
+- Personal and conversational: address the student as "you" and use "we". Short sentences, spoken language, varied rhythm.
+- No bullet points, tables, headings, Markdown or emoji. Never "see figure" or "in the table".
+- Pronunciation: write everything the way you say it. Symbols in words ("percent", "euros", "and"), numbers rounded and in words ("just over twenty percent", "almost a million"); years may stay as digits (2019). No parentheses, no slashes and no abbreviations such as "e.g.", "i.e." or "etc."; say "for example". Explain a common abbreviation or jargon term briefly the first time.
+- Never read out page numbers or markers like [[PAGINA 3]], and never say a web address. Mention a source briefly at most ("according to Eurostat").
+- Short pauses: a new line. No stage directions in brackets. Use ${PAUSE_MARK} only in ${w.pauseIn}.
+
+Content:
+- The core content comes ONLY from ${w.source}. Do not invent facts about the subject.
+- Students only see the reader, never your input. Refer to the source as "the reader", never "the text" or "the passage". Say "the reader" at most once or twice in ${w.whole}.
+${
+  grounded
+    ? `- Real-world examples: prefer the verified examples provided (found through search). Do not mention statistics, names or years that are not in them.`
+    : `- Real-world examples: only well-known, recognisable situations. Do NOT invent statistics, names, quotes or years; rather stay general ("many supermarkets", "a typical small business").`
+}
+- Examples fit a local, European context (the students study in the Netherlands) and the programme and course from the task.
+- The first and last page may contain bits of neighbouring paragraphs; leave those out.
+- Chapter titles are internal and are not read out.`;
+  return `Stijl (geschreven voor het oor):
+- Persoonlijk en conversationeel: spreek de student aan met "je" en gebruik "we". Korte zinnen, spreektaal, afwisselend ritme.
+- Geen opsommingstekens, tabellen, kopjes, Markdown of emoji. Nooit "zie figuur" of "in de tabel".
+- Uitspraak: schrijf alles uit zoals je het zegt. Symbolen voluit ("procent", "euro", "en"), getallen afgerond en in woorden ("ruim twintig procent", "bijna een miljoen"); jaartallen mogen als cijfers (2019). Geen haakjes, geen schuine strepen en geen afkortingen als "bv.", "d.w.z." of "o.a."; zeg "bijvoorbeeld". Een gangbare afkorting of Engelse vakterm leg je de eerste keer kort uit.
+- Lees nooit paginanummers of markeringen als [[PAGINA 3]] voor, en zeg nooit een webadres. Een bron noem je hooguit kort ("volgens het CBS").
+- Korte pauzes: een nieuwe regel. Geen regieaanwijzingen tussen haakjes. ${PAUSE_MARK} gebruik je alleen in ${w.pauseIn}.
+
+Inhoud:
+- De kerninhoud komt UITSLUITEND uit ${w.source}. Verzin geen feiten over de stof.
+- Studenten zien alleen de reader, nooit jouw invoer. Verwijs naar de bron als "de reader", nooit als "de tekst" of "het fragment". Noem "de reader" hooguit een of twee keer in ${w.whole}.
+${
+  grounded
+    ? `- Voorbeelden uit de echte wereld: gebruik bij voorkeur de aangeleverde, via zoeken gecontroleerde voorbeelden. Noem geen statistieken, namen of jaartallen die daar niet in staan.`
+    : `- Voorbeelden uit de echte wereld: alleen algemeen bekende, herkenbare situaties. Verzin GEEN statistieken, namen, citaten of jaartallen; blijf liever algemeen ("veel supermarkten", "een gemiddeld mkb-bedrijf").`
+}
+- Voorbeelden passen bij de Nederlandse context en bij de opleiding en het vak uit de opdracht.
+- De eerste en laatste pagina kunnen stukjes van naburige paragrafen bevatten; laat die weg.
+- Titels per hoofdstuk zijn intern en worden niet voorgelezen.`;
+}
+
 /** System prompt for the spoken script (one narrator, ~5-7 minutes). A real variant per language. */
 export function scriptInstructions(language: string, grounded: boolean) {
   return language === "en" ? scriptInstructionsEn(grounded) : scriptInstructionsNl(grounded);
@@ -219,24 +276,7 @@ Opbouw (in totaal 800 tot 1000 gesproken woorden, vijf tot zeven minuten). Elk h
 
 De hoofdstukken zijn losse bestanden: geen begroeting, geen "welkom (terug)" en geen afscheid per hoofdstuk. Het hele verhaal loopt door.
 
-Stijl (geschreven voor het oor):
-- Persoonlijk en conversationeel: spreek de student aan met "je" en gebruik "we". Korte zinnen, spreektaal, afwisselend ritme.
-- Geen opsommingstekens, tabellen, kopjes, Markdown of emoji. Nooit "zie figuur" of "in de tabel".
-- Uitspraak: schrijf alles uit zoals je het zegt. Symbolen voluit ("procent", "euro", "en"), getallen afgerond en in woorden ("ruim twintig procent", "bijna een miljoen"); jaartallen mogen als cijfers (2019). Geen haakjes, geen schuine strepen en geen afkortingen als "bv.", "d.w.z." of "o.a."; zeg "bijvoorbeeld". Een gangbare afkorting of Engelse vakterm leg je de eerste keer kort uit.
-- Lees nooit paginanummers of markeringen als [[PAGINA 3]] voor, en zeg nooit een webadres. Een bron noem je hooguit kort ("volgens het CBS").
-- Korte pauzes: een nieuwe regel. Geen regieaanwijzingen tussen haakjes. ${PAUSE_MARK} gebruik je alleen in de quiz.
-
-Inhoud:
-- De kerninhoud komt UITSLUITEND uit de tekst van de paragraaf. Verzin geen feiten over de stof.
-- Studenten zien alleen de reader, nooit jouw invoer. Verwijs naar de bron als "de reader", nooit als "de tekst" of "het fragment". Noem "de reader" hooguit een of twee keer in de hele luisterles.
-${
-  grounded
-    ? `- Voorbeelden uit de echte wereld: gebruik bij voorkeur de aangeleverde, via zoeken gecontroleerde voorbeelden. Noem geen statistieken, namen of jaartallen die daar niet in staan.`
-    : `- Voorbeelden uit de echte wereld: alleen algemeen bekende, herkenbare situaties. Verzin GEEN statistieken, namen, citaten of jaartallen; blijf liever algemeen ("veel supermarkten", "een gemiddeld mkb-bedrijf").`
-}
-- Voorbeelden passen bij de Nederlandse context en bij de opleiding en het vak uit de opdracht.
-- De eerste en laatste pagina kunnen stukjes van naburige paragrafen bevatten; laat die weg.
-- Titels per hoofdstuk zijn intern en worden niet voorgelezen.`;
+${spokenRules("nl", grounded, "lesson")}`;
 }
 
 function scriptInstructionsEn(grounded: boolean) {
@@ -252,24 +292,7 @@ Structure (800 to 1,000 spoken words in total, five to seven minutes). Each chap
 
 The chapters are separate files: no greeting, no "welcome back" and no goodbye per chapter. The story runs on.
 
-Style (written for the ear):
-- Personal and conversational: address the student as "you" and use "we". Short sentences, spoken language, varied rhythm.
-- No bullet points, tables, headings, Markdown or emoji. Never "see figure" or "in the table".
-- Pronunciation: write everything the way you say it. Symbols in words ("percent", "euros", "and"), numbers rounded and in words ("just over twenty percent", "almost a million"); years may stay as digits (2019). No parentheses, no slashes and no abbreviations such as "e.g.", "i.e." or "etc."; say "for example". Explain a common abbreviation or jargon term briefly the first time.
-- Never read out page numbers or markers like [[PAGINA 3]], and never say a web address. Mention a source briefly at most ("according to Eurostat").
-- Short pauses: a new line. No stage directions in brackets. Use ${PAUSE_MARK} only in the quiz.
-
-Content:
-- The core content comes ONLY from the paragraph's text. Do not invent facts about the subject.
-- Students only see the reader, never your input. Refer to the source as "the reader", never "the text" or "the passage". Say "the reader" at most once or twice in the whole lesson.
-${
-  grounded
-    ? `- Real-world examples: prefer the verified examples provided (found through search). Do not mention statistics, names or years that are not in them.`
-    : `- Real-world examples: only well-known, recognisable situations. Do NOT invent statistics, names, quotes or years; rather stay general ("many supermarkets", "a typical small business").`
-}
-- Examples fit a local, European context (the students study in the Netherlands) and the programme and course from the task.
-- The first and last page may contain bits of neighbouring paragraphs; leave those out.
-- Chapter titles are internal and are not read out.`;
+${spokenRules("en", grounded, "lesson")}`;
 }
 
 export interface ScriptPromptInput {

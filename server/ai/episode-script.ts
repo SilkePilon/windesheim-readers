@@ -2,7 +2,7 @@
 // built from that week's lessons. Same tone and TTS rules as the luisterles (audio-script.ts).
 // No DB or network access.
 import { z } from "zod";
-import { PAUSE_MARK, tidySpoken, wordCount } from "./audio-script";
+import { PAUSE_MARK, spokenRules, tidySpoken, wordCount } from "./audio-script";
 import { readerWording } from "./content-rules";
 
 export const EPISODE_CHAPTER_KINDS = ["hook", "lesson", "connect", "selftest", "recap"] as const;
@@ -55,10 +55,18 @@ export const EPISODE_SOURCE_CHARS = 24_000;
 /** Spoken-word targets per chapter for a week of `lessons` lessons (the lesson chapters share what is left). */
 export function episodeWordTargets(lessons: number) {
   const fixed = { hook: [120, 160], connect: [200, 260], selftest: [200, 250], recap: [140, 180] } as const;
-  const rest = (i: 0 | 1) => EPISODE_WORDS[i] - fixed.hook[i] - fixed.connect[i] - fixed.selftest[i] - fixed.recap[i];
-  const per = (i: 0 | 1) => Math.max(150, Math.round(rest(i) / Math.max(1, lessons) / 10) * 10);
+  const n = Math.max(1, lessons);
+  // Each lesson chapter gets an equal share of what the fixed chapters leave (rounded down to 10
+  // words, at least LESSON_WORDS_FLOOR), so the targets add up to at most EPISODE_WORDS[1].
+  const per = (i: 0 | 1) => {
+    const rest = EPISODE_WORDS[i] - fixed.hook[i] - fixed.connect[i] - fixed.selftest[i] - fixed.recap[i];
+    return Math.max(LESSON_WORDS_FLOOR, Math.floor(rest / n / 10) * 10);
+  };
   return { ...fixed, lesson: [per(0), per(1)] as const };
 }
+
+/** Fewest words a lesson chapter is asked for, however many lessons the week has. */
+export const LESSON_WORDS_FLOOR = 80;
 
 export interface EpisodeLessonInput {
   code: string;
@@ -101,47 +109,29 @@ export function episodeInstructions(language: string, lessons: number) {
     return `You are an experienced, enthusiastic university of applied sciences lecturer making a weekly audio episode: a spoken story that ties together this week's paragraphs of the course reader, read aloud by a single narrator (text-to-speech). Students never see the text; they only hear the audio. Write everything in English.
 
 Structure (${EPISODE_WORDS[0]} to ${EPISODE_WORDS[1]} spoken words in total, about fifteen minutes). Each chapter is a separate audio file in the player, in this order:
-1. hook (${t.hook[0]}-${t.hook[1]} words): a recognisable situation or a thought-provoking question, and why this week matters.
-2. lesson (exactly one per paragraph, in the order given; each ${t.lesson[0]}-${t.lesson[1]} words): tell the paragraph as a story with concrete examples from the student's field. Do not read out a list. Start with a short bridge from the previous chapter.
+1. hook (${t.hook[0]}-${t.hook[1]} words): a recognisable situation from daily life or professional practice, or a thought-provoking question. No numbers, no statistics and no "surprising fact". Then why this week matters.
+2. lesson (exactly one per paragraph, in the order given; each ${t.lesson[0]}-${t.lesson[1]} words): tell the paragraph as a story with concrete examples from the student's field. Do not read out a list. Start with a short bridge from the previous chapter and name the paragraph once, the way you would say it (for example "section one point two" for 1.2), with its title.
 3. connect (${t.connect[0]}-${t.connect[1]} words): how this week's paragraphs connect to each other, and to what came before in the course where that is clear from the material.
 4. selftest (${t.selftest[0]}-${t.selftest[1]} words): start by saying "Test yourself" out loud. Ask exactly three open questions, each about a different paragraph if possible. Never a yes/no question. After each question put a new line containing only ${PAUSE_MARK} (a three-second silence goes there), then start the answer with "The answer:" followed by one or two sentences.
 5. recap (${t.recap[0]}-${t.recap[1]} words): the main ideas of the week, one breath each, and one sentence to close.
 
 The chapters are separate files: no greeting or goodbye per chapter. The story runs on.
 
-Style (written for the ear):
-- Personal and conversational: address the student as "you" and use "we". Short sentences, spoken language, varied rhythm.
-- No bullet points, tables, headings, Markdown or emoji. Never "see figure" or "in the table".
-- Pronunciation: write everything the way you say it. Symbols and numbers in words; years may stay as digits. No parentheses, slashes or abbreviations such as "e.g."; say "for example". Say a paragraph number the way you would say it ("section one point two").
-- Never read out page numbers or markers like [[PAGINA 3]], and never say a web address. Use ${PAUSE_MARK} only in the selftest.
-
-Content:
-- The core content comes ONLY from the material provided. Do not invent facts, statistics, names or years.
-- Students only see the reader, never your input. Refer to the source as "the reader", at most a few times in the whole episode.
-- Examples fit a local, European context and the programme and course from the task.
-- The title is short and student-facing; chapter titles are internal and are not read out.`;
+${spokenRules("en", false, "episode")}
+- The episode title is short and student-facing.`;
   return `Je bent een ervaren, enthousiaste hbo-docent die een wekelijkse aflevering maakt: een gesproken verhaal dat de paragrafen van deze week uit de reader met elkaar verbindt, voorgelezen door één verteller (tekst-naar-spraak). Studenten zien de tekst nooit; ze horen alleen audio. Schrijf alles in het Nederlands.
 
 Opbouw (in totaal ${EPISODE_WORDS[0]} tot ${EPISODE_WORDS[1]} gesproken woorden, ongeveer een kwartier). Elk hoofdstuk is een los audiobestand in de speler, in deze volgorde:
-1. hook (${t.hook[0]}-${t.hook[1]} woorden): een herkenbare situatie of een prikkelende vraag, en waarom deze week ertoe doet.
-2. lesson (precies één per paragraaf, in de gegeven volgorde; elk ${t.lesson[0]}-${t.lesson[1]} woorden): vertel de paragraaf als een verhaal met concrete voorbeelden uit het werkveld van de student. Lees geen lijstje voor. Begin met een korte brug vanuit het vorige hoofdstuk.
+1. hook (${t.hook[0]}-${t.hook[1]} woorden): een herkenbare situatie uit het dagelijks leven of het werkveld, of een prikkelende vraag. Geen getallen, geen statistiek en geen "verrassend feit". Daarna waarom deze week ertoe doet.
+2. lesson (precies één per paragraaf, in de gegeven volgorde; elk ${t.lesson[0]}-${t.lesson[1]} woorden): vertel de paragraaf als een verhaal met concrete voorbeelden uit het werkveld van de student. Lees geen lijstje voor. Begin met een korte brug vanuit het vorige hoofdstuk en noem de paragraaf één keer, uitgesproken zoals je het zegt (bijvoorbeeld "paragraaf één punt twee" voor 1.2), met de titel.
 3. connect (${t.connect[0]}-${t.connect[1]} woorden): hoe de paragrafen van deze week met elkaar samenhangen, en met wat eerder in het vak kwam als dat uit de stof blijkt.
 4. selftest (${t.selftest[0]}-${t.selftest[1]} woorden): begin hardop met "Test jezelf". Stel precies drie open vragen, zo mogelijk elk over een andere paragraaf. Nooit een ja/nee-vraag. Zet na elke vraag een nieuwe regel met alleen ${PAUSE_MARK} (daar komt een stilte van drie seconden), en begin het antwoord daarna met "Het antwoord:" gevolgd door één of twee zinnen.
 5. recap (${t.recap[0]}-${t.recap[1]} woorden): de hoofdlijnen van de week, elk in één adem, en één afsluitende zin.
 
 De hoofdstukken zijn losse bestanden: geen begroeting of afscheid per hoofdstuk. Het verhaal loopt door.
 
-Stijl (geschreven voor het oor):
-- Persoonlijk en conversationeel: spreek de student aan met "je" en gebruik "we". Korte zinnen, spreektaal, afwisselend ritme.
-- Geen opsommingstekens, tabellen, kopjes, Markdown of emoji. Nooit "zie figuur" of "in de tabel".
-- Uitspraak: schrijf alles uit zoals je het zegt. Symbolen en getallen in woorden; jaartallen mogen als cijfers. Geen haakjes, schuine strepen of afkortingen als "bv."; zeg "bijvoorbeeld". Zeg een paragraafnummer zoals je het uitspreekt ("paragraaf één punt twee").
-- Lees nooit paginanummers of markeringen als [[PAGINA 3]] voor, en zeg nooit een webadres. ${PAUSE_MARK} gebruik je alleen in de selftest.
-
-Inhoud:
-- De kerninhoud komt UITSLUITEND uit de aangeleverde stof. Verzin geen feiten, statistieken, namen of jaartallen.
-- Studenten zien alleen de reader, nooit jouw invoer. Verwijs naar de bron als "de reader", hooguit een paar keer in de hele aflevering.
-- Voorbeelden passen bij de Nederlandse context en bij de opleiding en het vak uit de opdracht.
-- De titel is kort en voor studenten; titels per hoofdstuk zijn intern en worden niet voorgelezen.`;
+${spokenRules("nl", false, "episode")}
+- De titel van de aflevering is kort en voor studenten.`;
 }
 
 export function episodePrompt(p: {

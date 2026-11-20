@@ -167,7 +167,9 @@ export const admin = new Hono<AppEnv>()
   .delete("/readers/:id", async (c) => {
     const id = c.req.param("id");
     const lessonIds = (await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, id))).map((l) => l.id);
-    await db.delete(schema.reader).where(eq(schema.reader.id, id));
+    const deleted = await db.delete(schema.reader).where(eq(schema.reader.id, id)).returning({ id: schema.reader.id });
+    // Only touch files for a reader that existed: the id is a raw (URL-decoded) route param.
+    if (!deleted.length) return c.json({ error: "NOT_FOUND" }, 404);
     await unlink(pdfPath(id)).catch(() => {});
     await deleteAudioFiles(lessonIds);
     await deleteReaderEpisodeFiles(id);

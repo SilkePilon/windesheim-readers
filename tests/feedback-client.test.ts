@@ -7,14 +7,12 @@ import {
   getDraft,
   openDraft,
   resetFeedback,
-  resizeOptions,
   saveDraft,
-  collectContext,
-  fitWithin,
   getFeedbackState,
   messageValid,
   openFeedback,
 } from "../src/lib/feedback";
+import { collectContext, fitWithin, resizeOptions } from "../src/lib/feedback-collect";
 
 const win = (standalone = false) => ({
   innerWidth: 390,

@@ -1,7 +1,7 @@
 import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { MessageCircleQuestion } from "lucide-react";
-import { showHelpButton } from "@shared/feedback";
+import { showHelpButton } from "@shared/help-button";
 import { Button } from "@/components/ui/button";
 import { openFeedback } from "@/lib/feedback";
 import { useMe } from "@/lib/queries";

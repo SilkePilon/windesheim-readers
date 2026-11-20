@@ -16,17 +16,8 @@ import { CharCounter } from "@/components/char-counter";
 import { Segmented } from "@/components/game/segmented";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/error-text";
-import {
-  clearDraft,
-  closeFeedback,
-  collectContext,
-  messageValid,
-  openDraft,
-  prepareScreenshot,
-  saveDraft,
-  useFeedbackState,
-  type FeedbackSeed,
-} from "@/lib/feedback";
+import { clearDraft, closeFeedback, messageValid, openDraft, saveDraft, useFeedbackState, type FeedbackSeed } from "@/lib/feedback";
+import { collectContext, prepareScreenshot } from "@/lib/feedback-collect";
 import { notify } from "@/lib/notify";
 import { qk } from "@/lib/queries";
 import type { LessonDetail } from "@/lib/types";

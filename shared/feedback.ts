@@ -1,5 +1,5 @@
 /**
- * Feedback and issue reports: types, the GitHub issue draft and the help-button rule.
+ * Feedback and issue reports: types and the GitHub issue draft (the help-button rule lives in help-button.ts).
  * Pure and shared by server, client and tests: no DOM, Node-only or i18n imports.
  */
 import { LIMITS } from "./limits";
@@ -154,10 +154,4 @@ export const GITHUB_URL = /^https:\/\/github\.com\/[!-~]*$/;
 /** The client-side twin of the server's githubUrl rule. */
 export function isGithubUrl(s: string): boolean {
   return s.length <= LIMITS.feedback.githubUrl && GITHUB_URL.test(s);
-}
-
-/** Help button rule inside AppLayout: hidden on a lesson with any ?view=. */
-export function showHelpButton(pathname: string, search: string): boolean {
-  if (/^\/lesson\/[^/]+\/?$/i.test(pathname) && new URLSearchParams(search).has("view")) return false;
-  return true;
 }

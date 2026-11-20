@@ -5,7 +5,7 @@ import { DesktopRail } from "@/components/shell/desktop-rail";
 import { FloatingDock } from "@/components/shell/floating-dock";
 import { railItems, useNavItems } from "@/components/shell/nav-items";
 import { HelpButton } from "@/components/feedback/help-button";
-import { showHelpButton } from "@shared/feedback";
+import { showHelpButton } from "@shared/help-button";
 
 /**
  * Shell for every page except full-screen study mode: a floating dock on mobile and a

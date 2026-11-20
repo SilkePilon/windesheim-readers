@@ -6,9 +6,9 @@ import {
   issueUrl,
   redactEmails,
   shortBrowser,
-  showHelpButton,
   type FeedbackContext,
 } from "../shared/feedback";
+import { showHelpButton } from "../shared/help-button";
 import { LIMITS } from "../shared/limits";
 
 const context: FeedbackContext = {

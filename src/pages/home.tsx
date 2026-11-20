@@ -14,8 +14,9 @@ import { DAILY_XP_GOAL } from "@shared/game";
 import { pathNodes } from "@shared/path";
 import { storageGet, storageSet } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { PAGE_LOADERS } from "@/lib/warm-up";
 
-const loadWorldMap = () => import("@/components/world/world-map");
+const loadWorldMap = PAGE_LOADERS.world;
 const WorldMap = lazy(loadWorldMap);
 
 const READER_KEY = "wr.home.reader";

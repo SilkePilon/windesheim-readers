@@ -1,5 +1,7 @@
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { Outlet, useLocation } from "react-router";
+import { PageSpinner } from "@/components/page";
+import { PAGE_LOADERS, scheduleWarmUp, shouldWarmUp } from "@/lib/warm-up";
 import { cn } from "@/lib/utils";
 import { DesktopRail } from "@/components/shell/desktop-rail";
 import { FloatingDock } from "@/components/shell/floating-dock";
@@ -16,22 +18,18 @@ import { showHelpButton } from "@shared/help-button";
  * Used as a layout route (renders the `Outlet`), or by a page that picks its own shell
  * per state (battle) with `children`.
  */
-/** After first paint, fetch the world chunk so the home page doesn't wait for it (it stays out of the main bundle). */
-function preloadWorld() {
-  const load = () => void import("@/components/world/world-map").catch(() => {});
-  if ("requestIdleCallback" in window) {
-    const id = window.requestIdleCallback(load, { timeout: 4000 });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = setTimeout(load, 1500);
-  return () => clearTimeout(id);
-}
-
 export function AppLayout({ children }: { children?: ReactNode }) {
   const items = useNavItems();
   const { pathname, search } = useLocation();
   const help = showHelpButton(pathname, search);
-  useEffect(preloadWorld, []);
+  // After first paint, fetch the other pages' chunks while idle so navigating is instant.
+  useEffect(
+    () =>
+      shouldWarmUp(navigator as never)
+        ? scheduleWarmUp(window, () => Object.values(PAGE_LOADERS).forEach((l) => void l().catch(() => {})))
+        : undefined,
+    [],
+  );
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
   return (
@@ -44,7 +42,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
         )}
       >
         <div className={cn("mx-auto w-full", isAdminPage ? "max-w-6xl" : "max-w-5xl")}>
-          {children ?? <Outlet />}
+          <Suspense fallback={<PageSpinner />}>{children ?? <Outlet />}</Suspense>
         </div>
       </main>
       <FloatingDock items={items} />

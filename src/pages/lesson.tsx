@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,7 +23,6 @@ import { PageError, PageSpinner } from "@/components/page";
 import { Markdown } from "@/components/markdown";
 import { ExplainTab } from "@/components/explain-tab";
 import { OpenTab } from "@/components/open-tab";
-import { TutorTab } from "@/components/tutor-tab";
 import { ListenView } from "@/components/listen/listen-view";
 import { ActivityTile, type ActivityTone } from "@/components/game/activity-tile";
 import { LevelBar } from "@/components/game/level-bar";
@@ -42,6 +41,8 @@ import { LIMITS } from "@shared/limits";
 const VIEWS = ["read", "listen", "explain", "open", "tutor"] as const;
 type View = (typeof VIEWS)[number];
 type ActivityId = "cards" | View | "quiz";
+
+const TutorTab = lazy(() => import("@/components/tutor-tab").then((m) => ({ default: m.TutorTab })));
 
 export default function LessonPage() {
   const { t } = useTranslation();
@@ -260,7 +261,12 @@ function SubView({ lesson, view }: { lesson: LessonDetail; view: View }) {
   else if (view === "listen") body = <ListenView lesson={lesson} />;
   else if (view === "explain") body = <ExplainTab lesson={lesson} />;
   else if (view === "open") body = <OpenTab lessonId={lesson.id} />;
-  else body = <TutorTab lessonId={lesson.id} code={lesson.code} />;
+  else
+    body = (
+      <Suspense fallback={<PageSpinner />}>
+        <TutorTab lessonId={lesson.id} code={lesson.code} />
+      </Suspense>
+    );
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-4 md:px-8 md:py-8">

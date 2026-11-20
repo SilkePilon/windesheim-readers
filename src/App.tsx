@@ -6,14 +6,15 @@ import { PageSpinner } from "@/components/page";
 import { FeedbackHost } from "@/components/feedback/feedback-host";
 import LoginPage from "@/pages/login";
 import HomePage from "@/pages/home";
-import LessonPage from "@/pages/lesson";
-import LessonStudyPage from "@/pages/lesson-study";
-import ReviewPage from "@/pages/review";
-import LeaderboardPage from "@/pages/leaderboard";
-import ProfilePage from "@/pages/profile";
-import BattlePage from "@/pages/battle";
+import { PAGE_LOADERS } from "@/lib/warm-up";
 import { AdminLayout } from "@/pages/admin/layout";
 
+const LessonPage = lazy(PAGE_LOADERS.lesson);
+const LessonStudyPage = lazy(PAGE_LOADERS.study);
+const ReviewPage = lazy(PAGE_LOADERS.review);
+const LeaderboardPage = lazy(PAGE_LOADERS.leaderboard);
+const ProfilePage = lazy(PAGE_LOADERS.profile);
+const BattlePage = lazy(PAGE_LOADERS.battle);
 const AboutPage = lazy(() => import("@/pages/about"));
 const AdminReadersPage = lazy(() => import("@/pages/admin/readers"));
 const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
@@ -66,7 +67,9 @@ export function App() {
         <Route
           element={
             <RequireAuth>
-              <Outlet />
+              <Suspense fallback={<PageSpinner />}>
+                <Outlet />
+              </Suspense>
             </RequireAuth>
           }
         >

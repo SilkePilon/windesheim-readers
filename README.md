@@ -73,10 +73,11 @@ All configuration is through environment variables.
 | `EMAIL_FROM` | | `Windesheim Readers <noreply@example.com>` | Sender address; it must be on a domain verified in Resend. |
 | `PORT` | | `3000` | Port the server listens on. |
 | `DATABASE_PATH` | | `/app/data/app.db` in the image | SQLite database file. |
-| `UPLOAD_DIR` | | `/app/data/uploads` in the image | Uploaded PDFs and generated audio. |
+| `UPLOAD_DIR` | | `/app/data/uploads` in the image | Uploaded PDFs, generated audio and feedback screenshots (`feedback/`, at most 500 MB; a screenshot is deleted 90 days after its report is done). |
 | `CLIENT_IP_HEADER` | recommended behind a proxy | | Header holding the real client IP, used by the rate limits: `cf-connecting-ip` behind Cloudflare, `x-forwarded-for` (first entry is used) behind a proxy that overwrites it. Empty: the socket address. Only name a header your proxy always sets, or clients can pick their own IP. |
 | `EMAIL_LIMIT_HOURLY` | | `30` | Most sign-in emails the server sends per rolling hour, all addresses together. |
 | `EMAIL_LIMIT_DAILY` | | `100` | Same, per rolling 24 hours (Resend's free tier is 100 a day). |
+| `GITHUB_REPO` | | `SilkePilon/windesheim-readers` | `owner/name` of the GitHub repo that feedback reports are drafted as issues on (the admin opens a prefilled "new issue" page; no token needed). |
 | `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | | | Optional fallback AI keys. Keys entered under **Admin → AI settings** take precedence. |
 
 The container keeps everything under **`/app/data`**. Mount a volume there, or you lose your data when the container is replaced.
@@ -105,6 +106,7 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | AI explain-it-back grading | user | 4 per minute, 15 per 10 minutes |
 | AI open-question grading | user | 6 per minute, 25 per 10 minutes |
 | All three AI features together | user | 40 per 10 minutes |
+| Feedback and issue reports (valid ones only; refused reports don't count) | user | 5 per hour, 20 per day |
 | Progress and XP writes (reviews, quiz checks and submits, read, listen progress, profile) | user | 120 per minute |
 | Admin AI calls (key checks, model lists, test prompt, voice models and samples) | admin | 30 per 10 minutes |
 | Admin uploads and jobs (upload, retry, restructure, generate, audio, badge backfill) | admin | 30 per hour |

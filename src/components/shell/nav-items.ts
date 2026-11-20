@@ -1,12 +1,13 @@
-import { useMe } from "@/lib/queries";
+import { useFeedbackCount, useMe } from "@/lib/queries";
 import { ADMIN_ITEM, NAV_ITEMS, type NavItem } from "./nav-core";
 
 export * from "./nav-core";
 
-/** Student items (with the Herhalen due badge) plus Beheer for admins. */
+/** Student items (with the Herhalen due badge) plus Beheer for admins (with the new-feedback badge). */
 export function useNavItems(): NavItem[] {
   const { data: me } = useMe();
+  const newFeedback = useFeedbackCount();
   const due = me?.stats.due ?? 0;
   const items = NAV_ITEMS.map((i) => (i.key === "review" ? { ...i, badge: due } : i));
-  return me?.user.role === "admin" ? [...items, ADMIN_ITEM] : items;
+  return me?.user.role === "admin" ? [...items, { ...ADMIN_ITEM, badge: newFeedback }] : items;
 }

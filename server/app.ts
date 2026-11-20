@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { admin } from "./routes/admin";
 import { learn } from "./routes/learn";
+import { adminFeedback, feedback } from "./routes/feedback";
 import { userFromHeaders } from "./middleware";
 import { battleConnection } from "./live/battle";
 import { limits } from "./limits";
@@ -59,11 +60,13 @@ const bodyCaps = {
   tutor: bodyLimit({ maxSize: LIMITS.body.tutor, onError: tooLarge }),
   admin: bodyLimit({ maxSize: LIMITS.body.admin, onError: tooLarge }),
   upload: bodyLimit({ maxSize: LIMITS.body.upload, onError: tooLarge }),
+  feedback: bodyLimit({ maxSize: LIMITS.body.feedback, onError: tooLarge }),
 };
 app.use("/api/*", (c, next) => {
   if (c.req.method === "GET" || c.req.method === "HEAD") return next();
   const p = c.req.path;
   if (c.req.method === "POST" && p === "/api/admin/readers") return bodyCaps.upload(c, next);
+  if (c.req.method === "POST" && p === "/api/feedback") return bodyCaps.feedback(c, next);
   if (c.req.method === "POST" && /^\/api\/lessons\/[^/]+\/chat$/.test(p)) return bodyCaps.tutor(c, next);
   if (p.startsWith("/api/admin/")) return bodyCaps.admin(c, next);
   return bodyCaps.default(c, next);
@@ -112,6 +115,9 @@ app.get(
   }),
 );
 
+// Before `admin` and `learn`: each router guards itself (adminFeedback with requireUser + requireAdmin, like admin).
+app.route("/api/admin/feedback", adminFeedback);
+app.route("/api/feedback", feedback);
 app.route("/api/admin", admin);
 app.route("/api", learn);
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));

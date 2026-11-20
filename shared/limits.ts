@@ -60,9 +60,24 @@ export const LIMITS = {
   voiceId: { max: 100 },
   voiceInstructions: { max: 1_000 },
 
+  // ----- feedback -----
+  feedback: {
+    message: { min: 10, max: 4_000 },
+    screenshotBytes: 5 * 1024 * 1024,
+    contextBytes: 8 * 1024,
+    githubUrl: 300,
+  },
+
   // ----- transport -----
   /** Request body caps (bytes). */
-  body: { default: 64 * 1024, tutor: 256 * 1024, admin: 256 * 1024, upload: 51 * 1024 * 1024 },
+  body: {
+    default: 64 * 1024,
+    tutor: 256 * 1024,
+    admin: 256 * 1024,
+    upload: 51 * 1024 * 1024,
+    /** POST /api/feedback: a 5 MB screenshot, the message and context, and multipart overhead. */
+    feedback: 6 * 1024 * 1024,
+  },
   /** One battle websocket message (bytes). */
   battleMessage: { max: 4 * 1024 },
 } as const;

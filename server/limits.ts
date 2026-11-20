@@ -1,4 +1,4 @@
-import { HOUR, MINUTE, SECOND, ipKey, rateLimit } from "./lib/rate-limit";
+import { DAY, HOUR, MINUTE, SECOND, ipKey, rateLimit } from "./lib/rate-limit";
 
 /**
  * Every in-memory request limit in one place (the hard, persisted sign-in email limits live
@@ -53,6 +53,15 @@ export const limits = {
   ai: rateLimit({ name: "ai", rules: [{ limit: 40, windowMs: 10 * MINUTE }], adminFactor: 2 }),
   /** Writes that award XP or save progress, per user. */
   writes: rateLimit({ name: "writes", rules: [{ limit: 120, windowMs: MINUTE }] }),
+
+  /** Feedback and issue reports (POST /api/feedback), per user. Called inline by the route, after validation. */
+  feedback: rateLimit({
+    name: "feedback",
+    rules: [
+      { limit: 5, windowMs: HOUR },
+      { limit: 20, windowMs: DAY },
+    ],
+  }),
 
   /** Admin calls that hit an AI provider (key checks, model lists, test prompts, voice samples). */
   adminAi: rateLimit({ name: "admin-ai", rules: [{ limit: 30, windowMs: 10 * MINUTE }] }),

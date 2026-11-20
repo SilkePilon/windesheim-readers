@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import { badgeText, isNavActive, type NavItem } from "./nav-items";
+import { badgeLabelKey, badgeText, isNavActive, type NavItem } from "./nav-items";
 
 const CELL = 44; // inactive item: 44×44, icon only
 const ICON = 22;
@@ -97,7 +97,7 @@ export function FloatingDock({ items }: { items: NavItem[] }) {
         {items.map((item, i) => {
           const active = i === activeIndex;
           const label = t(`nav.${item.key}`);
-          const ariaLabel = item.badge ? t("nav.withDue", { label, count: item.badge }) : label;
+          const ariaLabel = item.badge ? t(badgeLabelKey(item), { label, count: item.badge }) : label;
           const Icon = item.icon;
           return (
             <Link

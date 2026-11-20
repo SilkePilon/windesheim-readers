@@ -1,4 +1,5 @@
 import type { BadgeId } from "@shared/game";
+import type { FeedbackContext, FeedbackStatus, FeedbackType } from "@shared/feedback";
 
 /** GET /me/badges: one entry per catalogue badge. */
 export interface BadgeStatus {
@@ -259,3 +260,23 @@ export interface ModelInfo {
   structuredOutput?: boolean;
 }
 export type KeyValidation = { ok: true; modelCount: number } | { ok: false; invalid: boolean; error: string };
+/** One report in the admin inbox (`GET /admin/feedback`). User-supplied text: render as plain text only. */
+export interface FeedbackRow {
+  id: string;
+  type: FeedbackType;
+  message: string;
+  context: FeedbackContext;
+  status: FeedbackStatus;
+  githubUrl: string | null;
+  hasScreenshot: boolean;
+  /** The stored screenshot's extension ("webp", "jpeg" or "png"), null without one. */
+  screenshotExt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Null once the account is gone. */
+  reporter: { name: string; email: string } | null;
+}
+export interface FeedbackList {
+  repo: string;
+  items: FeedbackRow[];
+}

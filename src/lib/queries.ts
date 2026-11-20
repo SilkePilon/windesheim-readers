@@ -11,6 +11,8 @@ export const qk = {
   lessonAudio: (id: string) => ["lesson", id, "audio"] as const,
   leaderboard: (p: string) => ["leaderboard", p] as const,
   badges: ["me", "badges"] as const,
+  adminFeedback: ["admin", "feedback"] as const,
+  adminFeedbackCount: ["admin", "feedback", "count"] as const,
 };
 
 export function useMe() {
@@ -72,4 +74,17 @@ export function useInvalidateProgress() {
     void qc.invalidateQueries({ queryKey: ["lesson"] });
     void qc.invalidateQueries({ queryKey: ["leaderboard"] });
   };
+}
+
+/** New feedback reports, for the Beheer badge. Admins only: students never call this route. */
+export function useFeedbackCount() {
+  const { data: me } = useMe();
+  const isAdmin = me?.user.role === "admin";
+  const { data } = useQuery({
+    queryKey: qk.adminFeedbackCount,
+    queryFn: () => api.get<{ new: number }>("/admin/feedback/count"),
+    enabled: isAdmin,
+    refetchInterval: 60_000,
+  });
+  return isAdmin ? (data?.new ?? 0) : 0;
 }

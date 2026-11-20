@@ -5,6 +5,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 import { injectMeta, metaForPath, renderMetaBlock } from "./server/og/meta";
 import { pickLang } from "./server/og/copy";
+import { appVersion } from "./scripts/app-version";
 
 /**
  * Dev only: the per-path link-preview meta the production server injects (server/og). There
@@ -23,6 +24,7 @@ const devLinkPreviewMeta = (): Plugin => ({
 });
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   plugins: [
     devLinkPreviewMeta(),
     react(),

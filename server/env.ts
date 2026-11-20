@@ -9,6 +9,16 @@ const int = (v: string | undefined, fallback: number) => {
   return v?.trim() && Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
 };
 
+const DEFAULT_GITHUB_REPO = "SilkePilon/windesheim-readers";
+/** `owner/name`; anything else (a URL, a path, spaces) falls back to the default with a warning. */
+const githubRepo = (v: string | undefined) => {
+  const s = (v ?? "").trim();
+  if (!s) return DEFAULT_GITHUB_REPO;
+  if (/^[\w.-]+\/[\w.-]+$/.test(s) && !s.split("/").some((p) => p === "." || p === "..")) return s;
+  console.warn(`GITHUB_REPO must look like owner/name; using ${DEFAULT_GITHUB_REPO}`);
+  return DEFAULT_GITHUB_REPO;
+};
+
 const isProd = process.env.NODE_ENV === "production";
 
 export const env = {
@@ -31,6 +41,8 @@ export const env = {
   /** Global cap on sign-in emails (all addresses together), per rolling hour and day. */
   emailLimitHourly: int(process.env.EMAIL_LIMIT_HOURLY, 30),
   emailLimitDaily: int(process.env.EMAIL_LIMIT_DAILY, 100),
+  /** `owner/name` of the GitHub repo the admin's "Naar GitHub" drafts open on. */
+  githubRepo: githubRepo(process.env.GITHUB_REPO),
   /** Turns every rate limit off. Honoured only outside production (the e2e suite uses it). */
   rateLimitDisabled: !isProd && process.env.RATE_LIMIT_DISABLED === "1",
 };

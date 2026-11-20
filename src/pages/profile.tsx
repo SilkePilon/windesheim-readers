@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { notify } from "@/lib/notify";
+import { notifyError } from "@/lib/notify-error";
 import { Check, ChevronRight, Download, Info, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ import { levelTitleIndex } from "@shared/game";
 import { BADGE_CATEGORIES, BADGE_LIST, BADGES } from "@shared/badges";
 import { BadgeCell, BadgeCellSkeleton } from "@/components/game/badge-tile";
 import { useEntrance } from "@/lib/motion";
+import { resetFeedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
@@ -43,12 +45,14 @@ export default function ProfilePage() {
       invalidate();
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(requestErrorText(e, t, t("common.error")));
+      notifyError(e, t, requestErrorText(e, t, t("common.error")));
     }
   };
 
   const signOut = async () => {
     await authClient.signOut();
+    // No reload follows: forget the feedback draft so the next user on this device never sees it.
+    resetFeedback();
     qc.clear();
     navigate("/login");
   };

@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
+# .git is not in the build context, so CI passes the commit SHA here.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 RUN bunx vite build
 
 # --- Production dependencies only ---

@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, ScrollRestoration, createBrowserRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import "@fontsource/fredoka/600.css";
 import "@fontsource/fredoka/700.css";
@@ -15,6 +15,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { captureInstallPrompt } from "@/lib/install";
 import { installPageTransitions } from "@/lib/motion";
+import { queryClient } from "@/lib/query-client";
+import { CrashScreen } from "@/components/crash-screen";
 
 // Before React mounts, so an early `beforeinstallprompt` is kept for the install drawer.
 captureInstallPrompt();
@@ -40,6 +42,8 @@ if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
 const router = createBrowserRouter([
   {
     path: "*",
+    // A render or loader crash lands here instead of react-router's default screen.
+    errorElement: <CrashScreen />,
     element: (
       <>
         <ScrollRestoration />
@@ -50,10 +54,6 @@ const router = createBrowserRouter([
 ]);
 // Every navigation is a view transition (content slides, dock/rail stay put).
 installPageTransitions(router);
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-});
 
 // next-themes renders an inline <script> meant for SSR; in this client-only app it never
 // runs, and React 19 logs "Encountered a script tag while rendering React component".

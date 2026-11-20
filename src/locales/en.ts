@@ -438,6 +438,13 @@ const en: Messages = {
     badgeTier: "{{tier}} badge",
   },
   feedback: {
+    report: "Report",
+    crash: {
+      title: "Oops, something went wrong.",
+      body: "Try reloading the page. If it keeps happening, let us know.",
+      reload: "Reload",
+      report: "Report a problem",
+    },
     help: "Send feedback or report a problem",
     title: "Let us know",
     description: "Something broken, unclear or a good idea? We read everything.",

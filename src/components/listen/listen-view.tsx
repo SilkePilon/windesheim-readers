@@ -11,7 +11,7 @@ import { useListenPlayer, type ListenControls, type ListenPlayer } from "@/compo
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { notify } from "@/lib/notify";
-import { errorText } from "@/lib/error-text";
+import { notifyError } from "@/lib/notify-error";
 import { useInvalidateProgress, useLessonAudio, useMe } from "@/lib/queries";
 import { SKIP_MS, SLIDER_STEP_MS, SPEEDS, formatClock, type Speed } from "@/lib/listen";
 import type { LessonAudio, LessonDetail } from "@/lib/types";
@@ -61,7 +61,7 @@ function NotReady({ lessonId, audio, onQueued }: { lessonId: string; audio: Less
       notify.success(t("admin.audio.queued", { count: 1 }));
       onQueued();
     } catch (e) {
-      notify.error(errorText(e, t));
+      notifyError(e, t);
     } finally {
       setQueueing(false);
     }

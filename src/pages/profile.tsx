@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { notify } from "@/lib/notify";
+import { notifyError } from "@/lib/notify-error";
 import { Check, ChevronRight, Download, Info, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,7 +45,7 @@ export default function ProfilePage() {
       invalidate();
       notify.success(t("common.saved"));
     } catch (e) {
-      notify.error(requestErrorText(e, t, t("common.error")));
+      notifyError(e, t, requestErrorText(e, t, t("common.error")));
     }
   };
 

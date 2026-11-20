@@ -436,6 +436,13 @@ const nl = {
     badgeTier: "{{tier}}-badge",
   },
   feedback: {
+    report: "Melden",
+    crash: {
+      title: "Oeps, er ging iets mis.",
+      body: "Probeer de pagina opnieuw te laden. Blijft het gebeuren? Laat het ons weten.",
+      reload: "Opnieuw laden",
+      report: "Probleem melden",
+    },
     help: "Feedback of een probleem melden",
     title: "Laat het ons weten",
     description: "Iets kapot, onduidelijk of een goed idee? We lezen alles.",

@@ -430,6 +430,7 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const lessonId = c.req.query("lessonId");
     const now = new Date();
+    if (lessonId && !(await visibleLesson(lessonId, u.role === "admin"))) return c.json({ error: "NOT_FOUND" }, 404);
     const publishedLessons = db
       .select({ id: schema.lesson.id })
       .from(schema.lesson)

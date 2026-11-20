@@ -8,7 +8,6 @@ import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
 import { db, runMigrations, schema } from "../server/db";
 import { env } from "../server/env";
 import { resetEmailGate } from "../server/lib/email-gate";
-import { limits } from "../server/limits";
 import { cardMasteryByLesson } from "../server/lib/game";
 import { computeMastery } from "../shared/game";
 
@@ -289,6 +288,13 @@ describe("cardMasteryByLesson", () => {
 describe("GET /api/review/queue", () => {
   for (const who of ["student", "admin"] as const) {
     for (const lessonId of [undefined, "ls-L1", "ls-L2", "ls-L3"]) {
+      if (who === "student" && lessonId === "ls-L3") {
+        test("student ?lessonId=ls-L3 (unpublished reader) is 404", async () => {
+          const res = await fetch(`${base}/api/review/queue?lessonId=ls-L3`, { headers: { cookie: cookies.student } });
+          expect(res.status).toBe(404);
+        });
+        continue;
+      }
       test(`${who}${lessonId ? ` ?lessonId=${lessonId}` : ""} matches the reference`, async () => {
         const items = (await get(`/review/queue${lessonId ? `?lessonId=${lessonId}` : ""}`, who)) as { id: string }[];
         const ref = refQueue(who, lessonId);

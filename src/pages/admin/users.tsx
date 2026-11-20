@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { notify } from "@/lib/notify";
 import { Lock, Pencil } from "lucide-react";
@@ -13,7 +13,7 @@ import { NicknameDialog } from "@/components/admin/nickname-dialog";
 import { Pill } from "@/components/admin/status-pill";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/error-text";
-import { useMe } from "@/lib/queries";
+import { qk, useMe } from "@/lib/queries";
 
 interface UserRow {
   id: string;
@@ -31,7 +31,10 @@ export default function AdminUsersPage() {
   const { t, i18n } = useTranslation();
   const { data: me } = useMe();
   const [saving, setSaving] = useState<string | null>(null);
+  // `editing` stays set while the dialog closes, so its content doesn't blank mid-animation.
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [open, setOpen] = useState(false);
+  const qc = useQueryClient();
   const { data, isLoading, refetch } = useQuery({ queryKey: ["admin", "users"], queryFn: () => api.get<UserRow[]>("/admin/users") });
   if (isLoading || !data) return <PageSpinner />;
 
@@ -83,7 +86,10 @@ export default function AdminUsersPage() {
                         size="icon"
                         className="shrink-0"
                         aria-label={t("admin.nickname.edit", { name: display })}
-                        onClick={() => setEditing(u)}
+                        onClick={() => {
+                          setEditing(u);
+                          setOpen(true);
+                        }}
                       >
                         <Pencil />
                       </Button>
@@ -116,7 +122,12 @@ export default function AdminUsersPage() {
           </TableBody>
         </Table>
       </Card>
-      <NicknameDialog user={editing} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} onSaved={refetch} />
+      <NicknameDialog
+        user={editing}
+        open={open}
+        onOpenChange={setOpen}
+        onSaved={() => Promise.all([refetch(), qc.invalidateQueries({ queryKey: qk.me })])}
+      />
     </>
   );
 }

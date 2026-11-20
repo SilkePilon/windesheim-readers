@@ -237,6 +237,8 @@ describe("admin endpoints", () => {
       await expectStatus(await patch("does-not-exist", { nickname: "Ann" }), 404, "NOT_FOUND");
       expect((await patch(self.id, { nickname: "Boss" })).status).toBe(200);
       expect(byEmail(self.email)).toMatchObject({ nickname: "Boss", role: "admin" });
+      await expectStatus(await patch(self.id, { role: "user" }), 400, "CANNOT_DEMOTE_SELF");
+      expect(byEmail(self.email).role).toBe("admin");
       expect((await patch(target.id, { nickname: "Hax" }, student)).status).toBe(403);
       expect(byEmail(target.email).nickname).toBeNull();
     } finally {

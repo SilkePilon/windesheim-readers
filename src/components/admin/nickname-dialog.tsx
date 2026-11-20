@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LIMITS, nicknameProblem, normalizeNickname } from "@shared/limits";
 import { Button } from "@/components/ui/button";
@@ -26,17 +26,29 @@ export function NicknameDialog({
   onOpenChange: (o: boolean) => void;
   onSaved: () => Promise<unknown>;
 }) {
+  // Close requests (X, Esc, overlay) are ignored while a save is in flight.
+  const savingRef = useRef(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => !(savingRef.current && !o) && onOpenChange(o)}>
       {/* The form lives inside the content, so it remounts (fresh value) on every open. */}
       <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-sm">
-        {user && <NicknameForm key={user.id} user={user} onOpenChange={onOpenChange} onSaved={onSaved} />}
+        {user && <NicknameForm key={user.id} user={user} savingRef={savingRef} onClose={() => onOpenChange(false)} onSaved={onSaved} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function NicknameForm({ user, onOpenChange, onSaved }: { user: NicknameUser; onOpenChange: (o: boolean) => void; onSaved: () => Promise<unknown> }) {
+function NicknameForm({
+  user,
+  savingRef,
+  onClose,
+  onSaved,
+}: {
+  user: NicknameUser;
+  savingRef: { current: boolean };
+  onClose: () => void;
+  onSaved: () => Promise<unknown>;
+}) {
   const { t } = useTranslation();
   const current = user.nickname ?? "";
   const [value, setValue] = useState(current);
@@ -46,15 +58,18 @@ function NicknameForm({ user, onOpenChange, onSaved }: { user: NicknameUser; onO
   const dirty = next !== current;
 
   const submit = async (nickname: string | null) => {
+    savingRef.current = true;
     setSaving(true);
     try {
       await api.patch(`/admin/users/${user.id}`, { nickname });
       notify.success(t("admin.nickname.saved"));
       await onSaved();
-      onOpenChange(false);
+      savingRef.current = false;
+      onClose();
     } catch (e) {
       notify.error(errorText(e, t));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

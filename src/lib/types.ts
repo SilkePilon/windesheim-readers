@@ -269,6 +269,8 @@ export interface FeedbackRow {
   status: FeedbackStatus;
   githubUrl: string | null;
   hasScreenshot: boolean;
+  /** The stored screenshot's extension ("webp", "jpeg" or "png"), null without one. */
+  screenshotExt: string | null;
   createdAt: string;
   updatedAt: string;
   /** Null once the account is gone. */

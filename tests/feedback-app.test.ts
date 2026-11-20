@@ -145,7 +145,10 @@ describe("POST /api/feedback", () => {
     expect(img.headers.get("content-type")).toBe("image/png");
     expect(img.headers.get("cache-control")).toBe("private, no-store");
     expect(img.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(img.headers.get("content-disposition")).toBe(`inline; filename="feedback-${id}.png"`);
     expect(new Uint8Array(await img.arrayBuffer())).toEqual(PNG_1x1);
+    const list = (await (await call("GET", "")).json()) as { items: { id: string; hasScreenshot: boolean; screenshotExt: string | null }[] };
+    expect(list.items.find((i) => i.id === id)).toMatchObject({ hasScreenshot: true, screenshotExt: "png" });
   });
 
   test("HTML labelled as a PNG: 400 BAD_IMAGE, no file and no row", async () => {
@@ -286,7 +289,7 @@ describe("admin inbox", () => {
     expect(ids.indexOf(b.id)).toBeLessThan(ids.indexOf(a.id));
     expect(body.items.every((i) => i.type === "idea")).toBe(true);
     const item = body.items.find((i) => i.id === b.id)!;
-    expect(item).toMatchObject({ type: "idea", message: "Second idea for the app", status: "new", githubUrl: null, hasScreenshot: false, context: CONTEXT });
+    expect(item).toMatchObject({ type: "idea", message: "Second idea for the app", status: "new", githubUrl: null, hasScreenshot: false, screenshotExt: null, context: CONTEXT });
     expect(item.reporter).toEqual({ name: expect.any(String), email: STUDENT });
     expect(typeof item.createdAt).toBe("string");
     expect(item).not.toHaveProperty("screenshot");

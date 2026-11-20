@@ -136,6 +136,8 @@ export const adminFeedback = new Hono<AppEnv>()
     const items = rows.map(({ screenshot, userId, name, nickname, email, ...r }) => ({
       ...r,
       hasScreenshot: !!screenshot,
+      // From the stored name (`<id>.<ext>`), so the admin's download gets the right extension.
+      screenshotExt: screenshot ? screenshot.slice(screenshot.lastIndexOf(".") + 1) : null,
       reporter: userId && name !== null && email !== null ? { name: displayName({ name, nickname, email }), email } : null,
     }));
     return c.json({ repo: env.githubRepo, items });
@@ -187,7 +189,8 @@ export const adminFeedback = new Hono<AppEnv>()
         "Content-Type": screenshotType(row!.screenshot!),
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
-        "Content-Disposition": "inline",
+        // The stored name passed screenshotPath's check: `<id>.<ext>`, safe in a quoted filename.
+        "Content-Disposition": `inline; filename="feedback-${row!.screenshot!}"`,
       },
     });
   });

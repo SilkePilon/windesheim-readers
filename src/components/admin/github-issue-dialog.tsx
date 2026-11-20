@@ -129,7 +129,7 @@ function DraftForm({ row, repo, onClose, onOpened }: { row: FeedbackRow; repo: s
         <span className="min-w-0 flex-1">{t("admin.inbox.draft.note")}</span>
         {row.hasScreenshot && (
           <Button asChild variant="outline" size="sm">
-            <a href={screenshotUrl(row.id)} download={`feedback-${row.id}`}>
+            <a href={screenshotUrl(row.id)} download={`feedback-${row.id}.${row.screenshotExt ?? "png"}`}>
               <Download /> {t("admin.inbox.draft.downloadScreenshot")}
             </a>
           </Button>

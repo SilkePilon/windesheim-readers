@@ -297,7 +297,7 @@ function DetailBody({ row, repo, onClose }: { row: FeedbackRow; repo: string; on
           </a>
           <div className="flex gap-2">
             <Button asChild variant="outline" size="sm">
-              <a href={src} download={`feedback-${row.id}`}>
+              <a href={src} download={`feedback-${row.id}.${row.screenshotExt ?? "png"}`}>
                 <Download /> {t("admin.inbox.download")}
               </a>
             </Button>

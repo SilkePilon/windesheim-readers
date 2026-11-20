@@ -247,6 +247,16 @@ export interface LessonAudio {
   listenMs: number;
   summaryRead: boolean;
 }
+/** GET /readers/:id/episodes/:week (student; never the script). */
+export interface EpisodeMeta {
+  week: number;
+  title: string;
+  status: "ready";
+  chapters: { n: number; title: string; durationMs: number }[];
+  totalMs: number;
+  positionMs: number;
+  listenMs: number;
+}
 export interface ListenProgress {
   listenMs: number;
   summaryRead: boolean;

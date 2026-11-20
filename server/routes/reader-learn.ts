@@ -10,10 +10,28 @@ import { previewIntervals, toCard } from "../lib/fsrs";
 import { updateProgress } from "../lib/game";
 import { dayKey } from "../lib/time";
 import { lessonMastery, loadPlanInput, readerOverview, sessionDayStreak, visibleReader } from "../lib/reader-learn";
-import { award, createQuizSession, getQuizSession } from "./learn";
+import { award, createQuizSession, getQuizSession, LISTENED_SHARE } from "./learn";
+import { episodeChapterPath } from "../ai/episodes";
+import { serveChapter } from "../lib/audio-file";
 import { quizXpPerCorrect, sessionXpFactor, XP } from "../../shared/game";
 import { buildSessionPlan, mainLessonId, sessionMastery } from "../../shared/reader-session";
 import * as input from "../lib/input";
+
+
+const positiveInt = (v: string) => (/^\d{1,6}$/.test(v) && Number(v) >= 1 ? Number(v) : null);
+
+/** The episode of a visible reader's week; `null` means 404 (hidden reader or no such episode). */
+async function visibleEpisode(u: Parameters<typeof visibleReader>[0], readerId: string, weekParam: string) {
+  const week = positiveInt(weekParam);
+  if (week == null) return null;
+  const reader = await visibleReader(u, readerId);
+  if (!reader) return null;
+  const ep = await db.query.readerEpisode.findFirst({
+    where: and(eq(schema.readerEpisode.readerId, reader.id), eq(schema.readerEpisode.week, week)),
+  });
+  return ep ? { reader, week, ep } : null;
+}
+const episodeTotalMs = (chapters: { durationMs: number }[]) => chapters.reduce((a, c) => a + c.durationMs, 0);
 
 // requireUser per route, not `.use()`: mounted on /api, a router-wide middleware would also run
 // (a second session lookup) for every /api request that falls through to `learn`.
@@ -23,6 +41,75 @@ export const readerLearn = new Hono<AppEnv>()
     const o = await readerOverview(c.get("user"), c.req.param("id"));
     if (!o) return c.json({ error: "NOT_FOUND" }, 404);
     return c.json(o);
+  })
+
+  // ----- weekly episodes (audio; students never get the script) -----
+  .get("/readers/:id/episodes/:week", requireUser, async (c) => {
+    const u = c.get("user");
+    const found = await visibleEpisode(u, c.req.param("id"), c.req.param("week"));
+    if (!found) return c.json({ error: "NOT_FOUND" }, 404);
+    const { reader, week, ep } = found;
+    if (ep.status !== "ready" || !ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
+    const p = await db.query.episodeProgress.findFirst({
+      where: and(eq(schema.episodeProgress.userId, u.id), eq(schema.episodeProgress.readerId, reader.id), eq(schema.episodeProgress.week, week)),
+    });
+    return c.json({
+      week,
+      title: ep.title ?? "",
+      status: ep.status,
+      chapters: ep.chapters.map((ch) => ({ n: ch.n, title: ep.script?.chapters[ch.n - 1]?.title ?? "", durationMs: ch.durationMs })),
+      totalMs: episodeTotalMs(ep.chapters),
+      positionMs: p?.positionMs ?? 0,
+      listenMs: p?.listenMs ?? 0,
+    });
+  })
+
+  .get("/readers/:id/episodes/:week/:file{[0-9]+\\.mp3}", requireUser, async (c) => {
+    const found = await visibleEpisode(c.get("user"), c.req.param("id"), c.req.param("week"));
+    if (!found) return c.json({ error: "NOT_FOUND" }, 404);
+    const n = Number.parseInt(c.req.param("file"), 10);
+    if (found.ep.status !== "ready" || !found.ep.chapters.some((ch) => ch.n === n)) return c.json({ error: "NOT_FOUND" }, 404);
+    return serveChapter(c, episodeChapterPath(found.reader.id, found.week, n));
+  })
+
+  /** Resume position + listen credit. Pays XP.episodeListen once per student and episode; never touches lesson progress. */
+  .post("/readers/:id/episodes/:week/progress", requireUser, limits.writes, async (c) => {
+    const u = c.get("user");
+    const found = await visibleEpisode(u, c.req.param("id"), c.req.param("week"));
+    if (!found) return c.json({ error: "NOT_FOUND" }, 404);
+    const { reader, week, ep } = found;
+    const body = input.audioProgress.parse(await c.req.json());
+    if (ep.status !== "ready" || !ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
+    const totalMs = episodeTotalMs(ep.chapters);
+    const positionMs = Math.min(body.positionMs, totalMs);
+    const heard = Math.min(body.heardMs ?? body.positionMs, totalMs);
+    const [row] = await db
+      .insert(schema.episodeProgress)
+      .values({ userId: u.id, readerId: reader.id, week, positionMs, listenMs: heard })
+      .onConflictDoUpdate({
+        target: [schema.episodeProgress.userId, schema.episodeProgress.readerId, schema.episodeProgress.week],
+        set: { positionMs, listenMs: sql`max(${schema.episodeProgress.listenMs}, ${heard})`, updatedAt: new Date() },
+      })
+      .returning({ listenMs: schema.episodeProgress.listenMs });
+    const listenMs = row?.listenMs ?? heard;
+    let reward = null;
+    if (listenMs >= LISTENED_SHARE * totalMs) {
+      // Claimed atomically, so two concurrent posts can't both pay.
+      const claimed = await db
+        .update(schema.episodeProgress)
+        .set({ awarded: true })
+        .where(
+          and(
+            eq(schema.episodeProgress.userId, u.id),
+            eq(schema.episodeProgress.readerId, reader.id),
+            eq(schema.episodeProgress.week, week),
+            eq(schema.episodeProgress.awarded, false),
+          ),
+        )
+        .returning({ week: schema.episodeProgress.week });
+      if (claimed.length) reward = await award(u.id, XP.episodeListen, "episode");
+    }
+    return c.json({ listenMs, award: reward });
   })
 
   /** Today's session. The plan is seeded per user, reader, day and completed sessions, so a refresh gives the same one. */

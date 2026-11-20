@@ -31,11 +31,11 @@ import { getModel } from "../ai/providers";
 import { stubChatModel } from "../ai/chat-stub";
 import { aiStubEnabled } from "../ai/speech";
 import { chapterPath, PUBLIC_AUDIO_COLUMNS, publicAudio } from "../ai/audio";
-import { parseRange } from "../lib/audio-codec";
+import { serveChapter } from "../lib/audio-file";
 import * as input from "../lib/input";
 
 /** Listening at least this share of the luisterles counts as having read the summary. */
-const LISTENED_SHARE = 0.9;
+export const LISTENED_SHARE = 0.9;
 
 /** Today's quiz XP factor for this user and lesson (diminishing after 3 quizzes per day). */
 async function todayQuizFactor(userId: string, lessonId: string) {
@@ -359,19 +359,8 @@ export const learn = new Hono<AppEnv>()
     if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     const n = Number.parseInt(c.req.param("file"), 10);
     const audio = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, row.lesson.id), columns: { chapters: true } });
-    const f = Bun.file(chapterPath(row.lesson.id, n));
-    if (!audio?.chapters.some((ch) => ch.n === n) || !(await f.exists())) return c.json({ error: "NOT_FOUND" }, 404);
-    const size = f.size;
-    // /api stays network-only in the service worker; the browser may cache it privately (URLs carry ?v=).
-    const headers: Record<string, string> = { "Content-Type": "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=86400" };
-    const range = parseRange(c.req.header("range"), size);
-    if (range === "unsatisfiable") return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
-    if (range)
-      return new Response(f.slice(range.start, range.end + 1), {
-        status: 206,
-        headers: { ...headers, "Content-Range": `bytes ${range.start}-${range.end}/${size}`, "Content-Length": String(range.end - range.start + 1) },
-      });
-    return new Response(f, { headers: { ...headers, "Content-Length": String(size) } });
+    if (!audio?.chapters.some((ch) => ch.n === n)) return c.json({ error: "NOT_FOUND" }, 404);
+    return serveChapter(c, chapterPath(row.lesson.id, n));
   })
 
   /**

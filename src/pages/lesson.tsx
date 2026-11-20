@@ -23,13 +23,13 @@ import { PageError, PageSpinner } from "@/components/page";
 import { Markdown } from "@/components/markdown";
 import { ExplainTab } from "@/components/explain-tab";
 import { OpenTab } from "@/components/open-tab";
-import { ListenView } from "@/components/listen/listen-view";
+import { LessonListen } from "@/components/listen/listen-view";
 import { ActivityTile, type ActivityTone } from "@/components/game/activity-tile";
 import { LevelBar } from "@/components/game/level-bar";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { useInvalidateProgress, useLesson, useLessonAudio } from "@/lib/queries";
-import { formatClock } from "@/lib/listen";
+import { formatClock, lessonAudioSource } from "@/lib/listen";
 import { resumePosition } from "@/components/listen/use-listen-player";
 import type { LessonDetail, XpResult } from "@/lib/types";
 import { useEntrance } from "@/lib/motion";
@@ -94,7 +94,7 @@ function Overview({ lesson }: { lesson: LessonDetail }) {
   const { level, step, cardsLeft, hint } = useNextStep(lesson, audioReady);
   const pct = (v: number) => Math.round(v * 100);
   // Same rule as the player: the server position, or a newer one that only this device has.
-  const resume = audioReady ? resumePosition(lesson.id, audio) : 0;
+  const resume = audioReady ? resumePosition(lessonAudioSource(lesson, audio)) : 0;
 
   const activities: { id: ActivityId; icon: LucideIcon; tone: ActivityTone; status: string }[] = [
     {
@@ -258,7 +258,7 @@ function SubView({ lesson, view }: { lesson: LessonDetail; view: View }) {
   const { t } = useTranslation();
   let body: ReactNode;
   if (view === "read") body = <ReadView lesson={lesson} />;
-  else if (view === "listen") body = <ListenView lesson={lesson} />;
+  else if (view === "listen") body = <LessonListen lesson={lesson} />;
   else if (view === "explain") body = <ExplainTab lesson={lesson} />;
   else if (view === "open") body = <OpenTab lessonId={lesson.id} />;
   else

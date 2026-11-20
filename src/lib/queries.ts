@@ -2,13 +2,16 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
 import { setLocale } from "./i18n";
-import type { BadgeStatus, Leaderboard, LessonAudio, LessonDetail, Me, ReaderWithLessons } from "./types";
+import type { BadgeStatus, Leaderboard, LessonAudio, LessonDetail, Me, ReaderConceptMap, ReaderLearn, ReaderWithLessons } from "./types";
 
 export const qk = {
   me: ["me"] as const,
   readers: ["readers"] as const,
   lesson: (id: string) => ["lesson", id] as const,
   lessonAudio: (id: string) => ["lesson", id, "audio"] as const,
+  readerLearn: (id: string) => ["reader", id, "learn"] as const,
+  readerEpisode: (id: string, week: number) => ["reader", id, "episode", week] as const,
+  conceptMap: (id: string) => ["reader", id, "concept-map"] as const,
   leaderboard: (p: string) => ["leaderboard", p] as const,
   badges: ["me", "badges"] as const,
   adminFeedback: ["admin", "feedback"] as const,
@@ -43,6 +46,26 @@ export function useReaders() {
   return useQuery({ queryKey: qk.readers, queryFn: () => api.get<ReaderWithLessons[]>("/readers") });
 }
 
+/** The whole-reader learning overview; idle without an id. */
+export function useReaderLearn(id: string | undefined) {
+  return useQuery({
+    queryKey: qk.readerLearn(id ?? ""),
+    queryFn: () => api.get<ReaderLearn>(`/readers/${id}/learn`),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
+/** The reader's concept map with mastery per lesson (under "reader", so progress refreshes the tones). A 404 is not retried. */
+export function useConceptMap(readerId: string) {
+  return useQuery({
+    queryKey: qk.conceptMap(readerId),
+    queryFn: () => api.get<ReaderConceptMap>(`/readers/${readerId}/concept-map`),
+    retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
+    staleTime: 30_000,
+  });
+}
+
 export function useLesson(id: string) {
   return useQuery({ queryKey: qk.lesson(id), queryFn: () => api.get<LessonDetail>(`/lessons/${id}`) });
 }
@@ -72,6 +95,7 @@ export function useInvalidateProgress() {
     void qc.invalidateQueries({ queryKey: qk.me });
     void qc.invalidateQueries({ queryKey: qk.readers });
     void qc.invalidateQueries({ queryKey: ["lesson"] });
+    void qc.invalidateQueries({ queryKey: ["reader"] });
     void qc.invalidateQueries({ queryKey: ["leaderboard"] });
   };
 }

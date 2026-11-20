@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Link, useBlocker, useNavigate, useParams } from "react-router";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Link, useBlocker, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { notify } from "@/lib/notify";
@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Notice } from "@/components/notice";
 import { Spinner } from "@/components/ui/spinner";
@@ -62,8 +63,14 @@ import type { AdminLessonRow, AdminReader } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LIMITS } from "@shared/limits";
 
+// The "Leren" tab (exam date, episodes, concept map) is its own chunk.
+const ReaderLearnTab = lazy(() => import("@/components/admin/reader-learn-tab"));
+/** Tab triggers, as the lesson editor's. */
+const TAB =
+  "h-auto rounded-[9px] px-3 py-1.5 text-[13px] font-bold text-muted-foreground data-active:bg-card data-active:text-foreground data-active:shadow-none data-active:ring-1 data-active:ring-border dark:data-active:border-transparent dark:data-active:bg-card";
+
 // The detail endpoint has no counts; they are derived from `lessons`.
-type Detail = Omit<AdminReader, "lessonCount" | "readyCount" | "failedCount"> & { lessons: AdminLessonRow[] };
+type Detail = Omit<AdminReader, "lessonCount" | "readyCount" | "failedCount"> & { lessons: AdminLessonRow[]; examDate: number | null };
 type Row = { id?: string; key: string; code: string; title: string; week: number; startPage: number; endPage: number };
 
 const BUSY = ["extracting", "structuring", "generating"];
@@ -358,22 +365,43 @@ export default function AdminReaderPage() {
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<number | null>(null);
   const [queueingAudio, setQueueingAudio] = useState(false);
+  // `?tab=leren` keeps the tab over reloads. The Leren tab stays mounted (hidden) once
+  // opened, so unsaved concept-map edits survive switching back to Structuur.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "leren" ? "leren" : "structuur";
+  const [learnOpened, setLearnOpened] = useState(tab === "leren");
+  useEffect(() => {
+    if (tab === "leren") setLearnOpened(true);
+  }, [tab]);
+  const onTab = (v: string) =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        if (v === "leren") next.set("tab", "leren");
+        else next.delete("tab");
+        return next;
+      },
+      { replace: true },
+    );
+  const [learnDirty, setLearnDirtyState] = useState(false);
+  const setLearnDirty = useCallback((d: boolean) => setLearnDirtyState(d), []);
+  const anyDirty = dirty || learnDirty;
 
   // Sync from server unless the admin is editing.
   useEffect(() => {
     if (data && !dirty) setRows(toRows(data.lessons));
   }, [data, dirty]);
 
-  // Unsaved structure edits: guard in-app navigation (tabs, back arrow, dock, browser
+  // Unsaved structure (or concept-map) edits: guard in-app navigation (tabs, back arrow, dock, browser
   // Back) with a dialog, and reload/close with the browser's own prompt.
   // Set once the admin chose to leave (discard, or the reader was deleted). The page can
   // stay mounted briefly during the route transition, so both guards check it.
   const leaving = useRef(false);
   const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) => anyDirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
   );
   useEffect(() => {
-    if (!dirty) return;
+    if (!anyDirty) return;
     const onUnload = (e: BeforeUnloadEvent) => {
       if (leaving.current) return;
       e.preventDefault();
@@ -381,7 +409,7 @@ export default function AdminReaderPage() {
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, [dirty]);
+  }, [anyDirty]);
 
   const lessonById = useMemo(() => new Map(data?.lessons.map((l) => [l.id, l]) ?? []), [data]);
   const sensors = useSensors(
@@ -620,74 +648,101 @@ export default function AdminReaderPage() {
         />
       )}
 
-      <Card variant="flat" className="gap-0 py-0">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b px-4 py-3">
-          <h3 className="font-heading text-base font-semibold">{t("admin.structure")}</h3>
-          <p className="text-xs text-muted-foreground">{t("admin.structureHint")}</p>
-        </div>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={onDragEnd}>
-          <Table className="min-w-[848px] table-fixed">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-9" />
-                <TableHead className="w-24 text-xs font-bold text-muted-foreground">{t("admin.code")}</TableHead>
-                <TableHead className="text-xs font-bold text-muted-foreground">{t("admin.lessonTitle")}</TableHead>
-                <TableHead className="w-16 text-xs font-bold text-muted-foreground">{t("admin.weekCol")}</TableHead>
-                <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.pages")}</TableHead>
-                <TableHead className="w-48 text-xs font-bold text-muted-foreground">{t("admin.content")}</TableHead>
-                <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.audio.column")}</TableHead>
-                <TableHead className="w-11" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
-                {rows.map((r, i) => (
-                  <SortableRow
-                    key={r.key}
-                    row={r}
-                    lesson={r.id ? lessonById.get(r.id) : undefined}
-                    changed={dirty && isChanged(r, i)}
-                    busy={busy}
-                    dirty={dirty}
-                    onChange={(patch) => update(r.key, patch)}
-                    onRemove={() => remove(r.key)}
-                    onAddAfter={() => addAfter(r.key)}
-                    onPreview={() => setPreview(r.startPage)}
-                    onRegenerate={() => generate([r.id!])}
-                    onRegenerateAudio={() => regenerateAudio(r.id!)}
-                  />
-                ))}
-              </SortableContext>
-              {!rows.length && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                    {t("admin.noLessons")}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </DndContext>
-        <div className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
-          <Button variant="flat" onClick={() => addAfter()} disabled={busy}>
-            <Plus /> {t("admin.addLesson")}
-          </Button>
-          <Button variant="flat" onClick={restructure} disabled={busy}>
-            <Wand2 /> {t("admin.reStructure")}
-          </Button>
-          <p className="basis-full text-xs text-muted-foreground sm:ml-auto sm:basis-auto">{t("admin.generateHint")}</p>
-        </div>
-      </Card>
+      <Tabs value={tab} onValueChange={onTab}>
+        <TabsList className="mb-2 grid h-auto w-full grid-cols-2 gap-1 rounded-xl bg-track p-[3px] group-data-horizontal/tabs:h-auto sm:inline-flex sm:w-fit">
+          <TabsTrigger value="structuur" className={TAB}>
+            {t("admin.tabs.structure")}
+          </TabsTrigger>
+          <TabsTrigger value="leren" className={TAB}>
+            {t("admin.tabs.learn")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="structuur">
+          <Card variant="flat" className="gap-0 py-0">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b px-4 py-3">
+              <h3 className="font-heading text-base font-semibold">{t("admin.structure")}</h3>
+              <p className="text-xs text-muted-foreground">{t("admin.structureHint")}</p>
+            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={onDragEnd}>
+              <Table className="min-w-[848px] table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-9" />
+                    <TableHead className="w-24 text-xs font-bold text-muted-foreground">{t("admin.code")}</TableHead>
+                    <TableHead className="text-xs font-bold text-muted-foreground">{t("admin.lessonTitle")}</TableHead>
+                    <TableHead className="w-16 text-xs font-bold text-muted-foreground">{t("admin.weekCol")}</TableHead>
+                    <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.pages")}</TableHead>
+                    <TableHead className="w-48 text-xs font-bold text-muted-foreground">{t("admin.content")}</TableHead>
+                    <TableHead className="w-32 text-xs font-bold text-muted-foreground">{t("admin.audio.column")}</TableHead>
+                    <TableHead className="w-11" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <SortableContext items={rows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
+                    {rows.map((r, i) => (
+                      <SortableRow
+                        key={r.key}
+                        row={r}
+                        lesson={r.id ? lessonById.get(r.id) : undefined}
+                        changed={dirty && isChanged(r, i)}
+                        busy={busy}
+                        dirty={dirty}
+                        onChange={(patch) => update(r.key, patch)}
+                        onRemove={() => remove(r.key)}
+                        onAddAfter={() => addAfter(r.key)}
+                        onPreview={() => setPreview(r.startPage)}
+                        onRegenerate={() => generate([r.id!])}
+                        onRegenerateAudio={() => regenerateAudio(r.id!)}
+                      />
+                    ))}
+                  </SortableContext>
+                  {!rows.length && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                        {t("admin.noLessons")}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </DndContext>
+            <div className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
+              <Button variant="flat" onClick={() => addAfter()} disabled={busy}>
+                <Plus /> {t("admin.addLesson")}
+              </Button>
+              <Button variant="flat" onClick={restructure} disabled={busy}>
+                <Wand2 /> {t("admin.reStructure")}
+              </Button>
+              <p className="basis-full text-xs text-muted-foreground sm:ml-auto sm:basis-auto">{t("admin.generateHint")}</p>
+            </div>
+          </Card>
+
+        </TabsContent>
+        {learnOpened && (
+          <TabsContent value="leren" forceMount className="data-[state=inactive]:hidden">
+            <Suspense fallback={<PageSpinner />}>
+              <ReaderLearnTab
+                readerId={id}
+                examDate={data.examDate ?? null}
+                lessons={data.lessons}
+                active={tab === "leren"}
+                onExamDateSaved={refetch}
+                onDirtyChange={setLearnDirty}
+              />
+            </Suspense>
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Room for the save bar so it never covers the last row. */}
-      {dirty && <div aria-hidden className="h-20" />}
-      <SaveBar dirty={dirty} saving={saving} canSave={valid && !busy} hint={valid ? undefined : t("admin.invalidRows")} onSave={save} onReset={reset} />
+      {dirty && tab === "structuur" && <div aria-hidden className="h-20" />}
+      <SaveBar dirty={dirty && tab === "structuur"} saving={saving} canSave={valid && !busy} hint={valid ? undefined : t("admin.invalidRows")} onSave={save} onReset={reset} />
       <PagePreview readerId={id} page={preview} onClose={() => setPreview(null)} />
       <AlertDialog open={blocker.state === "blocked"} onOpenChange={(o) => !o && blocker.reset?.()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("admin.leaveTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("admin.leaveText")}</AlertDialogDescription>
+            <AlertDialogDescription>{t(dirty ? "admin.leaveText" : "admin.learn.map.leaveText")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => blocker.reset?.()}>{t("admin.leaveStay")}</AlertDialogCancel>

@@ -1,5 +1,6 @@
 import type { BadgeId } from "@shared/game";
 import type { FeedbackContext, FeedbackStatus, FeedbackType } from "@shared/feedback";
+import type { ConceptMapData } from "@shared/concept-map";
 
 /** GET /me/badges: one entry per catalogue badge. */
 export interface BadgeStatus {
@@ -93,6 +94,63 @@ export type PublicQuestion =
   | { id: string; type: "fill"; prompt: string; difficulty: number }
   | { id: string; type: "order"; prompt: string; difficulty: number; items: string[] }
   | { id: string; type: "open"; prompt: string; difficulty: number };
+
+/** A card in a reader session: the `/review/queue` item shape. */
+export type ReviewCard = QueueCard;
+
+/** `POST /review` response. */
+export type ReviewResult = XpResult & { due: string; intervals: QueueCard["intervals"] };
+
+/** A question in a reader session, with its lesson. */
+export type SessionQuestion = PublicQuestion & { lessonId: string; code: string };
+
+export type ReaderSessionItem =
+  | { kind: "card"; card: ReviewCard }
+  | { kind: "question"; question: SessionQuestion }
+  | { kind: "open"; question: SessionQuestion };
+
+/** `GET /readers/:id/session`. `sessionId` is null when nothing has been started yet. */
+export interface ReaderSession {
+  sessionId: string | null;
+  needsStart: boolean;
+  xpPerCorrect: number;
+  /** An open session given back by a refresh: `items` holds only what is left in it. */
+  resumed?: boolean;
+  items: ReaderSessionItem[];
+}
+
+/** `POST /readers/:id/session/submit`. */
+export interface ReaderSessionResult {
+  xp: number;
+  correct: number;
+  total: number;
+  perLesson: { lessonId: string; code: string; correct: number; total: number }[];
+  dayStreak: number;
+  /** Null when nothing was answered (the session didn't count). */
+  award: XpResult | null;
+}
+
+/** `GET /readers/:id/learn`: the whole-reader learning page overview. */
+export interface ReaderLearn {
+  reader: { id: string; title: string; examDate: number | null };
+  daysToExam: number | null;
+  progress: { mastery: number; masteredLessons: number; totalLessons: number };
+  due: number;
+  pullForward: number;
+  today: { done: boolean; xp: number; sessions: number };
+  sessionDayStreak: number;
+  estimate: { cards: number; questions: number; open: number; minutes: number };
+  needsStart: boolean;
+  currentLessonId: string | null;
+  weakLessons: { id: string; code: string; title: string; mastery: number }[];
+  episodes: { week: number; title: string; durationSec: number; positionMs: number; listenMs: number }[];
+  conceptMap: boolean;
+}
+
+/** GET /readers/:id/concept-map: the ready map (visible lessons only) with the student's mastery per lesson. */
+export type ReaderConceptMap = ConceptMapData & {
+  lessons: { id: string; code: string; title: string; week: number; mastery: number }[];
+};
 
 export interface CheckResult {
   correct: boolean;
@@ -200,6 +258,19 @@ export interface LessonAudio {
   totalMs: number;
   listenMs: number;
   summaryRead: boolean;
+}
+/** GET /readers/:id/episodes/:week (student; never the script). */
+export interface EpisodeMeta {
+  week: number;
+  title: string;
+  /** The real generation status: a stored episode stays playable while it is regenerated or after a failed regeneration. */
+  status: "pending" | "generating" | "ready" | "error";
+  /** Changes on every regeneration; part of the chapter urls. */
+  version: string;
+  chapters: { n: number; title: string; durationMs: number }[];
+  totalMs: number;
+  positionMs: number;
+  listenMs: number;
 }
 export interface ListenProgress {
   listenMs: number;

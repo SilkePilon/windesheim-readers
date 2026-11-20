@@ -9,6 +9,7 @@ import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
 import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
 import { CONTROL } from "../../shared/control";
+import { CONCEPT_LIMITS } from "../../shared/concept-map";
 import { FEEDBACK_STATUSES, FEEDBACK_TYPES, GITHUB_URL } from "../../shared/feedback";
 
 /** Trimmed text of at most `max` characters (and at least `min`, default 1: blank is refused). */
@@ -72,13 +73,14 @@ export function answerFor(type: QuestionData["type"]) {
 
 export const quizCheck = z.object({ sessionId: id, answer: anyAnswer }).strict();
 export const quizSubmit = z.object({ sessionId: id }).strict();
+export const sessionSubmit = z.object({ sessionId: id }).strict();
 export const review = z.object({ flashcardId: id, rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]) }).strict();
 export const audioProgress = z
   .object({ positionMs: z.number().int().min(0).max(6 * 3600_000), heardMs: z.number().int().min(0).max(6 * 3600_000).optional() })
   .strict();
 
 // ----- AI-graded answers -----
-export const openAnswer = z.object({ answer: text(LIMITS.openAnswer.max, LIMITS.openAnswer.min) }).strict();
+export const openAnswer = z.object({ answer: text(LIMITS.openAnswer.max, LIMITS.openAnswer.min), sessionId: id.optional() }).strict();
 export const explain = z
   .object({ concept: text(LIMITS.concept.max, LIMITS.concept.min), explanation: text(LIMITS.explain.max, LIMITS.explain.min) })
   .strict();
@@ -173,6 +175,7 @@ export const patchReader = z
       .optional()
       .transform((v) => (v === "" ? null : v)),
     published: z.boolean().optional(),
+    examDate: z.number().int().positive().nullable().optional(),
   })
   .strict();
 
@@ -207,6 +210,26 @@ export const patchLesson = z
     title: line(LIMITS.lessonTitle.max, LIMITS.lessonTitle.min).optional(),
   })
   .strict();
+const conceptMapData = z
+  .object({
+    concepts: z
+      .array(
+        z
+          .object({
+            id,
+            label: line(CONCEPT_LIMITS.label),
+            description: text(CONCEPT_LIMITS.description, 0),
+            lessonId: id,
+          })
+          .strict(),
+      )
+      .max(CONCEPT_LIMITS.concepts),
+    links: z.array(z.object({ from: id, to: id, label: line(CONCEPT_LIMITS.relation, 0) }).strict()).max(CONCEPT_LIMITS.links),
+  })
+  .strict();
+/** PUT /admin/readers/:id/concept-map; the structure is checked by `validateConceptMap`. */
+export const conceptMapPut = z.object({ data: conceptMapData }).strict();
+
 export const patchFlashcard = z
   .object({ front: text(LIMITS.flashcardSide.max, LIMITS.flashcardSide.min), back: text(LIMITS.flashcardSide.max, LIMITS.flashcardSide.min) })
   .strict();

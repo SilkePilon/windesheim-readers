@@ -3,6 +3,8 @@
  * offset), clock formatting, and the "heard" tracker that decides the ≥ 90% rule.
  */
 
+import type { EpisodeMeta, LessonAudio, LessonDetail } from "@/lib/types";
+
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;
 export type Speed = (typeof SPEEDS)[number];
 /** −15 s / +15 s buttons, Media Session seek and the global arrow keys. */
@@ -174,4 +176,60 @@ export class Slots {
     // A slot that starts playing after a tap (or a primed one) is unlocked for its source.
     this.primed[slot] = true;
   }
+}
+
+/** What the player plays: a luisterles or a weekly episode. Chapter numbers `n` are 1-based (as on the server). */
+export type AudioSource = {
+  key: string;
+  title: string;
+  chapters: { n: number; title: string; durationMs: number }[];
+  chapterUrl: (n: number) => string;
+  progressUrl: string;
+  /** Server position to resume from. */
+  resumeMs: number;
+};
+
+export function lessonAudioSource(l: LessonDetail, audio: LessonAudio): AudioSource {
+  const urls = new Map(audio.chapters.map((c) => [c.n, c.url]));
+  return {
+    key: `lesson:${l.id}`,
+    title: l.title,
+    chapters: audio.chapters.map((c) => ({ n: c.n, title: "", durationMs: c.durationMs })),
+    chapterUrl: (n) => urls.get(n) ?? `/api/lessons/${l.id}/audio/${n}.mp3`,
+    progressUrl: `/api/lessons/${l.id}/audio/progress`,
+    resumeMs: audio.listenMs,
+  };
+}
+
+export function episodeAudioSource(readerId: string, ep: EpisodeMeta): AudioSource {
+  const base = `/api/readers/${readerId}/episodes/${ep.week}`;
+  return {
+    key: `episode:${readerId}:${ep.week}`,
+    title: ep.title,
+    chapters: ep.chapters,
+    // `?v=` makes `sourceVersion` change on a regeneration (fresh player, stale local position ignored).
+    chapterUrl: (n) => `${base}/${n}.mp3?v=${encodeURIComponent(ep.version)}`,
+    progressUrl: `${base}/progress`,
+    resumeMs: ep.positionMs,
+  };
+}
+
+export const sourceTotalMs = (s: AudioSource) => s.chapters.reduce((a, c) => a + c.durationMs, 0);
+/** Changes when the audio changes (lesson urls carry `?v=`), so a regenerated one starts a fresh player. */
+export const sourceVersion = (s: AudioSource) => s.chapters.map((c) => s.chapterUrl(c.n)).join("|");
+
+/** localStorage keys for a source's saved position, newest first; lessons also had `listen:<id>` before sources. */
+export function listenStorageKeys(sourceKey: string): string[] {
+  const keys = [`listen:${sourceKey}`];
+  if (sourceKey.startsWith("lesson:")) keys.push(`listen:${sourceKey.slice("lesson:".length)}`);
+  return keys;
+}
+
+/** First stored value among the source's keys (current, then legacy). */
+export function readStoredListen(get: (key: string) => string | null, sourceKey: string): string | null {
+  for (const k of listenStorageKeys(sourceKey)) {
+    const v = get(k);
+    if (v !== null) return v;
+  }
+  return null;
 }

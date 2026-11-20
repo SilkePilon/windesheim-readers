@@ -11,11 +11,17 @@ export const XP = {
   openPerPoint: 0.2,
   battlePlace: [50, 30, 20], // 1st, 2nd, 3rd; others get battleParticipation
   battleParticipation: 10,
+  episodeListen: 5,
 };
 
 /** Quiz XP multiplier: full XP for the first 3 quizzes on a lesson per day, then 25%. */
 export function quizXpFactor(todayAttempts: number) {
   return todayAttempts < 3 ? 1 : 0.25;
+}
+
+/** Reader-session XP multiplier per reader per day: 1st completed session 1, 2nd 0.5, later 0.1. */
+export function sessionXpFactor(completedBefore: number) {
+  return completedBefore <= 0 ? 1 : completedBefore === 1 ? 0.5 : 0.1;
 }
 
 /** XP shown per correct quiz answer (awardXp rounds the same way). */

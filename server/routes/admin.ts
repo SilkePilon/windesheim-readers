@@ -16,12 +16,19 @@ import { createModel, getAiSettingsPublic, getModelFor, resolveApiKey, updateAiS
 import { listModels, validateKey } from "../ai/models";
 import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, publicAudio, queueReaderAudio } from "../ai/audio";
 import { synthesize, voiceSampleText } from "../ai/speech";
+import { adminEpisodeList, deleteEpisode, deleteReaderEpisodeFiles, queueReaderEpisodes, readyWeeks } from "../ai/episodes";
 import { voiceProblem, VOICES, voicesFor } from "../ai/voices";
+import { generateConceptMap, isConceptMapInFlight, readyLessons, startConceptMap } from "../ai/concept-map";
+import { validateConceptMap } from "../../shared/concept-map";
 import { backfillBadges } from "../lib/badges";
 import * as input from "../lib/input";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
+
+const readerExists = async (id: string) => !!(await db.query.reader.findFirst({ where: eq(schema.reader.id, id), columns: { id: true } }));
+/** A week route param: a positive integer, else null. */
+const parseWeek = (s: string) => (/^[1-9]\d{0,3}$/.test(s) ? Number(s) : null);
 
 /** AI settings for the admin page, plus the usage limits that live next to them. */
 const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), ...getAiLimitSettings() });
@@ -162,9 +169,12 @@ export const admin = new Hono<AppEnv>()
   .delete("/readers/:id", async (c) => {
     const id = c.req.param("id");
     const lessonIds = (await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, id))).map((l) => l.id);
-    await db.delete(schema.reader).where(eq(schema.reader.id, id));
+    const deleted = await db.delete(schema.reader).where(eq(schema.reader.id, id)).returning({ id: schema.reader.id });
+    // Only touch files for a reader that existed: the id is a raw (URL-decoded) route param.
+    if (!deleted.length) return c.json({ error: "NOT_FOUND" }, 404);
     await unlink(pdfPath(id)).catch(() => {});
     await deleteAudioFiles(lessonIds);
+    await deleteReaderEpisodeFiles(id);
     return c.json({ ok: true });
   })
 
@@ -300,6 +310,71 @@ export const admin = new Hono<AppEnv>()
       chapterList: publicAudio(id, row).chapters,
       script: row?.script ?? null,
     });
+  })
+
+  // ----- weekly episodes (whole-reader audio) -----
+  /** One entry per week with ready lessons; `stale` is computed against the week's current lessons. */
+  .get("/readers/:id/episodes", async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json(await adminEpisodeList(id));
+  })
+  /** Queue every week's episode (missing, failed or stale ones only). */
+  .post("/readers/:id/episodes", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    const weeks = await queueReaderEpisodes(id);
+    return c.json({ queued: weeks.length, weeks }, 202);
+  })
+  /** Queue or regenerate one week's episode. */
+  .post("/readers/:id/episodes/:week", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    const week = parseWeek(c.req.param("week"));
+    if (week === null) return c.json({ error: "INVALID_WEEK" }, 400);
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!(await readyWeeks(id)).includes(week)) return c.json({ error: "NOT_FOUND" }, 404);
+    const weeks = await queueReaderEpisodes(id, { weeks: [week], force: true });
+    if (!weeks.length) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    return c.json({ queued: 1, weeks }, 202);
+  })
+  .delete("/readers/:id/episodes/:week", async (c) => {
+    const id = c.req.param("id");
+    const week = parseWeek(c.req.param("week"));
+    if (week === null) return c.json({ error: "INVALID_WEEK" }, 400);
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    await deleteEpisode(id, week);
+    return c.body(null, 204);
+  })
+
+  // ----- concept map (whole reader) -----
+  .get("/readers/:id/concept-map", async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    const m = await db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, id) });
+    return c.json(m ? { status: m.status, error: m.error, data: m.data ?? null, editedAt: m.editedAt, updatedAt: m.updatedAt } : null);
+  })
+  /** Generate or regenerate (replaces manual edits; the client confirms that first). Runs in the background. */
+  .post("/readers/:id/concept-map", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!(await readyLessons(id)).length) return c.json({ error: "NO_READY_LESSONS" }, 409);
+    if (!(await startConceptMap(id))) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    void generateConceptMap(id);
+    return c.json({ ok: true }, 202);
+  })
+  /** Save a hand-edited map: sizes by zod, structure by `validateConceptMap` (lessons of this reader only). */
+  .put("/readers/:id/concept-map", async (c) => {
+    const id = c.req.param("id");
+    const { data } = input.conceptMapPut.parse(await c.req.json());
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (isConceptMapInFlight(id)) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    const lessonIds = new Set((await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, id))).map((l) => l.id));
+    const v = validateConceptMap(data, lessonIds);
+    if (!v.ok) return c.json({ error: v.error }, 400);
+    const now = new Date();
+    const set = { status: "ready" as const, error: null, data, editedAt: now, updatedAt: now };
+    await db.insert(schema.conceptMap).values({ readerId: id, ...set }).onConflictDoUpdate({ target: schema.conceptMap.readerId, set });
+    return c.json({ status: set.status, error: null, data, editedAt: now, updatedAt: now });
   })
 
   // ----- lesson content editing -----

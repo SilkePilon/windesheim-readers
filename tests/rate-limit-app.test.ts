@@ -183,6 +183,20 @@ describe("per-user limits", () => {
     expect((await poster(await login("ai-other@student.windesheim.nl"))("/lessons/nope/explain")).status).toBe(404);
   });
 
+  test("reader sessions: 30 per hour per user, their own bucket", async () => {
+    const cookie = await login("session-user@student.windesheim.nl");
+    const get = (path: string) => fetch(`${base}/api${path}`, { headers: { cookie } });
+    for (let i = 0; i < 30; i++) expect((await get("/readers/nope/session")).status).toBe(404);
+    const r = await get("/readers/nope/session");
+    expect(r.status).toBe(429);
+    expect(((await r.json()) as { retryAfter: number }).retryAfter).toBeGreaterThan(60 * 59);
+    // Writes are untouched.
+    expect((await poster(cookie)("/lessons/nope/read")).status).toBe(404);
+    // Another user still has their own.
+    const other = await login("session-other@student.windesheim.nl");
+    expect((await fetch(`${base}/api/readers/nope/session`, { headers: { cookie: other } })).status).toBe(404);
+  });
+
   test("the 10-minute window per feature (explain: 15)", async () => {
     let t = Date.now();
     const realNow = Date.now;

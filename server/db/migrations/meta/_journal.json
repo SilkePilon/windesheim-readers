@@ -64,6 +64,13 @@
       "when": 1795183171900,
       "tag": "0008_fearless_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795192225516,
+      "tag": "0009_amusing_avengers",
+      "breakpoints": true
     }
   ]
 }

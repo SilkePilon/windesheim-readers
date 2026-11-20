@@ -33,6 +33,9 @@ import { aiStubEnabled, defaultRetryDelay, isAuthError, isFatalProviderError, sy
 import { effectiveVoice } from "./voices";
 
 const AUDIO_ROOT = () => join(env.uploadDir, "audio");
+export const audioRoot = AUDIO_ROOT;
+/** Sub-directory of the audio root holding the weekly episodes (never a lesson id). */
+export const EPISODES_DIR = "episodes";
 export const audioDir = (lessonId: string) => join(AUDIO_ROOT(), lessonId);
 export const chapterPath = (lessonId: string, n: number) => join(audioDir(lessonId), `${n}.mp3`);
 
@@ -141,14 +144,30 @@ async function upsertAudio(lessonId: string, data: Partial<typeof schema.lessonA
     .onConflictDoUpdate({ target: schema.lessonAudio.lessonId, set });
 }
 
+/** Running jobs: a lesson id, or `episodeKey(readerId, week)` for an episode. */
 const inFlight = new Set<string>();
 
-export function isAudioInFlight(lessonId: string) {
-  return inFlight.has(lessonId);
+export const episodeKey = (readerId: string, week: number) => `episode:${readerId}:${week}`;
+
+export function isAudioInFlight(key: string) {
+  return inFlight.has(key);
+}
+
+/** Mark a job as running; false when it already is (the caller skips it). */
+export function claimAudioJob(key: string) {
+  if (inFlight.has(key)) return false;
+  inFlight.add(key);
+  return true;
+}
+
+export function releaseAudioJob(key: string) {
+  inFlight.delete(key);
 }
 
 export interface AudioJobDeps {
   script?: (l: typeof schema.lesson.$inferSelect, r: ScriptReader) => Promise<AudioScript>;
+  /** Weekly episode script (default: `generateEpisodeScript`). */
+  episodeScript?: (readerId: string, week: number) => Promise<import("./episode-script").EpisodeScript>;
   speak?: SpeakFn;
   /** Voice role + key (default: AI settings). */
   voiceConfig?: () => Promise<{ choice: VoiceChoice; apiKey: string | undefined }>;
@@ -164,10 +183,10 @@ export interface AudioJobResult {
 }
 
 /** A configuration problem found before any paid call. */
-class AudioConfigError extends Error {}
+export class AudioConfigError extends Error {}
 
 /** A chapter failed for good; `reason` is the provider error (for auth/quota classification). */
-class ChapterError extends Error {
+export class ChapterError extends Error {
   constructor(
     message: string,
     readonly reason: unknown,
@@ -183,6 +202,87 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
   });
 
+export interface VoiceSetup {
+  choice: VoiceChoice;
+  apiKey: string | undefined;
+  /** Stub TTS (AI_STUB=1 without an injected `speak`). */
+  stub: boolean;
+}
+
+/** The voice to speak with. Cost guard: without a usable voice key every TTS call fails, so this throws before any paid call. */
+export async function resolveVoice(deps: AudioJobDeps): Promise<VoiceSetup> {
+  const { choice: configured, apiKey } = await (deps.voiceConfig ?? getVoiceConfig)();
+  const choice = effectiveVoice(configured);
+  const stub = aiStubEnabled() && !deps.speak;
+  if (!apiKey && !stub) throw new AudioConfigError(`No API key for the voice provider "${choice.provider}" (Stem role); add one in the AI settings`);
+  return { choice, apiKey, stub };
+}
+
+/**
+ * Speak each text into `<dir>/<n>.mp3`, CHAPTER_CONCURRENCY at a time, each with one retry.
+ * The first chapter that fails (after its retry) stops every worker: no further TTS calls and
+ * nothing more written; this only returns or throws (a `ChapterError`) once all workers settled.
+ */
+export async function speakChapters(
+  texts: string[],
+  o: { voice: VoiceSetup; language: string; deps: AudioJobDeps; dir: string; label: string },
+): Promise<{ chapters: LessonAudioChapter[]; models: Set<string> }> {
+  const { choice, apiKey, stub } = o.voice;
+  const ac = new AbortController();
+  let failure: ChapterError | null = null;
+  const chapters: LessonAudioChapter[] = new Array(texts.length);
+  const models = new Set<string>();
+  const retryDelay = o.deps.retryDelayMs ?? (stub ? () => 0 : defaultRetryDelay);
+  const speakChapter = async (i: number) => {
+    const text = texts[i]!;
+    const opts = { signal: ac.signal, speak: o.deps.speak };
+    try {
+      return await synthesize(text, choice, apiKey, o.language, opts);
+    } catch (e) {
+      if (ac.signal.aborted || isAuthError(e)) throw e; // a bad key won't get better
+      console.warn(`[${o.label}] chapter ${i + 1} failed, retrying once:`, errMsg(e));
+      await sleep(retryDelay(e), ac.signal);
+      ac.signal.throwIfAborted();
+      return await synthesize(text, choice, apiKey, o.language, opts);
+    }
+  };
+  let next = 0;
+  // Workers never reject: Promise.all only resolves once every one of them has settled.
+  await Promise.all(
+    Array.from({ length: Math.min(CHAPTER_CONCURRENCY, chapters.length) }, async () => {
+      while (!failure && next < chapters.length) {
+        const i = next++;
+        try {
+          const audio = await speakChapter(i);
+          if (failure) return; // another chapter failed meanwhile: write nothing more
+          await Bun.write(join(o.dir, `${i + 1}.mp3`), audio.mp3);
+          chapters[i] = { n: i + 1, durationMs: audio.durationMs, bytes: audio.mp3.length };
+          models.add(audio.model);
+        } catch (e) {
+          if (!failure) {
+            failure = new ChapterError(`Chapter ${i + 1}: ${errMsg(e)}`, e);
+            ac.abort();
+          }
+        }
+      }
+    }),
+  );
+  if (failure) throw failure;
+  return { chapters, models };
+}
+
+/** Swap a finished set in without a 404 gap: move the old set aside, move the new one in (the caller deletes `old`). */
+export async function swapAudioDir(tmp: string, dest: string, old: string) {
+  await rename(dest, old).catch(() => {});
+  await rename(tmp, dest);
+}
+
+/** Error message and whether the queue should stop (no key, auth, quota). */
+export function audioFailure(e: unknown) {
+  const cause = e instanceof ChapterError ? e.reason : e;
+  return { message: errMsg(e), fatal: cause instanceof AudioConfigError || isFatalProviderError(cause) };
+}
+
 type ScriptSource = NonNullable<AudioScript["source"]>;
 const sameSource = (a: ScriptSource | undefined, b: ScriptSource) =>
   !!a && a.generatedAt === b.generatedAt && a.startPage === b.startPage && a.endPage === b.endPage && a.language === b.language;
@@ -196,8 +296,7 @@ const sameSource = (a: ScriptSource | undefined, b: ScriptSource) =>
  * TTS calls, nothing written, and the job only finishes (and leaves `inFlight`) once all workers settled.
  */
 export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps = {}): Promise<AudioJobResult> {
-  if (inFlight.has(lessonId)) return { status: "skipped" };
-  inFlight.add(lessonId);
+  if (!claimAudioJob(lessonId)) return { status: "skipped" };
   const tmp = join(AUDIO_ROOT(), `.tmp-${lessonId}-${nanoid(6)}`);
   const old = join(AUDIO_ROOT(), `.old-${lessonId}-${nanoid(6)}`);
   try {
@@ -209,10 +308,8 @@ export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps =
     try {
       if (l.status !== "ready") throw new Error("Lesson content is not ready");
       // Cost guard: without a usable voice key every TTS call fails, so don't pay for a script first.
-      const { choice: configured, apiKey } = await (deps.voiceConfig ?? getVoiceConfig)();
-      const choice = effectiveVoice(configured);
-      const stub = aiStubEnabled() && !deps.speak;
-      if (!apiKey && !stub) throw new AudioConfigError(`No API key for the voice provider "${choice.provider}" (Stem role); add one in the AI settings`);
+      const voice = await resolveVoice(deps);
+      const { choice, stub } = voice;
 
       const source: ScriptSource = { generatedAt: l.generatedAt?.getTime() ?? null, startPage: l.startPage, endPage: l.endPage, language: r.language };
       const minIdeas = minIdeasFor(l.startPage, l.endPage);
@@ -227,46 +324,10 @@ export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps =
       }
       await mkdir(tmp, { recursive: true });
 
-      const ac = new AbortController();
-      let failure: ChapterError | null = null;
-      const chapters: LessonAudioChapter[] = new Array(script.chapters.length);
-      const models = new Set<string>();
-      const retryDelay = deps.retryDelayMs ?? (stub ? () => 0 : defaultRetryDelay);
-      const speakChapter = async (i: number) => {
-        const text = script.chapters[i]!.text;
-        const opts = { signal: ac.signal, speak: deps.speak };
-        try {
-          return await synthesize(text, choice, apiKey, r.language, opts);
-        } catch (e) {
-          if (ac.signal.aborted || isAuthError(e)) throw e; // a bad key won't get better
-          console.warn(`[audio ${l.code}] chapter ${i + 1} failed, retrying once:`, errMsg(e));
-          await sleep(retryDelay(e), ac.signal);
-          ac.signal.throwIfAborted();
-          return await synthesize(text, choice, apiKey, r.language, opts);
-        }
-      };
-      let next = 0;
-      // Workers never reject: Promise.all only resolves once every one of them has settled.
-      await Promise.all(
-        Array.from({ length: Math.min(CHAPTER_CONCURRENCY, chapters.length) }, async () => {
-          while (!failure && next < chapters.length) {
-            const i = next++;
-            try {
-              const audio = await speakChapter(i);
-              if (failure) return; // another chapter failed meanwhile: write nothing more
-              await Bun.write(join(tmp, `${i + 1}.mp3`), audio.mp3);
-              chapters[i] = { n: i + 1, durationMs: audio.durationMs, bytes: audio.mp3.length };
-              models.add(audio.model);
-            } catch (e) {
-              if (!failure) {
-                failure = new ChapterError(`Chapter ${i + 1}: ${errMsg(e)}`, e);
-                ac.abort();
-              }
-            }
-          }
-        }),
+      const { chapters, models } = await speakChapters(
+        script.chapters.map((c) => c.text),
+        { voice, language: r.language, deps, dir: tmp, label: `audio ${l.code}` },
       );
-      if (failure) throw failure;
 
       // The lesson may have been deleted (or its reader re-structured) while we were working.
       const now = await db.query.lesson.findFirst({
@@ -274,9 +335,7 @@ export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps =
         columns: { id: true, generatedAt: true, startPage: true, endPage: true },
       });
       if (!now) return { status: "skipped" };
-      // Swap without a 404 gap: move the old set aside, move the new one in, then delete the old one.
-      await rename(audioDir(lessonId), old).catch(() => {});
-      await rename(tmp, audioDir(lessonId));
+      await swapAudioDir(tmp, audioDir(lessonId), old);
       await upsertAudio(lessonId, {
         status: "ready",
         // Content regenerated or pages changed while we were speaking the old text → still stale.
@@ -291,16 +350,15 @@ export async function generateLessonAudio(lessonId: string, deps: AudioJobDeps =
       });
       return { status: "ready" };
     } catch (e) {
-      const cause = e instanceof ChapterError ? e.reason : e;
-      const message = errMsg(e);
+      const { message, fatal } = audioFailure(e);
       console.error(`[audio ${l.code}]`, e);
       await upsertAudio(lessonId, { status: "error", error: message }).catch(() => {});
-      return { status: "error", error: message, fatal: cause instanceof AudioConfigError || isFatalProviderError(cause) };
+      return { status: "error", error: message, fatal };
     }
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
     await rm(old, { recursive: true, force: true }).catch(() => {});
-    inFlight.delete(lessonId);
+    releaseAudioJob(lessonId);
   }
 }
 
@@ -316,35 +374,81 @@ export function audioQueueIdle() {
   return audioQueue;
 }
 
-/** Lessons of a batch that never got to run become errors (re-queueable, no endless polling). */
-async function failWaiting(ids: string[], error: string) {
-  const waiting = ids.filter((id) => !inFlight.has(id));
-  if (!waiting.length) return;
-  await db
-    .update(schema.lessonAudio)
-    .set({ status: "error", error, updatedAt: new Date() })
-    .where(and(inArray(schema.lessonAudio.lessonId, waiting), inArray(schema.lessonAudio.status, ["pending", "generating"])));
+/** One unit of work on the audio queue. */
+export type AudioJob = { kind: "lesson"; lessonId: string } | { kind: "episode"; readerId: string; week: number };
+
+const jobKey = (j: AudioJob) => (j.kind === "lesson" ? j.lessonId : episodeKey(j.readerId, j.week));
+
+/** Jobs of a batch that never got to run become errors (re-queueable, no endless polling). */
+async function failWaiting(jobs: AudioJob[], error: string) {
+  const waiting = jobs.filter((j) => !inFlight.has(jobKey(j)));
+  const lessonIds = waiting.flatMap((j) => (j.kind === "lesson" ? [j.lessonId] : []));
+  if (lessonIds.length)
+    await db
+      .update(schema.lessonAudio)
+      .set({ status: "error", error, updatedAt: new Date() })
+      .where(and(inArray(schema.lessonAudio.lessonId, lessonIds), inArray(schema.lessonAudio.status, ["pending", "generating"])));
+  for (const j of waiting) {
+    if (j.kind !== "episode") continue;
+    await db
+      .update(schema.readerEpisode)
+      .set({ status: "error", error })
+      .where(
+        and(
+          eq(schema.readerEpisode.readerId, j.readerId),
+          eq(schema.readerEpisode.week, j.week),
+          inArray(schema.readerEpisode.status, ["pending", "generating"]),
+        ),
+      );
+  }
 }
 
-async function runBatch(ids: string[], deps: AudioJobDeps) {
+/** Is the job still waiting? Another queue may have handled it meanwhile (it is no longer "pending" then). */
+async function isPending(j: AudioJob) {
+  const row =
+    j.kind === "lesson"
+      ? await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, j.lessonId), columns: { status: true } })
+      : await db.query.readerEpisode.findFirst({
+          where: and(eq(schema.readerEpisode.readerId, j.readerId), eq(schema.readerEpisode.week, j.week)),
+          columns: { status: true },
+        });
+  return row?.status === "pending";
+}
+
+async function runJob(j: AudioJob, deps: AudioJobDeps): Promise<AudioJobResult> {
+  if (j.kind === "lesson") return generateLessonAudio(j.lessonId, deps);
+  // Imported lazily: episodes.ts builds on this module.
+  const { generateEpisode } = await import("./episodes");
+  return generateEpisode(j.readerId, j.week, deps);
+}
+
+async function runBatch(jobs: AudioJob[], deps: AudioJobDeps) {
   let i = 0;
   try {
-    for (; i < ids.length; i++) {
-      const id = ids[i]!;
-      // Another queue may have handled it meanwhile (it is no longer "pending" then).
-      const row = await db.query.lessonAudio.findFirst({ where: eq(schema.lessonAudio.lessonId, id), columns: { status: true } });
-      if (row?.status !== "pending") continue;
-      const res = await generateLessonAudio(id, deps);
+    for (; i < jobs.length; i++) {
+      const job = jobs[i]!;
+      if (!(await isPending(job))) continue;
+      const res = await runJob(job, deps);
       if (res.status === "error" && res.fatal) {
-        // Every next lesson would fail the same way (and pay for its script first): stop here.
-        await failWaiting(ids.slice(i + 1), `Not generated: an earlier lesson failed with: ${res.error}`);
+        // Every next job would fail the same way (and pay for its script first): stop here.
+        const what = job.kind === "lesson" ? "an earlier lesson" : "an earlier episode";
+        await failWaiting(jobs.slice(i + 1), `Not generated: ${what} failed with: ${res.error}`);
         return;
       }
     }
   } catch (e) {
-    await failWaiting(ids.slice(i), `Audio queue failed: ${errMsg(e)}`).catch(() => {});
+    await failWaiting(jobs.slice(i), `Audio queue failed: ${errMsg(e)}`).catch(() => {});
     throw e;
   }
+}
+
+/**
+ * Append a batch to the global audio queue (the jobs' rows must already be "pending"). Batches
+ * run strictly one after another, one job at a time.
+ */
+export function enqueueAudioJobs(jobs: AudioJob[], deps: AudioJobDeps = {}) {
+  if (!jobs.length) return;
+  audioQueue = audioQueue.then(() => runBatch(jobs, deps)).catch((e) => console.error("[audio] queue failed", e));
 }
 
 /**
@@ -370,10 +474,10 @@ export async function queueReaderAudio(readerId: string, opts: { lessonIds?: str
     .filter((l) => opts.force || !l.status || l.status === "error" || l.stale || !l.chapters?.length)
     .map((l) => l.id);
   for (const id of ids) await upsertAudio(id, { status: "pending", error: null });
-  if (ids.length) {
-    const deps = opts.deps ?? {};
-    audioQueue = audioQueue.then(() => runBatch(ids, deps)).catch((e) => console.error("[audio] queue failed", e));
-  }
+  enqueueAudioJobs(
+    ids.map((lessonId) => ({ kind: "lesson", lessonId })),
+    opts.deps,
+  );
   return ids;
 }
 
@@ -399,7 +503,13 @@ export async function recoverAudio() {
     .update(schema.lessonAudio)
     .set({ status: "error", error: "Interrupted by server restart" })
     .where(inArray(schema.lessonAudio.status, ["pending", "generating"]));
-  const entries = await readdir(AUDIO_ROOT()).catch(() => [] as string[]);
+  await db
+    .update(schema.readerEpisode)
+    .set({ status: "error", error: "Interrupted by server restart" })
+    .where(inArray(schema.readerEpisode.status, ["pending", "generating"]));
+  const { recoverEpisodeFiles } = await import("./episodes");
+  await recoverEpisodeFiles();
+  const entries = (await readdir(AUDIO_ROOT()).catch(() => [] as string[])).filter((e) => e !== EPISODES_DIR);
   if (!entries.length) return;
   const existing = new Set((await db.select({ id: schema.lesson.id }).from(schema.lesson)).map((l) => l.id));
   const present = new Set(entries);

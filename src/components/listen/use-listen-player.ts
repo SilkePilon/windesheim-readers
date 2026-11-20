@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import type { LessonAudio, ListenProgress, XpResult } from "@/lib/types";
-import { qk } from "@/lib/queries";
+import type { XpResult } from "@/lib/types";
 import { storageGet, storageSet } from "@/lib/storage";
-import { HeardTracker, REPORT_EVERY_MS, SKIP_MS, SPEEDS, Slots, chapterStarts, countableEnd, locate, pickResume, type Speed } from "@/lib/listen";
+import {
+  HeardTracker,
+  REPORT_EVERY_MS,
+  SKIP_MS,
+  SPEEDS,
+  Slots,
+  chapterStarts,
+  countableEnd,
+  listenStorageKeys,
+  locate,
+  pickResume,
+  readStoredListen,
+  sourceTotalMs,
+  sourceVersion,
+  type AudioSource,
+  type Speed,
+} from "@/lib/listen";
 
 const RATE_KEY = "listen:rate";
-const localKey = (lessonId: string) => `listen:${lessonId}`;
 /** The shown position goes to React state at most this often (the scrubber needs no more). */
 const RENDER_EVERY_MS = 100;
 
@@ -16,20 +29,25 @@ const RENDER_EVERY_MS = 100;
  */
 type LocalState = { v: string; pos: number; heard: unknown; synced?: boolean };
 
-const versionOf = (audio: Pick<LessonAudio, "chapters">) => audio.chapters.map((c) => c.url).join("|");
+/** The progress response, as far as the player reads it (lessons add `summaryRead`). */
+export interface ListenReport {
+  listenMs: number;
+  award: XpResult | null;
+  summaryRead?: boolean;
+}
 
-export function readLocalListen(lessonId: string, audio: Pick<LessonAudio, "chapters">): LocalState | null {
+export function readLocalListen(source: AudioSource): LocalState | null {
   try {
-    const s = JSON.parse(storageGet(localKey(lessonId)) ?? "null") as LocalState | null;
-    return s && s.v === versionOf(audio) && typeof s.pos === "number" ? s : null;
+    const s = JSON.parse(readStoredListen(storageGet, source.key) ?? "null") as LocalState | null;
+    return s && s.v === sourceVersion(source) && typeof s.pos === "number" ? s : null;
   } catch {
     return null;
   }
 }
 
 /** Where the player would resume (server position unless a newer local one exists). For the lesson tile too. */
-export function resumePosition(lessonId: string, audio: LessonAudio) {
-  return pickResume(audio.listenMs, readLocalListen(lessonId, audio), audio.totalMs);
+export function resumePosition(source: AudioSource) {
+  return pickResume(source.resumeMs, readLocalListen(source), sourceTotalMs(source));
 }
 
 function readRate(): Speed {
@@ -44,41 +62,45 @@ export interface ListenMeta {
 }
 
 /**
- * Plays a luisterles: its chapters back-to-back on two alternating <audio> elements (the
+ * Plays an audio source (a luisterles or a weekly episode; memoize `source`): its chapters back-to-back on two alternating <audio> elements (the
  * next chapter is always loading in the idle one, so a chapter change has no gap), with
  * one timeline across chapters for the scrubber and skips.
  *
  * - Resume: the server's `listenMs`, or the local copy when the server never got it.
- * - Progress: `POST /lessons/:id/audio/progress` every ~12 s while playing, on pause,
+ * - Progress: `POST source.progressUrl` every ~12 s while playing, on pause,
  *   chapter end and when leaving, with `heardMs` = media time actually played (replays
- *   count once). The response's `award` (≥ 90% heard, once) goes to `onAward`.
+ *   count once). The response's `award` (once) goes to `onAward`.
  * - Media Session: lock-screen / headphone play, pause, seek and prev/next chapter.
  */
-export function useListenPlayer({
-  lessonId,
-  audio,
-  meta,
-  onAward,
-}: {
-  lessonId: string;
-  audio: LessonAudio;
-  meta: ListenMeta;
-  onAward: (award: XpResult, progress: ListenProgress) => void;
-}) {
-  const qc = useQueryClient();
-  const chapters = audio.chapters;
+export function useListenPlayer(
+  source: AudioSource,
+  {
+    meta,
+    onAward,
+    onProgress,
+    awarded = false,
+  }: {
+    meta: ListenMeta;
+    onAward?: (award: XpResult, progress: ListenReport) => void;
+    /** Every acknowledged report (e.g. to refresh a cached resume position). */
+    onProgress?: (progress: ListenReport) => void;
+    /** The award was already paid: never fire `onAward`. */
+    awarded?: boolean;
+  },
+) {
+  const chapters = useMemo(() => source.chapters.map((c) => ({ ...c, url: source.chapterUrl(c.n) })), [source]);
   const count = chapters.length;
   const durations = useMemo(() => chapters.map((c) => c.durationMs), [chapters]);
   const starts = useMemo(() => chapterStarts(durations), [durations]);
-  const total = audio.totalMs;
-  const version = versionOf(audio);
+  const total = useMemo(() => sourceTotalMs(source), [source]);
+  const version = sourceVersion(source);
 
   // Initial values only: the player is keyed by version, so these are read once.
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
   const [init] = useState(() => {
-    const local = readLocalListen(lessonId, audio);
-    const at = pickResume(audio.listenMs, local, total);
+    const local = readLocalListen(source);
+    const at = pickResume(source.resumeMs, local, total);
     return { local, at, first: locate(durations, at) };
   });
 
@@ -100,13 +122,17 @@ export function useListenPlayer({
     rate: readRate() as number,
     lastSent: { pos: -1, heard: -1 },
     tracker: new HeardTracker(durations, init.local?.heard),
-    awardSeen: audio.summaryRead,
+    awardSeen: awarded,
     /** Played or sought at least once: only then is a position worth reporting. */
     touched: false,
   });
   const s = r.current;
   const onAwardRef = useRef(onAward);
   onAwardRef.current = onAward;
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
 
   const absolute = useCallback(() => {
     const el = s.els[s.slots.active];
@@ -115,8 +141,8 @@ export function useListenPlayer({
 
   const saveLocal = useCallback(
     (pos: number, synced = false) =>
-      storageSet(localKey(lessonId), JSON.stringify({ v: version, pos: Math.round(pos), heard: s.tracker.toJSON(), synced } satisfies LocalState)),
-    [lessonId, version, s],
+      storageSet(listenStorageKeys(sourceRef.current.key)[0]!, JSON.stringify({ v: version, pos: Math.round(pos), heard: s.tracker.toJSON(), synced } satisfies LocalState)),
+    [version, s],
   );
 
   /** Report the position and heard time (skipped when nothing changed). `leaving` uses keepalive. */
@@ -128,7 +154,7 @@ export function useListenPlayer({
       if (pos === s.lastSent.pos && heard === s.lastSent.heard) return;
       saveLocal(pos);
       s.lastSent = { pos, heard };
-      void fetch(`/api/lessons/${lessonId}/audio/progress`, {
+      void fetch(sourceRef.current.progressUrl, {
         method: "POST",
         credentials: "include",
         keepalive: leaving,
@@ -137,13 +163,13 @@ export function useListenPlayer({
       })
         .then(async (res) => {
           if (!res.ok) throw new Error(String(res.status));
-          const body = (await res.json()) as ListenProgress;
+          const body = (await res.json()) as ListenReport;
           // Acknowledged: the server position is current again (unless a newer report went out).
           if (s.lastSent.pos === pos) saveLocal(pos, true);
-          qc.setQueryData<LessonAudio>(qk.lessonAudio(lessonId), (old) => (old ? { ...old, listenMs: body.listenMs, summaryRead: body.summaryRead } : old));
+          onProgressRef.current?.(body);
           if (body.award && !s.awardSeen) {
             s.awardSeen = true;
-            onAwardRef.current(body.award, body);
+            onAwardRef.current?.(body.award, body);
           }
         })
         .catch(() => {
@@ -151,7 +177,7 @@ export function useListenPlayer({
           s.lastSent = { pos: -1, heard: -1 };
         });
     },
-    [absolute, lessonId, qc, s, saveLocal, total],
+    [absolute, s, saveLocal, total],
   );
 
   /** Restart heard counting from the active element's current time (after any jump or seek). */

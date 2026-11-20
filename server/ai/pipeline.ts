@@ -349,7 +349,7 @@ export async function recoverInterruptedJobs() {
   await db
     .update(schema.conceptMap)
     .set({ status: "error", error: interrupted, updatedAt: new Date() })
-    .where(eq(schema.conceptMap.status, "generating"));
+    .where(inArray(schema.conceptMap.status, ["pending", "generating"]));
 }
 
 /** Re-run extract + structure from the stored PDF. Refuses if lessons exist (proposeStructure deletes them). */

@@ -219,10 +219,13 @@ describe("generateConceptMap", () => {
     expect(row()).toMatchObject({ status: "error", error: "boom" });
   });
 
-  test("boot recovery: a map stuck in generating becomes an error", async () => {
-    db.update(schema.conceptMap).set({ status: "generating" }).where(eq(schema.conceptMap.readerId, R)).run();
-    await recoverInterruptedJobs();
-    expect(row()?.status).toBe("error");
+  test("boot recovery: a map stuck in generating or pending becomes an error, its data kept", async () => {
+    for (const status of ["generating", "pending"] as const) {
+      db.update(schema.conceptMap).set({ status, error: null }).where(eq(schema.conceptMap.readerId, R)).run();
+      const data = row()!.data;
+      await recoverInterruptedJobs();
+      expect(row()).toMatchObject({ status: "error", error: "Interrupted by server restart", data });
+    }
   });
 });
 

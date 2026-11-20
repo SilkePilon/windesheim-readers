@@ -9,6 +9,7 @@ import { dayKey } from "../server/lib/time";
 
 runMigrations();
 const { app } = await import("../server/app");
+const { getQuizSession } = await import("../server/routes/learn");
 
 let server: ReturnType<typeof Bun.serve>;
 let base = "";
@@ -222,6 +223,27 @@ describe("GET /readers/:id/learn", () => {
 });
 
 describe("GET /readers/:id/session", () => {
+  test("peek then replay: after a check, a refresh is the same session and the first check stands", async () => {
+    // First of the session tests (nothing else open yet), and created in the past, so it has
+    // expired by the time the later tests run.
+    setSystemTime(new Date(Date.now() - 4 * 3600_000));
+    try {
+      const a = await ok<Session>("student", `/readers/${R}/session`);
+      const q = questionsOf(a)[0]!;
+      await check(a.sessionId!, q.id, false);
+      const b = await ok<Session>("student", `/readers/${R}/session`);
+      expect(b.sessionId).toBe(a.sessionId);
+      expect(b.items).toEqual(a.items);
+      const again = await check(b.sessionId!, q.id, true);
+      expect(again.correct).toBe(true);
+      expect(getQuizSession(a.sessionId!)!.results.get(q.id)).toBe(false);
+    } finally {
+      setSystemTime();
+      // The checks were recorded per question; the later tests start from a clean slate.
+      db.delete(schema.questionResult).where(eq(schema.questionResult.userId, ids.student)).run();
+    }
+  });
+
   test("only started, ready lessons; cards are the due cards; at most 3 questions per lesson", async () => {
     const s = await ok<Session>("student", `/readers/${R}/session`);
     expect(s.needsStart).toBe(false);
@@ -244,12 +266,11 @@ describe("GET /readers/:id/session", () => {
     expect(open.length).toBe(1);
   });
 
-  test("a refresh gives the same plan", async () => {
+  test("a refresh gives the same open session back", async () => {
     const a = await ok<Session>("student", `/readers/${R}/session`);
     const b = await ok<Session>("student", `/readers/${R}/session`);
-    const shape = (s: Session) => s.items.map((i) => `${i.kind}:${i.kind === "card" ? i.card.id : i.question.id}`);
-    expect(shape(a)).toEqual(shape(b));
-    expect(a.sessionId).not.toBe(b.sessionId);
+    expect(b.sessionId).toBe(a.sessionId);
+    expect(b.items).toEqual(a.items);
   });
 });
 
@@ -404,6 +425,9 @@ describe("exam pull-forward", () => {
         lastReview: at(-1),
       })
       .run();
+    // The session that was open was built before the exam date: used up (an empty submit doesn't count).
+    const open = await ok<Session>("student", `/readers/${R}/session`);
+    expect((await ok("student", `/readers/${R}/session/submit`, { sessionId: open.sessionId })).award).toBeNull();
     const o = await ok("student", `/readers/${R}/learn`);
     expect(o.daysToExam).toBe(10);
     expect(o.pullForward).toBeGreaterThanOrEqual(1);

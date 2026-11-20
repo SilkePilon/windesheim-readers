@@ -10,7 +10,7 @@ import { previewIntervals, toCard } from "../lib/fsrs";
 import { updateProgress } from "../lib/game";
 import { dayKey } from "../lib/time";
 import { lessonMastery, loadPlanInput, readerOverview, sessionDayStreak, visibleReader } from "../lib/reader-learn";
-import { award, createQuizSession, getQuizSession, LISTENED_SHARE } from "./learn";
+import { award, createQuizSession, findOpenReaderSession, getQuizSession, LISTENED_SHARE } from "./learn";
 import { episodeChapterPath } from "../ai/episodes";
 import { readyLessons } from "../ai/concept-map";
 import { visibleMap } from "../../shared/concept-map";
@@ -138,14 +138,21 @@ export const readerLearn = new Hono<AppEnv>()
     return c.json({ listenMs, award: reward });
   })
 
-  /** Today's session. The plan is seeded per user, reader, day and completed sessions, so a refresh gives the same one. */
+  /**
+   * Today's session. The plan is seeded per user, reader, day and completed sessions; while a
+   * session for that plan is open, a refresh gets that same session back (same id, items and
+   * first checks), so peeking at the answers and starting over can't replay it.
+   */
   .get("/readers/:id/session", requireUser, limits.writes, async (c) => {
     const u = c.get("user");
     const now = new Date();
     const data = await loadPlanInput(u, c.req.param("id"), now);
     if (!data) return c.json({ error: "NOT_FOUND" }, 404);
-    const plan = buildSessionPlan(data.input);
     const xpPerCorrect = quizXpPerCorrect(sessionXpFactor(data.sessionsToday));
+    const planKey = `${dayKey(now)}:${data.sessionsToday}`;
+    const open = findOpenReaderSession(u.id, data.reader.id, planKey);
+    if (open) return c.json({ sessionId: open.id, needsStart: false, xpPerCorrect, items: open.session.items ?? [] });
+    const plan = buildSessionPlan(data.input);
     if (plan.needsStart) return c.json({ sessionId: null, needsStart: true, xpPerCorrect, items: [] });
 
     const code = new Map(data.lessons.map((l) => [l.id, l.code]));
@@ -177,7 +184,7 @@ export const readerLearn = new Hono<AppEnv>()
     });
     const questionIds = items.flatMap((i) => (i.kind === "card" ? [] : [i.question.id]));
     const quizCount = items.filter((i) => i.kind === "question").length;
-    const sessionId = createQuizSession(u.id, null, questionIds, data.reader.id, { cards: plan.counts.cards, quizCount });
+    const sessionId = createQuizSession(u.id, null, questionIds, data.reader.id, { cards: plan.counts.cards, quizCount, planKey, items });
     return c.json({ sessionId, needsStart: false, xpPerCorrect, items });
   })
 

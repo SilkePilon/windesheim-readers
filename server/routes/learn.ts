@@ -60,6 +60,9 @@ export interface QuizSession {
   cards?: number;
   /** Reader sessions: the number of quiz (checkable) questions in the plan; open questions not counted. */
   quizCount?: number;
+  /** Reader sessions: the plan they were built for (day and sessions done that day) and the items as sent. */
+  planKey?: string;
+  items?: unknown[];
   /** Reader sessions are kept after submit (their open answers may still be graded) but can't be checked or submitted again. */
   submitted?: boolean;
 }
@@ -71,13 +74,22 @@ export function createQuizSession(
   lessonId: string | null,
   questionIds: string[],
   readerId?: string,
-  extra: Pick<QuizSession, "cards" | "quizCount"> = {},
+  extra: Pick<QuizSession, "cards" | "quizCount" | "planKey" | "items"> = {},
 ) {
   const cutoff = Date.now() - SESSION_TTL_MS;
   for (const [id, s] of quizSessions) if (s.createdAt < cutoff) quizSessions.delete(id);
   const id = nanoid();
   quizSessions.set(id, { userId, lessonId, readerId, questionIds, results: new Map(), createdAt: Date.now(), ...extra });
   return id;
+}
+
+/** The open (unsubmitted, unexpired) reader session of this user for this plan, if any. */
+export function findOpenReaderSession(userId: string, readerId: string, planKey: string): { id: string; session: QuizSession } | undefined {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [id, s] of quizSessions) {
+    if (s.userId === userId && s.readerId === readerId && s.planKey === planKey && !s.submitted && s.createdAt >= cutoff) return { id, session: s };
+  }
+  return undefined;
 }
 
 /** The session, or undefined when it doesn't exist or is older than 3 hours. */

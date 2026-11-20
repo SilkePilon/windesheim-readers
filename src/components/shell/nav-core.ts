@@ -38,3 +38,8 @@ export function isNavActive(to: string, pathname: string): boolean {
 export function badgeText(n: number): string {
   return n > 99 ? "99+" : String(n);
 }
+
+/** The aria label for a badge: due cards on Herhalen, new reports on Beheer. */
+export function badgeLabelKey(item: NavItem): "nav.withDue" | "nav.withNew" {
+  return item.key === "admin" ? "nav.withNew" : "nav.withDue";
+}

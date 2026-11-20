@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultIssueDraft,
   githubIssueUrl,
+  isGithubUrl,
+  issueUrl,
   redactEmails,
   shortBrowser,
   showHelpButton,
@@ -92,6 +94,40 @@ describe("githubIssueUrl", () => {
     expect(url.length).toBeLessThan(8000);
     const body = new URL(url).searchParams.get("body")!;
     expect(body.endsWith("\n\n_(ingekort)_")).toBe(true);
+  });
+});
+
+describe("issueUrl", () => {
+  test("a short body is kept whole", () => {
+    const d = defaultIssueDraft({ type: "idea", message: "Graag een donker thema", context });
+    const r = issueUrl("o/r", d);
+    expect(r.truncated).toBe(false);
+    expect(r.keptChars).toBe([...d.body].length);
+    expect(r.bodyChars).toBe(r.keptChars);
+    expect(r.url).toBe(githubIssueUrl("o/r", d));
+  });
+  test("a long body reports what is kept", () => {
+    const body = "😀x".repeat(6000);
+    const r = issueUrl("o/r", { title: "t", body, labels: ["bug"] });
+    expect(r.truncated).toBe(true);
+    expect(r.bodyChars).toBe(12000);
+    expect(r.keptChars).toBeGreaterThan(0);
+    expect(r.keptChars).toBeLessThan(r.bodyChars);
+    const out = new URL(r.url).searchParams.get("body")!;
+    expect(out).toBe([...body].slice(0, r.keptChars).join("").trimEnd() + "\n\n_(ingekort)_");
+    expect(r.url).toBe(githubIssueUrl("o/r", { title: "t", body, labels: ["bug"] }));
+  });
+});
+
+describe("isGithubUrl", () => {
+  test("same rule as the server", () => {
+    expect(isGithubUrl("https://github.com/o/r/issues/12")).toBe(true);
+    expect(isGithubUrl("https://github.com/")).toBe(true);
+    expect(isGithubUrl("http://github.com/o/r")).toBe(false);
+    expect(isGithubUrl("https://github.com.evil.io/x")).toBe(false);
+    expect(isGithubUrl("https://github.com/o r")).toBe(false);
+    expect(isGithubUrl("https://github.com/o\u202er")).toBe(false);
+    expect(isGithubUrl("https://github.com/" + "a".repeat(LIMITS.feedback.githubUrl))).toBe(false);
   });
 });
 

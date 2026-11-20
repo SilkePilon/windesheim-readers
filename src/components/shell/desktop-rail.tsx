@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { badgeText, isNavActive, type NavItem } from "./nav-items";
+import { badgeLabelKey, badgeText, isNavActive, type NavItem } from "./nav-items";
 
 /**
  * Floating vertical icon rail (≥ md). Every child, including the logo, is the same
@@ -29,7 +29,7 @@ export function DesktopRail({ items }: { items: NavItem[] }) {
       {items.map((item) => {
         const active = isNavActive(item.to, pathname);
         const label = t(`nav.${item.key}`);
-        const ariaLabel = item.badge ? t("nav.withDue", { label, count: item.badge }) : label;
+        const ariaLabel = item.badge ? t(badgeLabelKey(item), { label, count: item.badge }) : label;
         const Icon = item.icon;
         return (
           <Fragment key={item.to}>

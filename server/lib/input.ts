@@ -8,7 +8,7 @@ import { COUNT_MAX, COUNT_MIN, DEFAULT_BATTLE_SETTINGS, DIFFICULTIES, POINTS_MOD
 import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
 import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
-import { FEEDBACK_STATUSES, FEEDBACK_TYPES } from "../../shared/feedback";
+import { FEEDBACK_STATUSES, FEEDBACK_TYPES, GITHUB_URL } from "../../shared/feedback";
 
 /** No control or zero-width characters, except newlines and tabs in multi-line text. */
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤﻿]/;
@@ -294,7 +294,7 @@ export const feedbackCreate = z
 const githubUrl = z
   .string()
   .max(LIMITS.feedback.githubUrl)
-  .regex(/^https:\/\/github\.com\/[!-~]*$/, "Must be a https://github.com/ link"); // printable ASCII: no spaces or control characters
+  .regex(GITHUB_URL, "Must be a https://github.com/ link"); // printable ASCII: no spaces or control characters
 
 export const feedbackPatch = z
   .object({ status: z.enum(FEEDBACK_STATUSES).optional(), githubUrl: githubUrl.nullable().optional() })

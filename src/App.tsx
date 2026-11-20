@@ -20,6 +20,7 @@ const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
 const AdminLessonPage = lazy(() => import("@/pages/admin/lesson"));
 const AdminSettingsPage = lazy(() => import("@/pages/admin/settings"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/users"));
+const AdminFeedbackPage = lazy(() => import("@/pages/admin/feedback"));
 // Dev-only art gallery; the import is dropped from production builds.
 const DevWorldPage = import.meta.env.DEV ? lazy(() => import("@/pages/dev-world")) : null;
 
@@ -100,6 +101,7 @@ export function App() {
                       <Route path="lessons/:id" element={<AdminLessonPage />} />
                       <Route path="settings" element={<AdminSettingsPage />} />
                       <Route path="users" element={<AdminUsersPage />} />
+                      <Route path="feedback" element={<AdminFeedbackPage />} />
                     </Routes>
                   </Suspense>
                 </AdminLayout>

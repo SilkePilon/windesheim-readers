@@ -2,6 +2,7 @@
  * Feedback and issue reports: types, the GitHub issue draft and the help-button rule.
  * Pure and shared by server, client and tests: no DOM, Node-only or i18n imports.
  */
+import { LIMITS } from "./limits";
 
 export const FEEDBACK_TYPES = ["feedback", "bug", "idea"] as const;
 export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
@@ -117,12 +118,21 @@ function build(repo: string, d: IssueDraft, body: string): string {
   return `https://github.com/${repo}/issues/new?${q.toString()}`;
 }
 
-/** The "new issue" URL, always under 8000 characters (the body is cut and marked when needed). */
-export function githubIssueUrl(repo: string, issue: IssueDraft): string {
+export interface IssueUrl {
+  url: string;
+  /** True when the body had to be cut (and marked) to keep the URL under 8000 characters. */
+  truncated: boolean;
+  /** Body characters (code points) kept, out of `bodyChars`. */
+  keptChars: number;
+  bodyChars: number;
+}
+
+/** The "new issue" URL plus how much of the body survived (for the admin's live hint). */
+export function issueUrl(repo: string, issue: IssueDraft): IssueUrl {
   const d = { ...issue, title: [...issue.title].slice(0, TITLE_MAX).join("") };
-  const full = build(repo, d, d.body);
-  if (full.length < URL_MAX) return full;
   const chars = [...d.body];
+  const full = build(repo, d, d.body);
+  if (full.length < URL_MAX) return { url: full, truncated: false, keptChars: chars.length, bodyChars: chars.length };
   const fits = (n: number) => build(repo, d, chars.slice(0, n).join("").trimEnd() + MARKER).length < URL_MAX;
   let lo = 0;
   let hi = chars.length;
@@ -131,7 +141,19 @@ export function githubIssueUrl(repo: string, issue: IssueDraft): string {
     if (fits(mid)) lo = mid;
     else hi = mid - 1;
   }
-  return build(repo, d, chars.slice(0, lo).join("").trimEnd() + MARKER);
+  return { url: build(repo, d, chars.slice(0, lo).join("").trimEnd() + MARKER), truncated: true, keptChars: lo, bodyChars: chars.length };
+}
+
+/** The "new issue" URL, always under 8000 characters (the body is cut and marked when needed). */
+export function githubIssueUrl(repo: string, issue: IssueDraft): string {
+  return issueUrl(repo, issue).url;
+}
+
+/** A link to the issue: https://github.com/ plus printable ASCII only (no spaces or control characters). */
+export const GITHUB_URL = /^https:\/\/github\.com\/[!-~]*$/;
+/** The client-side twin of the server's githubUrl rule. */
+export function isGithubUrl(s: string): boolean {
+  return s.length <= LIMITS.feedback.githubUrl && GITHUB_URL.test(s);
 }
 
 /** Help button rule inside AppLayout: hidden on a lesson with any ?view=. */

@@ -3,17 +3,21 @@ import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Page } from "@/components/page";
+import { badgeText } from "@/components/shell/nav-items";
+import { useFeedbackCount } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { key: "readers", to: "/admin" },
   { key: "settings", to: "/admin/settings" },
   { key: "users", to: "/admin/users" },
+  { key: "feedback", to: "/admin/feedback" },
 ] as const;
 
 function activeTab(pathname: string) {
   if (pathname.startsWith("/admin/settings")) return "settings";
   if (pathname.startsWith("/admin/users")) return "users";
+  if (pathname.startsWith("/admin/feedback")) return "feedback";
   // Readers, a reader's structure and the lesson editor all live under "Readers".
   return "readers";
 }
@@ -28,12 +32,13 @@ export function AdminActions({ children }: { children: ReactNode }) {
 
 /**
  * Shell for every admin route: the "Beheer" title with segmented tabs (Readers /
- * AI-instellingen / Gebruikers) and an actions slot. Calm variant: denser 14px text.
+ * AI-instellingen / Gebruikers / Feedback, with the new-report count) and an actions slot. Calm variant: denser 14px text.
  */
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const active = activeTab(pathname);
+  const newFeedback = useFeedbackCount();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
 
   return (
@@ -50,6 +55,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         >
           {TABS.map((tab) => {
             const on = tab.key === active;
+            const badge = tab.key === "feedback" ? newFeedback : 0;
             return (
               <Link
                 key={tab.key}
@@ -61,6 +67,13 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 )}
               >
                 {t(`admin.${tab.key}`)}
+                {badge > 0 && (
+                  <span className="ml-1.5 inline-block min-w-5 rounded-full bg-danger px-1 align-[1px] font-heading text-[11px] leading-5 font-semibold text-white tabular-nums">
+                    <span className="sr-only">, </span>
+                    {badgeText(badge)}
+                    <span className="sr-only"> {t("admin.inbox.filter.new")}</span>
+                  </span>
+                )}
               </Link>
             );
           })}

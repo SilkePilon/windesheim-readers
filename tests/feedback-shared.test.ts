@@ -110,3 +110,35 @@ test("limits", () => {
   expect(LIMITS.feedback.message).toEqual({ min: 10, max: 4000 });
   expect(LIMITS.feedback.githubUrl).toBe(300);
 });
+
+describe("fix round 1", () => {
+  test("redact: dotless domain, apostrophe, several, full stop", () => {
+    expect(redactEmails("me@localhost")).toBe("[email]");
+    expect(redactEmails("o'brien@x.nl")).toBe("[email]");
+    expect(redactEmails("a@b.nl en c@d.com")).toBe("[email] en [email]");
+    expect(redactEmails("Mail me@x.nl.")).toBe("Mail [email].");
+  });
+  test("long title is clamped", () => {
+    const url = githubIssueUrl("o/r", { title: "t".repeat(5000), body: "b", labels: ["bug"] });
+    expect(url.length).toBeLessThan(8000);
+    expect([...new URL(url).searchParams.get("title")!].length).toBe(120);
+  });
+  test("emoji body truncates cleanly", () => {
+    const body = "😀x".repeat(6000);
+    const url = githubIssueUrl("o/r", { title: "t", body, labels: ["bug"] });
+    expect(url.length).toBeLessThan(8000);
+    const out = new URL(url).searchParams.get("body")!;
+    expect(out).not.toContain("�");
+    expect(out.endsWith("_(ingekort)_")).toBe(true);
+    expect(out.startsWith("😀x😀x")).toBe(true);
+  });
+  test("title first line splits on unicode separators", () => {
+    const d = defaultIssueDraft({ type: "bug", message: "eerste tweede", context });
+    expect(d.title).toBe("[bug] eerste");
+  });
+  test("help button path variants", () => {
+    expect(showHelpButton("/lesson/x/", "?view=read")).toBe(false);
+    expect(showHelpButton("/lessons", "")).toBe(true);
+    expect(showHelpButton("/Lesson/x", "?view=read")).toBe(false);
+  });
+});

@@ -30,7 +30,7 @@ export interface IssueDraft {
   labels: string[];
 }
 
-const EMAIL = /[^\s@<>()[\]"',;:]+@[^\s@<>()[\]"',;:]+\.[^\s@<>()[\]"',;:]+/g;
+const EMAIL = /[^\s@<>()[\]",;:]+@[\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)*/gu;
 
 /** Email-like strings become "[email]". */
 export function redactEmails(s: string): string {
@@ -74,7 +74,7 @@ export function defaultIssueDraft(r: {
   context: FeedbackContext;
 }): IssueDraft {
   const message = redactEmails(r.message.trim());
-  const firstLine = (message.split(/\r?\n/)[0] ?? "").trim();
+  const firstLine = (message.split(/[\r\n\u2028\u2029]/)[0] ?? "").trim();
   const prefix = `[${r.type}] `;
   const title = prefix + [...firstLine].slice(0, TITLE_MAX - prefix.length).join("").trimEnd();
 
@@ -118,7 +118,8 @@ function build(repo: string, d: IssueDraft, body: string): string {
 }
 
 /** The "new issue" URL, always under 8000 characters (the body is cut and marked when needed). */
-export function githubIssueUrl(repo: string, d: IssueDraft): string {
+export function githubIssueUrl(repo: string, issue: IssueDraft): string {
+  const d = { ...issue, title: [...issue.title].slice(0, TITLE_MAX).join("") };
   const full = build(repo, d, d.body);
   if (full.length < URL_MAX) return full;
   const chars = [...d.body];
@@ -135,6 +136,6 @@ export function githubIssueUrl(repo: string, d: IssueDraft): string {
 
 /** Help button rule inside AppLayout: hidden on a lesson with any ?view=. */
 export function showHelpButton(pathname: string, search: string): boolean {
-  if (/^\/lesson\/[^/]+\/?$/.test(pathname) && new URLSearchParams(search).has("view")) return false;
+  if (/^\/lesson\/[^/]+\/?$/i.test(pathname) && new URLSearchParams(search).has("view")) return false;
   return true;
 }

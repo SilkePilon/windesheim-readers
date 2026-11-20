@@ -1,4 +1,4 @@
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, schema } from "../db";
 import type { BadgeId } from "../../shared/badges";
@@ -77,8 +77,14 @@ export async function updateProgress(
     .where(and(eq(schema.lessonProgress.userId, userId), eq(schema.lessonProgress.lessonId, lessonId)));
 }
 
-/** Per lesson card mastery: cards in FSRS "Review" state count fully, cards still in (re)learning count half. */
-export async function cardMasteryByLesson(userId: string) {
+/** Which lessons `cardMasteryByLesson` computes: one lesson, or the ids a subquery selects. */
+export type MasteryScope = { lessonId: string } | { lessonIds: SQLWrapper };
+
+/**
+ * Per lesson card mastery: cards in FSRS "Review" state count fully, cards still in (re)learning count half.
+ * Without `scope` every lesson is computed; with it only those lessons (same values).
+ */
+export async function cardMasteryByLesson(userId: string, scope?: MasteryScope): Promise<Map<string, number>> {
   const rows = await db
     .select({
       lessonId: schema.flashcard.lessonId,
@@ -89,6 +95,13 @@ export async function cardMasteryByLesson(userId: string) {
     .leftJoin(
       schema.cardReview,
       and(eq(schema.cardReview.flashcardId, schema.flashcard.id), eq(schema.cardReview.userId, userId)),
+    )
+    .where(
+      !scope
+        ? undefined
+        : "lessonId" in scope
+          ? eq(schema.flashcard.lessonId, scope.lessonId)
+          : inArray(schema.flashcard.lessonId, scope.lessonIds),
     )
     .groupBy(schema.flashcard.lessonId);
   return new Map(rows.map((r) => [r.lessonId, r.total ? Number(r.learned ?? 0) / r.total : 0]));

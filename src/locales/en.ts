@@ -849,7 +849,7 @@ const en: Messages = {
         issueTitle: "Title",
         body: "Body",
         labels: "Labels",
-        note: "Screenshot? Drag it into the GitHub window yourself.",
+        note: "Screenshot? Check it for names or other personal details first, then drag it into the GitHub window yourself.",
         downloadScreenshot: "Download screenshot",
         open: "Open GitHub",
         truncated: "Too long for the link: {{kept}} of {{total}} characters fit, then “(ingekort)” is added.",

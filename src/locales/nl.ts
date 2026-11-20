@@ -847,7 +847,7 @@ const nl = {
         issueTitle: "Titel",
         body: "Tekst",
         labels: "Labels",
-        note: "Screenshot? Sleep hem zelf in het GitHub-venster.",
+        note: "Screenshot? Controleer hem eerst op namen of andere persoonsgegevens en sleep hem dan zelf in het GitHub-venster.",
         downloadScreenshot: "Screenshot downloaden",
         open: "GitHub openen",
         truncated: "Te lang voor de link: {{kept}} van {{total}} tekens gaan mee, daarna staat “(ingekort)”.",

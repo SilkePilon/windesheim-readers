@@ -1,3 +1,12 @@
+// "Latest request wins": begin() returns a check that is true only until the next begin().
+export function makeLatestOnly(): () => () => boolean {
+  let n = 0;
+  return () => {
+    const mine = ++n;
+    return () => mine === n;
+  };
+}
+
 // Loads the English strings on demand. Pure (no i18next) so it can be tested alone.
 export function makeLocaleLoader(
   add: (lng: "en", bundle: object) => void,

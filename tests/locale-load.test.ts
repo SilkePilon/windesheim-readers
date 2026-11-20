@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { makeLocaleLoader } from "@/lib/locale-load";
+import { makeLatestOnly, makeLocaleLoader } from "@/lib/locale-load";
 
 describe("makeLocaleLoader", () => {
   test("nl never imports", async () => {
@@ -26,5 +26,16 @@ describe("makeLocaleLoader", () => {
     await expect(load("en")).rejects.toThrow();
     await load("en");
     expect(n).toBe(2);
+  });
+});
+
+describe("makeLatestOnly", () => {
+  test("only the newest request is current", () => {
+    const begin = makeLatestOnly();
+    const a = begin();
+    expect(a()).toBe(true);
+    const b = begin();
+    expect(a()).toBe(false);
+    expect(b()).toBe(true);
   });
 });

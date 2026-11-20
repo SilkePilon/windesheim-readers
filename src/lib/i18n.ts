@@ -1,7 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import nl from "@/locales/nl";
-import { makeLocaleLoader } from "@/lib/locale-load";
+import { makeLatestOnly, makeLocaleLoader } from "@/lib/locale-load";
 import { storageGet, storageSet } from "@/lib/storage";
 
 // Logged out: the last language used on this device, else the browser language. Once
@@ -24,13 +24,18 @@ export const ensureLocale = makeLocaleLoader(
   () => import("@/locales/en"),
 );
 
+const beginLocaleRequest = makeLatestOnly();
+
 export function setLocale(locale: "nl" | "en") {
   storageSet("locale", locale);
   document.documentElement.lang = locale;
-  if (i18n.language === locale) return;
-  // On failure stay on the current language.
+  const isLatest = beginLocaleRequest();
+  if (i18n.language === locale && i18n.hasResourceBundle(locale, "translation")) return;
+  // On failure stay on the current language; a stale request never overrides a newer one.
   ensureLocale(locale)
-    .then(() => i18n.changeLanguage(locale))
+    .then(() => {
+      if (isLatest()) return i18n.changeLanguage(locale);
+    })
     .catch(() => {});
 }
 

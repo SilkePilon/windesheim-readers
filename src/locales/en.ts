@@ -833,7 +833,6 @@ const en: Messages = {
       screenshotOpen: "Open full size",
       download: "Download",
       reporter: "Reported by",
-      reported: "Reported",
       statusLabel: "Status",
       githubLink: "GitHub issue",
       githubHint: "Paste the issue link once it exists.",

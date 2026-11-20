@@ -831,7 +831,6 @@ const nl = {
       screenshotOpen: "Op volle grootte openen",
       download: "Downloaden",
       reporter: "Gemeld door",
-      reported: "Gemeld",
       statusLabel: "Status",
       githubLink: "GitHub-issue",
       githubHint: "Plak de link van het issue zodra het bestaat.",

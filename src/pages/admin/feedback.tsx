@@ -35,6 +35,8 @@ export default function AdminFeedbackPage() {
   const { data, isLoading } = useQuery({
     queryKey: qk.adminFeedback,
     queryFn: () => api.get<FeedbackList>("/admin/feedback"),
+    // Same cadence as the badge count, so the list and the badge agree.
+    refetchInterval: 60_000,
   });
   if (isLoading || !data) return <PageSpinner />;
 

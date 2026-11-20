@@ -1,5 +1,6 @@
 import type { BadgeId } from "@shared/game";
 import type { FeedbackContext, FeedbackStatus, FeedbackType } from "@shared/feedback";
+import type { ConceptMapData } from "@shared/concept-map";
 
 /** GET /me/badges: one entry per catalogue badge. */
 export interface BadgeStatus {
@@ -142,6 +143,11 @@ export interface ReaderLearn {
   episodes: { week: number; title: string; durationSec: number; positionMs: number; listenMs: number }[];
   conceptMap: boolean;
 }
+
+/** GET /readers/:id/concept-map: the ready map (visible lessons only) with the student's mastery per lesson. */
+export type ReaderConceptMap = ConceptMapData & {
+  lessons: { id: string; code: string; title: string; week: number; mastery: number }[];
+};
 
 export interface CheckResult {
   correct: boolean;

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
 import { setLocale } from "./i18n";
-import type { BadgeStatus, Leaderboard, LessonAudio, LessonDetail, Me, ReaderLearn, ReaderWithLessons } from "./types";
+import type { BadgeStatus, Leaderboard, LessonAudio, LessonDetail, Me, ReaderConceptMap, ReaderLearn, ReaderWithLessons } from "./types";
 
 export const qk = {
   me: ["me"] as const,
@@ -11,6 +11,7 @@ export const qk = {
   lessonAudio: (id: string) => ["lesson", id, "audio"] as const,
   readerLearn: (id: string) => ["reader", id, "learn"] as const,
   readerEpisode: (id: string, week: number) => ["reader", id, "episode", week] as const,
+  conceptMap: (id: string) => ["reader", id, "concept-map"] as const,
   leaderboard: (p: string) => ["leaderboard", p] as const,
   badges: ["me", "badges"] as const,
   adminFeedback: ["admin", "feedback"] as const,
@@ -51,6 +52,16 @@ export function useReaderLearn(id: string | undefined) {
     queryKey: qk.readerLearn(id ?? ""),
     queryFn: () => api.get<ReaderLearn>(`/readers/${id}/learn`),
     enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
+/** The reader's concept map with mastery per lesson (under "reader", so progress refreshes the tones). A 404 is not retried. */
+export function useConceptMap(readerId: string) {
+  return useQuery({
+    queryKey: qk.conceptMap(readerId),
+    queryFn: () => api.get<ReaderConceptMap>(`/readers/${readerId}/concept-map`),
+    retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1,
     staleTime: 30_000,
   });
 }

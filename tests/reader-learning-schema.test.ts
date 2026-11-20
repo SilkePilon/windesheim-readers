@@ -110,17 +110,17 @@ describe("reader-learning tables", () => {
       chapters: [{ n: 1, durationMs: 1000, bytes: 10 }],
       sourceSnapshot: [{ lessonId: "rl1-l", generatedAt: null, startPage: 1, endPage: 2 }],
     });
-    expect(db.select().from(schema.conceptMap).get()).toMatchObject({ readerId: "rl1", status: "pending" });
-    expect(db.select().from(schema.readerSessionDay).get()).toMatchObject({ sessions: 0, xp: 0, cards: 0, questions: 0, correct: 0, completedAt: null });
-    expect(db.select().from(schema.episodeProgress).get()).toMatchObject({ listenMs: 5, positionMs: 3, awarded: false });
-    expect(db.select().from(schema.questionResult).get()).toMatchObject({ lastCorrect: true, seen: 1 });
+    expect(db.select().from(schema.conceptMap).where(eq(schema.conceptMap.readerId, "rl1")).get()).toMatchObject({ readerId: "rl1", status: "pending" });
+    expect(db.select().from(schema.readerSessionDay).where(eq(schema.readerSessionDay.readerId, "rl1")).get()).toMatchObject({ sessions: 0, xp: 0, cards: 0, questions: 0, correct: 0, completedAt: null });
+    expect(db.select().from(schema.episodeProgress).where(eq(schema.episodeProgress.readerId, "rl1")).get()).toMatchObject({ listenMs: 5, positionMs: 3, awarded: false });
+    expect(db.select().from(schema.questionResult).where(eq(schema.questionResult.questionId, "rl1-q")).get()).toMatchObject({ lastCorrect: true, seen: 1 });
 
     await call("DELETE", "/rl1");
-    expect(db.select().from(schema.readerEpisode).all()).toHaveLength(0);
-    expect(db.select().from(schema.conceptMap).all()).toHaveLength(0);
-    expect(db.select().from(schema.readerSessionDay).all()).toHaveLength(0);
-    expect(db.select().from(schema.episodeProgress).all()).toHaveLength(0);
-    expect(db.select().from(schema.questionResult).all()).toHaveLength(0);
+    expect(db.select().from(schema.readerEpisode).where(eq(schema.readerEpisode.readerId, "rl1")).all()).toHaveLength(0);
+    expect(db.select().from(schema.conceptMap).where(eq(schema.conceptMap.readerId, "rl1")).all()).toHaveLength(0);
+    expect(db.select().from(schema.readerSessionDay).where(eq(schema.readerSessionDay.readerId, "rl1")).all()).toHaveLength(0);
+    expect(db.select().from(schema.episodeProgress).where(eq(schema.episodeProgress.readerId, "rl1")).all()).toHaveLength(0);
+    expect(db.select().from(schema.questionResult).where(eq(schema.questionResult.questionId, "rl1-q")).all()).toHaveLength(0);
   });
 });
 

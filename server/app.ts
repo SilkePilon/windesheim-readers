@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { admin } from "./routes/admin";
 import { learn } from "./routes/learn";
+import { readerLearn } from "./routes/reader-learn";
 import { adminFeedback, feedback } from "./routes/feedback";
 import { userFromHeaders } from "./middleware";
 import { battleConnection } from "./live/battle";
@@ -127,6 +128,7 @@ app.get(
 app.route("/api/admin/feedback", adminFeedback);
 app.route("/api/feedback", feedback);
 app.route("/api/admin", admin);
+app.route("/api", readerLearn);
 app.route("/api", learn);
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));
 

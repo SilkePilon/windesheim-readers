@@ -17,6 +17,7 @@ export function eventsForReason(reason: string): BadgeEvent[] {
     case "explain":
       return ["explain", "mastery"];
     case "summary":
+    case "session":
       return ["mastery"];
     case "open":
       return ["open"];

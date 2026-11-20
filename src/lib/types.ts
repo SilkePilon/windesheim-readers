@@ -94,6 +94,52 @@ export type PublicQuestion =
   | { id: string; type: "order"; prompt: string; difficulty: number; items: string[] }
   | { id: string; type: "open"; prompt: string; difficulty: number };
 
+/** A card in a reader session: the `/review/queue` item shape. */
+export type ReviewCard = QueueCard;
+
+/** A question in a reader session, with its lesson. */
+export type SessionQuestion = PublicQuestion & { lessonId: string; code: string };
+
+export type ReaderSessionItem =
+  | { kind: "card"; card: ReviewCard }
+  | { kind: "question"; question: SessionQuestion }
+  | { kind: "open"; question: SessionQuestion };
+
+/** `GET /readers/:id/session`. `sessionId` is null when nothing has been started yet. */
+export interface ReaderSession {
+  sessionId: string | null;
+  needsStart: boolean;
+  xpPerCorrect: number;
+  items: ReaderSessionItem[];
+}
+
+/** `POST /readers/:id/session/submit`. */
+export interface ReaderSessionResult {
+  xp: number;
+  correct: number;
+  total: number;
+  perLesson: { lessonId: string; code: string; correct: number; total: number }[];
+  dayStreak: number;
+  award: XpResult;
+}
+
+/** `GET /readers/:id/learn`: the whole-reader learning page overview. */
+export interface ReaderLearn {
+  reader: { id: string; title: string; examDate: number | null };
+  daysToExam: number | null;
+  progress: { mastery: number; masteredLessons: number; totalLessons: number };
+  due: number;
+  pullForward: number;
+  today: { done: boolean; xp: number; sessions: number };
+  sessionDayStreak: number;
+  estimate: { cards: number; questions: number; open: number; minutes: number };
+  needsStart: boolean;
+  currentLessonId: string | null;
+  weakLessons: { id: string; code: string; title: string; mastery: number }[];
+  episodes: { week: number; title: string; durationSec: number; positionMs: number; listenMs: number }[];
+  conceptMap: boolean;
+}
+
 export interface CheckResult {
   correct: boolean;
   correctAnswer: unknown;

@@ -72,13 +72,14 @@ export function answerFor(type: QuestionData["type"]) {
 
 export const quizCheck = z.object({ sessionId: id, answer: anyAnswer }).strict();
 export const quizSubmit = z.object({ sessionId: id }).strict();
+export const sessionSubmit = z.object({ sessionId: id }).strict();
 export const review = z.object({ flashcardId: id, rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]) }).strict();
 export const audioProgress = z
   .object({ positionMs: z.number().int().min(0).max(6 * 3600_000), heardMs: z.number().int().min(0).max(6 * 3600_000).optional() })
   .strict();
 
 // ----- AI-graded answers -----
-export const openAnswer = z.object({ answer: text(LIMITS.openAnswer.max, LIMITS.openAnswer.min) }).strict();
+export const openAnswer = z.object({ answer: text(LIMITS.openAnswer.max, LIMITS.openAnswer.min), sessionId: id.optional() }).strict();
 export const explain = z
   .object({ concept: text(LIMITS.concept.max, LIMITS.concept.min), explanation: text(LIMITS.explain.max, LIMITS.explain.min) })
   .strict();

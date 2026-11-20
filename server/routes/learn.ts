@@ -2,7 +2,8 @@ import { Hono, type Context } from "hono";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream, type UIMessage } from "ai";
-import { fsrs, createEmptyCard, Rating, type Card, type Grade } from "ts-fsrs";
+import { createEmptyCard, type Grade } from "ts-fsrs";
+import { fromCard, previewIntervals, scheduler, toCard } from "../lib/fsrs";
 import { db, schema } from "../db";
 import { limits } from "../limits";
 import { aiQuota, aiQuotas, consumeAi, dailyLimitBody, type ConsumeResult } from "../lib/ai-quota";
@@ -36,8 +37,6 @@ import * as input from "../lib/input";
 /** Listening at least this share of the luisterles counts as having read the summary. */
 const LISTENED_SHARE = 0.9;
 
-const scheduler = fsrs({ enable_fuzz: true });
-
 /** Today's quiz XP factor for this user and lesson (diminishing after 3 quizzes per day). */
 async function todayQuizFactor(userId: string, lessonId: string) {
   const [{ n } = { n: 0 }] = await db
@@ -47,36 +46,56 @@ async function todayQuizFactor(userId: string, lessonId: string) {
   return quizXpFactor(n);
 }
 
-/** Next-due interval (ms from `now`) per rating, from FSRS `repeat()` previews. */
-function previewIntervals(card: Card, now: Date) {
-  const rec = scheduler.repeat(card, now);
-  const ms = (g: Grade) => rec[g].card.due.getTime() - now.getTime();
-  return { again: ms(Rating.Again), hard: ms(Rating.Hard), good: ms(Rating.Good), easy: ms(Rating.Easy) };
-}
-
-interface QuizSession {
+/** A quiz on one lesson (`lessonId`), or a reader session (`readerId`, questions from many lessons). */
+export interface QuizSession {
   userId: string;
-  lessonId: string;
+  lessonId: string | null;
+  readerId?: string;
+  /** Every question the session may check (reader sessions also list their open questions). */
   questionIds: string[];
+  /** First check per question. */
   results: Map<string, boolean>;
   createdAt: number;
+  /** Reader sessions: the number of cards in the plan, for the day record. */
+  cards?: number;
+  /** Reader sessions are kept after submit (their open answers may still be graded) but can't be checked or submitted again. */
+  submitted?: boolean;
 }
+const SESSION_TTL_MS = 3 * 60 * 60 * 1000;
 const quizSessions = new Map<string, QuizSession>();
 
-function createQuizSession(userId: string, lessonId: string, questionIds: string[]) {
-  const cutoff = Date.now() - 3 * 60 * 60 * 1000;
+export function createQuizSession(
+  userId: string,
+  lessonId: string | null,
+  questionIds: string[],
+  readerId?: string,
+  extra: Pick<QuizSession, "cards"> = {},
+) {
+  const cutoff = Date.now() - SESSION_TTL_MS;
   for (const [id, s] of quizSessions) if (s.createdAt < cutoff) quizSessions.delete(id);
   const id = nanoid();
-  quizSessions.set(id, { userId, lessonId, questionIds, results: new Map(), createdAt: Date.now() });
+  quizSessions.set(id, { userId, lessonId, readerId, questionIds, results: new Map(), createdAt: Date.now(), ...extra });
   return id;
 }
+
+/** The session, or undefined when it doesn't exist or is older than 3 hours. */
+export function getQuizSession(id: string): QuizSession | undefined {
+  const s = quizSessions.get(id);
+  if (s && s.createdAt < Date.now() - SESSION_TTL_MS) {
+    quizSessions.delete(id);
+    return undefined;
+  }
+  return s;
+}
 const NEW_CARDS_PER_SESSION = 15;
+/** A reader-session open answer counts for this share of bestExplain. */
+const SESSION_EXPLAIN_WEIGHT = 0.6;
 
 /**
  * Award XP, advance the daily quests and check the badges the action can earn, with one
  * badge check for the whole action (see awardWithQuests). `lessonId` scopes the mastery check.
  */
-const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = [], lessonId?: string) =>
+export const award = (userId: string, amount: number, reason: string, events: QuestEvent[] = [], lessonId?: string) =>
   awardWithQuests(
     {
       awardXp: awardXpOnly,
@@ -106,7 +125,7 @@ async function markSummaryRead(userId: string, lessonId: string) {
 }
 
 /** Lessons visible to this user: from published readers (admins see all). */
-async function visibleLesson(lessonId: string, isAdmin: boolean) {
+export async function visibleLesson(lessonId: string, isAdmin: boolean) {
   const row = await db
     .select({ lesson: schema.lesson, reader: schema.reader })
     .from(schema.lesson)
@@ -116,36 +135,6 @@ async function visibleLesson(lessonId: string, isAdmin: boolean) {
   if (!row || row.lesson.status !== "ready") return null;
   if (!row.reader.published && !isAdmin) return null;
   return row;
-}
-
-function toCard(r: typeof schema.cardReview.$inferSelect): Card {
-  return {
-    due: r.due,
-    stability: r.stability,
-    difficulty: r.difficulty,
-    elapsed_days: r.elapsedDays,
-    scheduled_days: r.scheduledDays,
-    learning_steps: r.learningSteps,
-    reps: r.reps,
-    lapses: r.lapses,
-    state: r.state,
-    last_review: r.lastReview ?? undefined,
-  };
-}
-
-function fromCard(c: Card) {
-  return {
-    due: c.due,
-    stability: c.stability,
-    difficulty: c.difficulty,
-    elapsedDays: c.elapsed_days,
-    scheduledDays: c.scheduled_days,
-    learningSteps: c.learning_steps,
-    reps: c.reps,
-    lapses: c.lapses,
-    state: c.state,
-    lastReview: c.last_review ?? null,
-  };
 }
 
 async function dueCount(userId: string) {
@@ -544,14 +533,25 @@ export const learn = new Hono<AppEnv>()
   .post("/questions/:id/check", limits.writes, async (c) => {
     const u = c.get("user");
     const { sessionId, answer } = input.quizCheck.parse(await c.req.json());
-    const session = quizSessions.get(sessionId);
+    const session = getQuizSession(sessionId);
     const qid = c.req.param("id");
-    if (!session || session.userId !== u.id || !session.questionIds.includes(qid)) return c.json({ error: "NO_SESSION" }, 400);
+    if (!session || session.userId !== u.id || session.submitted || !session.questionIds.includes(qid)) return c.json({ error: "NO_SESSION" }, 400);
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, qid) });
     if (!q || q.data.type === "open") return c.json({ error: "NOT_FOUND" }, 404);
     // The exact shape for this question type (a number for mc, a boolean for tf, ...).
     const correct = checkAnswer(q.data, input.answerFor(q.data.type).parse(answer));
-    if (!session.results.has(qid)) session.results.set(qid, correct);
+    // Only the first check counts, for the session and for the per-question history.
+    if (!session.results.has(qid) && !session.submitted) {
+      session.results.set(qid, correct);
+      const lastAt = new Date();
+      await db
+        .insert(schema.questionResult)
+        .values({ userId: u.id, questionId: qid, lastCorrect: correct, seen: 1, lastAt })
+        .onConflictDoUpdate({
+          target: [schema.questionResult.userId, schema.questionResult.questionId],
+          set: { lastCorrect: correct, seen: sql`${schema.questionResult.seen} + 1`, lastAt },
+        });
+    }
     return c.json({ correct, correctAnswer: correctAnswer(q.data), explanation: explanationOf(q.data) });
   })
 
@@ -559,8 +559,8 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const lessonId = c.req.param("id");
     const { sessionId } = input.quizSubmit.parse(await c.req.json());
-    const session = quizSessions.get(sessionId);
-    if (!session || session.userId !== u.id || session.lessonId !== lessonId) return c.json({ error: "NO_SESSION" }, 400);
+    const session = getQuizSession(sessionId);
+    if (!session || session.userId !== u.id || session.readerId || session.lessonId !== lessonId) return c.json({ error: "NO_SESSION" }, 400);
     quizSessions.delete(sessionId);
     const max = session.questionIds.length;
     const correct = [...session.results.values()].filter(Boolean).length;
@@ -593,7 +593,7 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const q = await db.query.question.findFirst({ where: eq(schema.question.id, c.req.param("id")) });
     if (!q || q.data.type !== "open") return c.json({ error: "NOT_FOUND" }, 404);
-    const { answer } = input.openAnswer.parse(await c.req.json());
+    const { answer, sessionId } = input.openAnswer.parse(await c.req.json());
     const { modelAnswer, rubric } = q.data;
     const quota = consumeAi(u, "grade");
     if (!quota.ok) return dailyLimitReached(c, quota);
@@ -601,6 +601,11 @@ export const learn = new Hono<AppEnv>()
       gradeOpenAnswer({ question: q.prompt, modelAnswer, rubric, answer, locale: u.locale ?? "nl" }),
     );
     await db.insert(schema.attempt).values({ id: nanoid(), userId: u.id, lessonId: q.lessonId, kind: "explain", score: grade.score, maxScore: 100 });
+    // In a reader session one answer is weaker evidence than the full explain exercise: 0.6 weight.
+    const session = sessionId ? getQuizSession(sessionId) : undefined;
+    if (session?.readerId && session.userId === u.id && session.questionIds.includes(q.id)) {
+      await updateProgress(u.id, q.lessonId, { explain: (grade.score / 100) * SESSION_EXPLAIN_WEIGHT });
+    }
     const res = await award(u.id, grade.score * XP.openPerPoint, "open", [{ kind: "open", lessonId: q.lessonId }]);
     return c.json({ ...grade, ...res, modelAnswer: q.data.modelAnswer });
   })

@@ -19,16 +19,26 @@ describe("isReportable", () => {
 });
 
 describe("errorSeed", () => {
-  test("an ApiError becomes a bug seed with status, code and path, no stack", () => {
+  test("a 5xx gets a generic message with its status, code and path, no stack", () => {
     const seed = errorSeed(new ApiError(502, "BAD_GATEWAY"), "/me");
     expect(seed.type).toBe("bug");
-    expect(seed.error).toEqual({ message: "BAD_GATEWAY", status: 502, code: "BAD_GATEWAY", apiPath: "/me" });
+    expect(seed.error).toEqual({ message: "Server error 502", status: 502, code: "BAD_GATEWAY", apiPath: "/me" });
     expect(seed.error && "stack" in seed.error).toBe(false);
   });
-  test("a network TypeError carries its message only", () => {
-    const seed = errorSeed(new TypeError("Failed to fetch"));
+  test("raw server text in a 5xx code never becomes the message or the code", () => {
+    const seed = errorSeed(new ApiError(500, "SQLITE_CONSTRAINT: UNIQUE constraint failed: user.email"));
+    expect(seed.error).toEqual({ message: "Server error 500", status: 500 });
+  });
+  test("a 4xx keeps its code as the message", () => {
+    expect(errorSeed(new ApiError(404, "NOT_FOUND")).error).toEqual({ message: "NOT_FOUND", status: 404, code: "NOT_FOUND" });
+  });
+  test("a network TypeError says only that", () => {
+    const seed = errorSeed(new TypeError("Failed to fetch"), "/me");
     expect(seed.type).toBe("bug");
-    expect(seed.error).toEqual({ message: "Failed to fetch" });
+    expect(seed.error).toEqual({ message: "Network error", apiPath: "/me" });
+  });
+  test("another Error keeps its message", () => {
+    expect(errorSeed(new Error("boom")).error).toEqual({ message: "boom" });
   });
   test("non-errors still give a message", () => {
     expect(errorSeed("x").error?.message).toBe("x");

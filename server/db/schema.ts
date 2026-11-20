@@ -79,6 +79,8 @@ export const reader = sqliteTable("reader", {
   status: text("status").$type<ReaderStatus>().notNull().default("extracting"),
   error: text("error"),
   published: integer("published", { mode: "boolean" }).notNull().default(false),
+  /** Exam day: ms at 00:00 Europe/Amsterdam. */
+  examDate: integer("exam_date", { mode: "number" }),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: ts("created_at").notNull().default(now),
 });
@@ -184,6 +186,43 @@ export const lessonAudio = sqliteTable("lesson_audio", {
   updatedAt: ts("updated_at").notNull().default(now),
 });
 
+export type ReaderEpisodeStatus = "pending" | "generating" | "ready" | "error";
+
+/** Whole-reader audio: one episode per week, shared by every student. */
+export const readerEpisode = sqliteTable(
+  "reader_episode",
+  {
+    readerId: text("reader_id").notNull().references(() => reader.id, { onDelete: "cascade" }),
+    week: integer("week").notNull(),
+    status: text("status").$type<ReaderEpisodeStatus>().notNull().default("pending"),
+    error: text("error"),
+    title: text("title"),
+    /** Internal (admin only, never sent to students). */
+    script: text("script", { mode: "json" }).$type<import("../ai/audio-script").AudioScript>(),
+    chapters: text("chapters", { mode: "json" }).$type<LessonAudioChapter[]>().notNull().default(sql`'[]'`),
+    generatedAt: ts("generated_at"),
+    provider: text("provider"),
+    model: text("model"),
+    voice: text("voice"),
+    /** The lessons (and their generation time) this episode was made from, to detect staleness. */
+    sourceSnapshot: text("source_snapshot", { mode: "json" })
+      .$type<{ lessonId: string; generatedAt: number | null; startPage: number; endPage: number }[]>(),
+  },
+  (t) => [primaryKey({ columns: [t.readerId, t.week] })],
+);
+
+export type ConceptMapStatus = "pending" | "generating" | "ready" | "error";
+
+/** One concept map per reader (shape defined with the generator). */
+export const conceptMap = sqliteTable("concept_map", {
+  readerId: text("reader_id").primaryKey().references(() => reader.id, { onDelete: "cascade" }),
+  status: text("status").$type<ConceptMapStatus>().notNull().default("pending"),
+  error: text("error"),
+  data: text("data", { mode: "json" }).$type<unknown>(),
+  editedAt: ts("edited_at"),
+  updatedAt: ts("updated_at").notNull().default(now),
+});
+
 // ---------- learning state ----------
 
 export const cardReview = sqliteTable(
@@ -206,7 +245,7 @@ export const cardReview = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.flashcardId] }), index("card_review_due_idx").on(t.userId, t.due)],
 );
 
-export type AttemptKind = "quiz" | "explain" | "battle" | "review";
+export type AttemptKind = "quiz" | "explain" | "battle" | "review" | "session";
 
 export const attempt = sqliteTable(
   "attempt",
@@ -341,4 +380,48 @@ export const feedback = sqliteTable(
     updatedAt: ts("updated_at").notNull().default(now),
   },
   (t) => [index("feedback_status_created_idx").on(t.status, t.createdAt)],
+);
+
+/** Per student, reader and Amsterdam day (YYYY-MM-DD): what the daily learning session did. */
+export const readerSessionDay = sqliteTable(
+  "reader_session_day",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    readerId: text("reader_id").notNull().references(() => reader.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    sessions: integer("sessions").notNull().default(0),
+    completedAt: ts("completed_at"),
+    xp: integer("xp").notNull().default(0),
+    cards: integer("cards").notNull().default(0),
+    questions: integer("questions").notNull().default(0),
+    correct: integer("correct").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.readerId, t.day] })],
+);
+
+export const episodeProgress = sqliteTable(
+  "episode_progress",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    readerId: text("reader_id").notNull().references(() => reader.id, { onDelete: "cascade" }),
+    week: integer("week").notNull(),
+    listenMs: integer("listen_ms").notNull().default(0),
+    positionMs: integer("position_ms").notNull().default(0),
+    awarded: integer("awarded", { mode: "boolean" }).notNull().default(false),
+    updatedAt: ts("updated_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.readerId, t.week] })],
+);
+
+/** Latest answer per student and question, for picking what to practise next. */
+export const questionResult = sqliteTable(
+  "question_result",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    questionId: text("question_id").notNull().references(() => question.id, { onDelete: "cascade" }),
+    lastCorrect: integer("last_correct", { mode: "boolean" }).notNull(),
+    seen: integer("seen").notNull().default(1),
+    lastAt: ts("last_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.questionId] })],
 );

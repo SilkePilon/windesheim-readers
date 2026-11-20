@@ -173,6 +173,7 @@ export const patchReader = z
       .optional()
       .transform((v) => (v === "" ? null : v)),
     published: z.boolean().optional(),
+    examDate: z.number().int().positive().nullable().optional(),
   })
   .strict();
 

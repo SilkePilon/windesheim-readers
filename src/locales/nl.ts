@@ -243,6 +243,8 @@ const nl = {
       tone: { new: "Nog niet gestart", learning: "Bezig", mastered: "Beheerst" },
       links: "Verbanden",
       noLinks: "Nog geen verbanden",
+      close: "Sluiten",
+      focusHint: "Tik op een begrip om te zien hoe het samenhangt met de rest.",
       from: "← {{label}}",
       openLesson: "Open les {{code}}",
       lessonOf: "Les {{code}} · {{title}}",

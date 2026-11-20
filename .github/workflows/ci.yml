@@ -78,6 +78,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             REVISION=${{ github.sha }}
+            APP_VERSION=${{ github.sha }}
 
       - name: Smoke test
         run: |
@@ -120,3 +121,4 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             REVISION=${{ github.sha }}
+            APP_VERSION=${{ github.sha }}

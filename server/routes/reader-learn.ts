@@ -167,7 +167,8 @@ export const readerLearn = new Hono<AppEnv>()
       return [{ kind: item.kind, question: { ...publicQuestion(q), lessonId: q.lessonId, code: code.get(q.lessonId) ?? "" } }];
     });
     const questionIds = items.flatMap((i) => (i.kind === "card" ? [] : [i.question.id]));
-    const sessionId = createQuizSession(u.id, null, questionIds, data.reader.id, { cards: plan.counts.cards });
+    const quizCount = items.filter((i) => i.kind === "question").length;
+    const sessionId = createQuizSession(u.id, null, questionIds, data.reader.id, { cards: plan.counts.cards, quizCount });
     return c.json({ sessionId, needsStart: false, xpPerCorrect, items });
   })
 
@@ -183,6 +184,11 @@ export const readerLearn = new Hono<AppEnv>()
 
     // Only checked quiz questions count (open answers are graded on their own).
     const checked = [...session.results.keys()];
+    // A session with quiz questions but none answered (opened, then submitted) doesn't count as a
+    // session of the day: no day record, no streak, and the next session still pays in full.
+    if ((session.quizCount ?? 0) > 0 && !checked.length) {
+      return c.json({ xp: 0, correct: 0, total: 0, perLesson: [], dayStreak: await sessionDayStreak(u.id, reader.id), award: null });
+    }
     const rows = checked.length
       ? await db
           .select({ id: schema.question.id, lessonId: schema.question.lessonId, code: schema.lesson.code })

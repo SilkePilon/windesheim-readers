@@ -124,7 +124,8 @@ export interface ReaderSessionResult {
   total: number;
   perLesson: { lessonId: string; code: string; correct: number; total: number }[];
   dayStreak: number;
-  award: XpResult;
+  /** Null when nothing was answered (the session didn't count). */
+  award: XpResult | null;
 }
 
 /** `GET /readers/:id/learn`: the whole-reader learning page overview. */

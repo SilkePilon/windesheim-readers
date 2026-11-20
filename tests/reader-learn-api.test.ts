@@ -254,6 +254,25 @@ describe("GET /readers/:id/session", () => {
 });
 
 describe("check and submit", () => {
+  test("submitting without answering a quiz question doesn't count as a session", async () => {
+    const s = await ok<Session>("student", `/readers/${R}/session`);
+    expect(questionsOf(s).length).toBeGreaterThan(0);
+    const res = await ok("student", `/readers/${R}/session/submit`, { sessionId: s.sessionId });
+    expect(res).toMatchObject({ xp: 0, correct: 0, total: 0, perLesson: [], award: null });
+    const day = db
+      .select()
+      .from(schema.readerSessionDay)
+      .where(and(eq(schema.readerSessionDay.userId, ids.student), eq(schema.readerSessionDay.readerId, R), eq(schema.readerSessionDay.day, dayKey())))
+      .get();
+    expect(day).toBeUndefined();
+    const o = await ok("student", `/readers/${R}/learn`);
+    expect(o.today).toEqual({ done: false, xp: 0, sessions: 0 });
+    // The session is used up all the same.
+    expect((await req("student", `/readers/${R}/session/submit`, { sessionId: s.sessionId })).status).toBe(400);
+    // The next real session still pays the full factor (checked in the test below: 2 correct = 20 XP).
+    expect((await ok<Session>("student", `/readers/${R}/session`)).xpPerCorrect).toBe(10);
+  });
+
   test("checks across lessons, first check counts, submit pays and records", async () => {
     const { s, l1 } = await playLesson1(2);
     const l2 = questionsOf(s).find((q) => q.lessonId === L[1])!;

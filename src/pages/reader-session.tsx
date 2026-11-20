@@ -79,7 +79,7 @@ function ReaderSession({ id }: { id: string }) {
     try {
       const res = await api.post<ReaderSessionResult>(`/readers/${id}/session/submit`, { sessionId: session.sessionId });
       dispatch({ type: "submitted", result: res });
-      celebrate(res.award);
+      celebrate(res.award ?? undefined);
       setPhase("playing");
       window.scrollTo({ top: 0 });
     } catch (e) {

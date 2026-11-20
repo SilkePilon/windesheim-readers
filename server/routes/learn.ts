@@ -58,6 +58,8 @@ export interface QuizSession {
   createdAt: number;
   /** Reader sessions: the number of cards in the plan, for the day record. */
   cards?: number;
+  /** Reader sessions: the number of quiz (checkable) questions in the plan; open questions not counted. */
+  quizCount?: number;
   /** Reader sessions are kept after submit (their open answers may still be graded) but can't be checked or submitted again. */
   submitted?: boolean;
 }
@@ -69,7 +71,7 @@ export function createQuizSession(
   lessonId: string | null,
   questionIds: string[],
   readerId?: string,
-  extra: Pick<QuizSession, "cards"> = {},
+  extra: Pick<QuizSession, "cards" | "quizCount"> = {},
 ) {
   const cutoff = Date.now() - SESSION_TTL_MS;
   for (const [id, s] of quizSessions) if (s.createdAt < cutoff) quizSessions.delete(id);

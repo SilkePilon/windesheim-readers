@@ -9,7 +9,7 @@
 @keyframes wk-flap { 0%, 100% { transform: skewY(0); } 50% { transform: skewY(-9deg); } }
 @keyframes wk-twinkle { 0%, 100% { opacity: 0; transform: scale(0.4); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes wk-drift { from { transform: translateX(-30px); } to { transform: translateX(30px); } }
-@keyframes wk-flow { to { stroke-dashoffset: -40; } }
+@keyframes wk-shimmer { 0%, 100% { opacity: .85; } 50% { opacity: .35; } }
 @keyframes wk-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 @keyframes wk-flicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.9, 1.12); } 60% { transform: scale(1.08, 0.92); } }
 @keyframes wk-float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-3deg); } }
@@ -34,7 +34,7 @@
 .world .flag { animation: wk-flap 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: left center; }
 .world .spark { animation: wk-twinkle 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 .world .fog { animation: wk-drift 7s ease-in-out infinite alternate; }
-.world .water { animation: wk-flow 2.4s linear infinite; }
+.world .water { animation: wk-shimmer 2.4s ease-in-out infinite; }
 /* Palm crowns and flames: origin at the element's own (0,0), the crown/flame base. */
 .world .sway { animation: wk-sway 3.6s ease-in-out infinite; transform-origin: 0 0; }
 .world .flicker { animation: wk-flicker 0.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
@@ -57,6 +57,12 @@
 /* Off-screen segments: freeze (IntersectionObserver toggles .paused). */
 .world .paused,
 .world .paused * { animation-play-state: paused !important; }
+
+/* While the page scrolls (scroll-pause.ts) the art holds still; far-off week segments are not rendered at all. */
+.world.scrolling .wseg,
+.world.scrolling .wseg *,
+.world.scrolling .world-top * { animation-play-state: paused !important; }
+.world-art > .world-seg.seg-off { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .world * { animation: none !important; }

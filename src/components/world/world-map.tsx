@@ -4,6 +4,7 @@ import type { PathGroup, PathNode } from "@shared/path";
 import { LevelBar } from "@/components/game/level-bar";
 import { bubbleBox, composeWorld, WORLD_WIDTH } from "@/lib/world/compose";
 import { afterViewTransition } from "@/lib/motion";
+import { createScrollPause } from "@/lib/world/scroll-pause";
 import { cn } from "@/lib/utils";
 import { REGISTRY } from "./registry";
 import { renderWorldSvg } from "./render";
@@ -86,6 +87,32 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
       io.observe(s);
     });
     return () => io.disconnect();
+  }, [svg]);
+
+  // Far-off week segments are not rendered; all start visible so first paint is never missing art.
+  useEffect(() => {
+    const segs = artRef.current?.querySelectorAll<SVGSVGElement>(".world-seg");
+    if (!segs?.length || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) e.target.classList.toggle("seg-off", !e.isIntersecting);
+      },
+      { rootMargin: "100% 0px" },
+    );
+    segs.forEach((s) => io.observe(s));
+    return () => io.disconnect();
+  }, [svg]);
+
+  // Animations hold still while the page scrolls.
+  useEffect(() => {
+    const root = artRef.current?.querySelector<HTMLElement>(".world");
+    if (!root) return;
+    const sp = createScrollPause(root, (fn, ms) => window.setTimeout(fn, ms), (id) => window.clearTimeout(id as number));
+    window.addEventListener("scroll", sp.onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", sp.onScroll);
+      sp.dispose();
+    };
   }, [svg]);
 
   useEffect(() => {

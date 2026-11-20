@@ -36,6 +36,16 @@ const WORLDS = [
 export default function DevWorldPage() {
   const { t } = useTranslation();
   const [dark, setDark] = useState(() => new URLSearchParams(location.search).has("dark"));
+  // `?bench`: only the 12-week world at phone width, for paint/scroll measurements.
+  if (new URLSearchParams(location.search).has("bench")) {
+    return (
+      <div className={cn("min-h-dvh bg-background px-4 text-foreground", dark && "dark")}>
+        <div className="mx-auto w-full max-w-[520px] pt-4">
+          <WorldMap seed="bench" groups={WORLDS[2].groups} onOpen={() => {}} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn("min-h-dvh bg-background p-4 text-foreground md:p-8", dark && "dark")}>
       <div className="mb-6 flex items-center gap-3">

@@ -175,3 +175,12 @@ describe("registry", () => {
       }
   });
 });
+
+describe("world.css water", () => {
+  test("shimmers by opacity instead of flowing dashes", async () => {
+    const css = await Bun.file(new URL("../src/components/world/world.css", import.meta.url)).text();
+    expect(css).toMatch(/\.world \.water \{ animation: wk-shimmer/);
+    expect(css).not.toContain("stroke-dashoffset");
+    expect(css).not.toContain("wk-flow");
+  });
+});

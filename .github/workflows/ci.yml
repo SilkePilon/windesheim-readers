@@ -34,6 +34,8 @@ jobs:
         run: bun test
       - name: Build web app
         run: bunx vite build
+      - name: Bundle budget
+        run: bun run budget
       - name: API end-to-end tests
         run: bun run test:e2e
       - name: Server log on failure

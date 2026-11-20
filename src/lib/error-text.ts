@@ -3,7 +3,7 @@ import { ApiError, parseRetryAfter } from "./api";
 import { dailyLimitFeature } from "./ai-quota";
 
 /** Server error codes with their own wording (`errors.<CODE>` in the locales). */
-const KNOWN = ["ALREADY_RUNNING", "LESSON_NOT_READY", "AUDIO_NOT_READY", "NOT_FOUND", "UNAUTHORIZED", "FORBIDDEN", "VALIDATION", "PAYLOAD_TOO_LARGE"] as const;
+const KNOWN = ["ALREADY_RUNNING", "LESSON_NOT_READY", "AUDIO_NOT_READY", "NOT_FOUND", "UNAUTHORIZED", "FORBIDDEN", "VALIDATION", "PAYLOAD_TOO_LARGE", "BAD_IMAGE", "FILE_TOO_LARGE"] as const;
 /** Input refused by the server: invalid (400) or too large (413). */
 const INPUT_ERRORS = ["VALIDATION", "PAYLOAD_TOO_LARGE"] as const;
 

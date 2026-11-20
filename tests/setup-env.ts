@@ -11,3 +11,5 @@ process.env.UPLOAD_DIR = join(dir, "uploads");
 delete process.env.RESEND_API_KEY;
 delete process.env.RATE_LIMIT_DISABLED;
 delete process.env.CLIENT_IP_HEADER;
+// Vite defines __APP_VERSION__ at build time; bun test doesn't apply Vite's define.
+(globalThis as typeof globalThis & { __APP_VERSION__: string }).__APP_VERSION__ = "test";

@@ -12,6 +12,8 @@ import { dayKey } from "../lib/time";
 import { lessonMastery, loadPlanInput, readerOverview, sessionDayStreak, visibleReader } from "../lib/reader-learn";
 import { award, createQuizSession, getQuizSession, LISTENED_SHARE } from "./learn";
 import { episodeChapterPath } from "../ai/episodes";
+import { readyLessons } from "../ai/concept-map";
+import { visibleMap } from "../../shared/concept-map";
 import { serveChapter } from "../lib/audio-file";
 import { quizXpPerCorrect, sessionXpFactor, XP } from "../../shared/game";
 import { buildSessionPlan, mainLessonId, sessionMastery } from "../../shared/reader-session";
@@ -41,6 +43,21 @@ export const readerLearn = new Hono<AppEnv>()
     const o = await readerOverview(c.get("user"), c.req.param("id"));
     if (!o) return c.json({ error: "NOT_FOUND" }, 404);
     return c.json(o);
+  })
+
+  /** The ready concept map, limited to the reader's ready lessons, with the student's mastery per lesson. */
+  .get("/readers/:id/concept-map", requireUser, async (c) => {
+    const u = c.get("user");
+    const reader = await visibleReader(u, c.req.param("id"));
+    if (!reader) return c.json({ error: "NOT_FOUND" }, 404);
+    const m = await db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, reader.id) });
+    if (m?.status !== "ready" || !m.data) return c.json({ error: "NOT_FOUND" }, 404);
+    const lessons = await readyLessons(reader.id);
+    const mastery = await lessonMastery(u.id, lessons.map((l) => l.id));
+    return c.json({
+      ...visibleMap(m.data, new Set(lessons.map((l) => l.id))),
+      lessons: lessons.map((l) => ({ id: l.id, code: l.code, title: l.title, week: l.week, mastery: mastery.get(l.id) ?? 0 })),
+    });
   })
 
   // ----- weekly episodes (audio; students never get the script) -----

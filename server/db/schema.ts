@@ -218,7 +218,7 @@ export const conceptMap = sqliteTable("concept_map", {
   readerId: text("reader_id").primaryKey().references(() => reader.id, { onDelete: "cascade" }),
   status: text("status").$type<ConceptMapStatus>().notNull().default("pending"),
   error: text("error"),
-  data: text("data", { mode: "json" }).$type<unknown>(),
+  data: text("data", { mode: "json" }).$type<import("../../shared/concept-map").ConceptMapData>(),
   editedAt: ts("edited_at"),
   updatedAt: ts("updated_at").notNull().default(now),
 });

@@ -18,6 +18,8 @@ import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, p
 import { synthesize, voiceSampleText } from "../ai/speech";
 import { adminEpisodeList, deleteEpisode, deleteReaderEpisodeFiles, queueReaderEpisodes, readyWeeks } from "../ai/episodes";
 import { voiceProblem, VOICES, voicesFor } from "../ai/voices";
+import { generateConceptMap, isConceptMapInFlight, readyLessons, startConceptMap } from "../ai/concept-map";
+import { validateConceptMap } from "../../shared/concept-map";
 import { backfillBadges } from "../lib/badges";
 import * as input from "../lib/input";
 
@@ -342,6 +344,37 @@ export const admin = new Hono<AppEnv>()
     if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
     await deleteEpisode(id, week);
     return c.body(null, 204);
+  })
+
+  // ----- concept map (whole reader) -----
+  .get("/readers/:id/concept-map", async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    const m = await db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, id) });
+    return c.json(m ? { status: m.status, error: m.error, data: m.data ?? null, editedAt: m.editedAt, updatedAt: m.updatedAt } : null);
+  })
+  /** Generate or regenerate (replaces manual edits; the client confirms that first). Runs in the background. */
+  .post("/readers/:id/concept-map", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!(await readyLessons(id)).length) return c.json({ error: "NO_READY_LESSONS" }, 409);
+    if (!(await startConceptMap(id))) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    void generateConceptMap(id);
+    return c.json({ ok: true }, 202);
+  })
+  /** Save a hand-edited map: sizes by zod, structure by `validateConceptMap` (lessons of this reader only). */
+  .put("/readers/:id/concept-map", async (c) => {
+    const id = c.req.param("id");
+    const { data } = input.conceptMapPut.parse(await c.req.json());
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (isConceptMapInFlight(id)) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    const lessonIds = new Set((await db.select({ id: schema.lesson.id }).from(schema.lesson).where(eq(schema.lesson.readerId, id))).map((l) => l.id));
+    const v = validateConceptMap(data, lessonIds);
+    if (!v.ok) return c.json({ error: v.error }, 400);
+    const now = new Date();
+    const set = { status: "ready" as const, error: null, data, editedAt: now, updatedAt: now };
+    await db.insert(schema.conceptMap).values({ readerId: id, ...set }).onConflictDoUpdate({ target: schema.conceptMap.readerId, set });
+    return c.json({ status: set.status, error: null, data, editedAt: now, updatedAt: now });
   })
 
   // ----- lesson content editing -----

@@ -9,6 +9,7 @@ import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
 import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
 import { CONTROL } from "../../shared/control";
+import { CONCEPT_LIMITS } from "../../shared/concept-map";
 import { FEEDBACK_STATUSES, FEEDBACK_TYPES, GITHUB_URL } from "../../shared/feedback";
 
 /** Trimmed text of at most `max` characters (and at least `min`, default 1: blank is refused). */
@@ -209,6 +210,26 @@ export const patchLesson = z
     title: line(LIMITS.lessonTitle.max, LIMITS.lessonTitle.min).optional(),
   })
   .strict();
+const conceptMapData = z
+  .object({
+    concepts: z
+      .array(
+        z
+          .object({
+            id,
+            label: line(CONCEPT_LIMITS.label),
+            description: text(CONCEPT_LIMITS.description, 0),
+            lessonId: id,
+          })
+          .strict(),
+      )
+      .max(CONCEPT_LIMITS.concepts),
+    links: z.array(z.object({ from: id, to: id, label: line(CONCEPT_LIMITS.relation, 0) }).strict()).max(CONCEPT_LIMITS.links),
+  })
+  .strict();
+/** PUT /admin/readers/:id/concept-map; the structure is checked by `validateConceptMap`. */
+export const conceptMapPut = z.object({ data: conceptMapData }).strict();
+
 export const patchFlashcard = z
   .object({ front: text(LIMITS.flashcardSide.max, LIMITS.flashcardSide.min), back: text(LIMITS.flashcardSide.max, LIMITS.flashcardSide.min) })
   .strict();

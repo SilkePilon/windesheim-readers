@@ -346,6 +346,10 @@ export async function recoverInterruptedJobs() {
     .set({ status: "error", error: interrupted })
     .where(inArray(schema.reader.status, ["extracting", "structuring"]));
   await db.update(schema.reader).set({ status: "ready", error: interrupted }).where(eq(schema.reader.status, "generating"));
+  await db
+    .update(schema.conceptMap)
+    .set({ status: "error", error: interrupted, updatedAt: new Date() })
+    .where(eq(schema.conceptMap.status, "generating"));
 }
 
 /** Re-run extract + structure from the stored PDF. Refuses if lessons exist (proposeStructure deletes them). */

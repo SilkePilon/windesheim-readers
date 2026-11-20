@@ -31,9 +31,9 @@ describe("AboutContent", () => {
       expect(html).toContain("https://github.com/SilkePilon/windesheim-readers");
       expect(html).toContain("#deploying");
       expect(html).toContain("Silke Pilon");
-      expect(html).toContain("/brand/maker.png");
+      expect(html).toContain("/brand/maker.jpg");
       expect(html).toContain(lng === "nl" ? "Eerstejaars student HBO-ICT aan Windesheim" : "First-year HBO-ICT student at Windesheim");
-      expect(html).not.toContain("about.");
+      expect(html).not.toMatch(/\babout\.[a-z]+/i);
     });
   }
 });

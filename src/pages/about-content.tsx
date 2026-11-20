@@ -63,10 +63,10 @@ export function AboutContent() {
 
         <Card className="flex-row items-center gap-4 p-5 md:p-6">
           <img
-            src="/brand/maker.png"
+            src="/brand/maker.jpg"
             alt={t("about.makerPhotoAlt")}
-            width={256}
-            height={256}
+            width={192}
+            height={192}
             loading="lazy"
             className="size-20 shrink-0 rounded-full bg-track object-cover shadow-[0_4px_0_var(--chunky)] md:size-24"
           />

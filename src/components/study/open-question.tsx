@@ -51,10 +51,10 @@ export function OpenQuestion({
     try {
       const res = await api.post<GradeResult>(`/questions/${q.id}/grade`, { answer: answer.trim(), ...(sessionId ? { sessionId } : {}) });
       setGrade(res);
-      onGraded?.(res);
       countUse();
       celebrate(res, { quietXp: true });
       invalidate();
+      onGraded?.(res);
     } catch (e) {
       // A used-up daily limit shows once for the whole tab (the reloaded quota says 0).
       if (!dailyLimitFeature(e)) setError(requestErrorText(e, t, t("common.errorHint")));

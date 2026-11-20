@@ -127,9 +127,7 @@ export function FlashcardSession({
     );
   } else {
     body = (
-      <div className="flex flex-1 flex-col pt-3">
-        <ReviewCard key={card.id} card={card} onRated={onRated} />
-      </div>
+      <ReviewCard key={card.id} card={card} onRated={onRated} />
     );
   }
 

@@ -7,8 +7,9 @@ import nl from "../src/locales/nl";
 import en from "../src/locales/en";
 
 // celebrate.ts and queries.ts pull in src/lib/i18n.ts, which reads `navigator` and crashes under bun.
-// Swap it for an inert instance before the components load.
-mock.module("../src/lib/i18n", () => ({ default: i18next.createInstance(), setLocale: async () => {} }));
+// Swap it for an inert instance before the components load. bun applies mock.module process-wide,
+// so the stub must cover every export of that module (default, setLocale, ensureLocale).
+mock.module("../src/lib/i18n", () => ({ default: i18next.createInstance(), setLocale: async () => {}, ensureLocale: async () => {} }));
 const { ReviewCard } = await import("../src/components/study/review-card");
 const { OpenQuestion } = await import("../src/components/study/open-question");
 

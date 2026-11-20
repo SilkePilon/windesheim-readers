@@ -720,6 +720,13 @@ const en: Messages = {
       saveAnyway: "Save anyway",
       leaveText: "You changed the AI settings but haven't saved them. If you leave, these changes are lost.",
     },
+    nickname: {
+      edit: "Edit nickname for {{name}}",
+      title: "Nickname for {{name}}",
+      hint: "Shown on the leaderboard and in battles. Empty = their first name.",
+      clear: "Clear nickname",
+      saved: "Nickname saved",
+    },
     usersTable: {
       name: "Name",
       role: "Role",

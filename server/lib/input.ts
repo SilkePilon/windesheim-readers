@@ -244,7 +244,10 @@ export const listModels = z.object({ provider: providerEnum, apiKey: apiKey.opti
 export const listVoiceModels = z.object({ provider: z.enum(VOICE_PROVIDERS), apiKey: apiKey.optional(), refresh: z.boolean().optional() }).strict();
 export const voiceSample = voiceChoice.extend({ apiKey: apiKey.optional(), language: z.enum(["nl", "en"]).optional() }).strict();
 export const testModel = modelChoice.extend({ apiKey: apiKey.optional() }).strict();
-export const patchUser = z.object({ role: z.enum(["user", "admin"]) }).strict();
+export const patchUser = z
+  .object({ role: z.enum(["user", "admin"]).optional(), nickname: nickname.nullable().optional() })
+  .strict()
+  .refine((b) => b.role !== undefined || b.nickname !== undefined, { message: "Nothing to change" });
 
 // ----- better-auth bodies we check before better-auth sees them -----
 export const magicLinkBody = z.looseObject({

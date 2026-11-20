@@ -415,9 +415,11 @@ export const admin = new Hono<AppEnv>()
     return c.json(users.map((u) => ({ ...u, envAdmin: env.adminEmails.includes(u.email.toLowerCase()) })));
   })
   .patch("/users/:id", async (c) => {
-    const { role } = input.patchUser.parse(await c.req.json());
+    const { role, nickname } = input.patchUser.parse(await c.req.json());
     const id = c.req.param("id");
-    if (id === c.get("user").id && role !== "admin") return c.json({ error: "CANNOT_DEMOTE_SELF" }, 400);
-    await db.update(schema.user).set({ role }).where(eq(schema.user.id, id));
+    if (role !== undefined && id === c.get("user").id && role !== "admin") return c.json({ error: "CANNOT_DEMOTE_SELF" }, 400);
+    const set = { ...(role !== undefined && { role }), ...(nickname !== undefined && { nickname }) };
+    const [row] = await db.update(schema.user).set(set).where(eq(schema.user.id, id)).returning({ id: schema.user.id });
+    if (!row) return c.json({ error: "NOT_FOUND" }, 404);
     return c.json({ ok: true });
   });

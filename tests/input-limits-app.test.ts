@@ -222,6 +222,29 @@ describe("admin endpoints", () => {
     expect((await send("PATCH", "/admin/readers/il-reader", { title: "R" }, admin)).status).toBe(200);
   });
 
+  test("admin sets, normalises and clears a user's nickname", async () => {
+    const byEmail = (email: string) => db.select().from(schema.user).where(eq(schema.user.email, email)).get()!;
+    const target = byEmail("limits-student@student.windesheim.nl");
+    const self = byEmail("limits-admin@windesheim.nl");
+    const patch = (id: string, body: unknown, cookie = admin) => send("PATCH", `/admin/users/${id}`, body, cookie);
+    try {
+      expect((await patch(target.id, { nickname: "  Mod  Set " })).status).toBe(200);
+      expect(byEmail(target.email).nickname).toBe("Mod Set");
+      expect((await patch(target.id, { nickname: "" })).status).toBe(200);
+      expect(byEmail(target.email).nickname).toBeNull();
+      await expectStatus(await patch(target.id, { nickname: "x".repeat(25) }), 400, "VALIDATION");
+      await expectStatus(await patch(target.id, {}), 400, "VALIDATION");
+      await expectStatus(await patch("does-not-exist", { nickname: "Ann" }), 404, "NOT_FOUND");
+      expect((await patch(self.id, { nickname: "Boss" })).status).toBe(200);
+      expect(byEmail(self.email)).toMatchObject({ nickname: "Boss", role: "admin" });
+      expect((await patch(target.id, { nickname: "Hax" }, student)).status).toBe(403);
+      expect(byEmail(target.email).nickname).toBeNull();
+    } finally {
+      db.update(schema.user).set({ nickname: null }).where(eq(schema.user.id, target.id)).run();
+      db.update(schema.user).set({ nickname: null }).where(eq(schema.user.id, self.id)).run();
+    }
+  });
+
   test("AI settings strings are capped", async () => {
     await expectStatus(await send("PUT", "/admin/settings/ai", { keys: { openai: "k".repeat(501) } }, admin), 400, "VALIDATION");
     await expectStatus(await send("PUT", "/admin/settings/ai", { fast: { provider: "openai", model: "m".repeat(201) } }, admin), 400, "VALIDATION");

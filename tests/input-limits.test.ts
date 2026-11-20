@@ -52,6 +52,18 @@ describe("nickname (shared rule, PATCH /me)", () => {
   });
 });
 
+describe("patchUser (admin)", () => {
+  test("role and/or nickname, at least one, nothing else", () => {
+    expect(input.patchUser.parse({ nickname: "  Zoë   B " })).toEqual({ nickname: "Zoë B" });
+    expect(input.patchUser.parse({ nickname: "" })).toEqual({ nickname: null });
+    expect(input.patchUser.parse({ nickname: null })).toEqual({ nickname: null });
+    expect(input.patchUser.parse({ role: "admin" })).toEqual({ role: "admin" });
+    expect(() => input.patchUser.parse({})).toThrow(ZodError);
+    expect(() => input.patchUser.parse({ nickname: "x".repeat(25) })).toThrow();
+    expect(() => input.patchUser.parse({ name: "Bob" })).toThrow();
+  });
+});
+
 describe("quiz", () => {
   test("check: answers are size-capped and typed", () => {
     const s = input.quizCheck;

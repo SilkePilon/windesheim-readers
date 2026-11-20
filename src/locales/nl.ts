@@ -70,6 +70,7 @@ const nl = {
     withDue_other: "{{label}}, {{count}} kaarten te herhalen",
   },
   login: {
+    about: "Over Windesheim Readers",
     email: "E-mailadres",
     emailPlaceholder: "s1234567 of naam.achternaam",
     switchDomain: "@{{domain}}, wissel naar @{{other}}",
@@ -414,6 +415,7 @@ const nl = {
     players: "{{n}} spelers",
   },
   profile: {
+    aboutRow: "Over deze app",
     levelTitles: ["Nieuwkomer", "Stagiair", "Junior", "Medior", "Senior", "Procesexpert", "Architect", "Bedrijfskundige", "Meester", "Legende"],
     nickname: "Bijnaam",
     nicknameHint: "Wordt getoond op de ranglijst en in battles. Leeg = je voornaam.",

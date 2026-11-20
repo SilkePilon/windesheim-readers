@@ -3,7 +3,7 @@ import { Outlet, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { DesktopRail } from "@/components/shell/desktop-rail";
 import { FloatingDock } from "@/components/shell/floating-dock";
-import { useNavItems } from "@/components/shell/nav-items";
+import { railItems, useNavItems } from "@/components/shell/nav-items";
 
 /**
  * Shell for every page except full-screen study mode: a floating dock on mobile and a
@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
 
   return (
     <div className="min-h-dvh">
-      <DesktopRail items={items} />
+      <DesktopRail items={railItems(items)} />
       <main className="pb-[calc(96px+env(safe-area-inset-bottom))] md:pb-8 md:pl-28">
         <div className={cn("mx-auto w-full", isAdminPage ? "max-w-6xl" : "max-w-5xl")}>
           {children ?? <Outlet />}

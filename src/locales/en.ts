@@ -72,6 +72,7 @@ const en: Messages = {
     withDue_other: "{{label}}, {{count}} cards due",
   },
   login: {
+    about: "About Windesheim Readers",
     email: "Email address",
     emailPlaceholder: "s1234567 or name.surname",
     switchDomain: "@{{domain}}, switch to @{{other}}",
@@ -416,6 +417,7 @@ const en: Messages = {
     players: "{{n}} players",
   },
   profile: {
+    aboutRow: "About this app",
     levelTitles: ["Newcomer", "Intern", "Junior", "Medior", "Senior", "Process expert", "Architect", "Business expert", "Master", "Legend"],
     nickname: "Nickname",
     nicknameHint: "Shown on the leaderboard and in battles. Empty = your first name.",

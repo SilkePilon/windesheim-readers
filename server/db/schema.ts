@@ -235,16 +235,23 @@ export const xpEvent = sqliteTable(
     index("xp_event_user_idx").on(t.userId, t.createdAt),
     // Badge counts per reason (cards reviewed, battles won, ...).
     index("xp_event_user_reason_idx").on(t.userId, t.reason),
+    // Weekly leaderboard: range scan on createdAt.
+    index("xp_event_created_user_idx").on(t.createdAt, t.userId),
   ],
 );
 
-export const userStats = sqliteTable("user_stats", {
-  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
-  xp: integer("xp").notNull().default(0),
-  streak: integer("streak").notNull().default(0),
-  longestStreak: integer("longest_streak").notNull().default(0),
-  lastActiveDay: text("last_active_day"), // YYYY-MM-DD (Europe/Amsterdam)
-});
+export const userStats = sqliteTable(
+  "user_stats",
+  {
+    userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+    xp: integer("xp").notNull().default(0),
+    streak: integer("streak").notNull().default(0),
+    longestStreak: integer("longest_streak").notNull().default(0),
+    lastActiveDay: text("last_active_day"), // YYYY-MM-DD (Europe/Amsterdam)
+  },
+  // All-time leaderboard: order by xp desc without a sort.
+  (t) => [index("user_stats_xp_idx").on(t.xp)],
+);
 
 export const lessonProgress = sqliteTable(
   "lesson_progress",

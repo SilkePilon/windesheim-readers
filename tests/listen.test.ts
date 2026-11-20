@@ -1,5 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { HeardTracker, Slots, chapterStarts, countableEnd, formatClock, locate, pickResume, resumeAt } from "../src/lib/listen";
+import {
+  HeardTracker,
+  Slots,
+  chapterStarts,
+  countableEnd,
+  episodeAudioSource,
+  formatClock,
+  lessonAudioSource,
+  listenStorageKeys,
+  locate,
+  pickResume,
+  readStoredListen,
+  resumeAt,
+  sourceTotalMs,
+  sourceVersion,
+} from "../src/lib/listen";
+import type { EpisodeMeta, LessonAudio, LessonDetail } from "../src/lib/types";
 
 describe("listen helpers", () => {
   test("formatClock", () => {
@@ -95,5 +111,50 @@ describe("listen helpers", () => {
     // A jump to a chapter nobody holds loads it into the idle slot.
     expect(s.slotFor(0)).toEqual({ slot: 0, fresh: true });
     expect(s.nextToPreload(5, 6)).toBe(null); // last chapter
+  });
+});
+
+describe("audio sources", () => {
+  const audio = {
+    status: "ready",
+    chapters: [
+      { n: 1, durationMs: 1_000, url: "/api/lessons/L1/audio/1.mp3?v=7" },
+      { n: 2, durationMs: 2_000, url: "/api/lessons/L1/audio/2.mp3?v=7" },
+    ],
+    totalMs: 3_000,
+    listenMs: 1_500,
+    summaryRead: false,
+  } as LessonAudio;
+  const lesson = { id: "L1", code: "1.2", title: "Titel" } as LessonDetail;
+
+  test("lessonAudioSource keeps the lesson urls", () => {
+    const s = lessonAudioSource(lesson, audio);
+    expect(s.key).toBe("lesson:L1");
+    expect(s.chapterUrl(2)).toBe("/api/lessons/L1/audio/2.mp3?v=7");
+    expect(s.progressUrl).toBe("/api/lessons/L1/audio/progress");
+    expect(s.resumeMs).toBe(1_500);
+    expect(sourceTotalMs(s)).toBe(3_000);
+    expect(sourceVersion(s)).toBe("/api/lessons/L1/audio/1.mp3?v=7|/api/lessons/L1/audio/2.mp3?v=7");
+  });
+
+  test("episodeAudioSource builds the episode urls (chapters are 1-based, like the server)", () => {
+    const ep: EpisodeMeta = { week: 3, title: "Week 3", status: "ready", chapters: [{ n: 1, title: "A", durationMs: 4_000 }], totalMs: 4_000, positionMs: 900, listenMs: 2_000 };
+    const s = episodeAudioSource("R9", ep);
+    expect(s.key).toBe("episode:R9:3");
+    expect(s.title).toBe("Week 3");
+    expect(s.chapterUrl(1)).toBe("/api/readers/R9/episodes/3/1.mp3");
+    expect(s.progressUrl).toBe("/api/readers/R9/episodes/3/progress");
+    expect(s.resumeMs).toBe(900);
+  });
+
+  test("storage keys fall back to the legacy lesson key", () => {
+    expect(listenStorageKeys("lesson:L1")).toEqual(["listen:lesson:L1", "listen:L1"]);
+    expect(listenStorageKeys("episode:R9:3")).toEqual(["listen:episode:R9:3"]);
+    const store: Record<string, string> = { "listen:L1": "old" };
+    const get = (k: string) => store[k] ?? null;
+    expect(readStoredListen(get, "lesson:L1")).toBe("old");
+    store["listen:lesson:L1"] = "new";
+    expect(readStoredListen(get, "lesson:L1")).toBe("new");
+    expect(readStoredListen(get, "episode:R9:3")).toBeNull();
   });
 });

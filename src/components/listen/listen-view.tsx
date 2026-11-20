@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Check, Headphones, Pause, Play, RotateCcw, RotateCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,14 +8,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { Notice } from "@/components/notice";
 import { Segmented } from "@/components/game/segmented";
 import { Equalizer } from "@/components/listen/equalizer";
-import { useListenPlayer, type ListenControls, type ListenPlayer } from "@/components/listen/use-listen-player";
+import { useListenPlayer, type ListenControls, type ListenPlayer, type ListenReport } from "@/components/listen/use-listen-player";
 import { api } from "@/lib/api";
 import { celebrate } from "@/lib/celebrate";
 import { notify } from "@/lib/notify";
 import { notifyError } from "@/lib/notify-error";
-import { useInvalidateProgress, useLessonAudio, useMe } from "@/lib/queries";
-import { SKIP_MS, SLIDER_STEP_MS, SPEEDS, formatClock, type Speed } from "@/lib/listen";
-import type { LessonAudio, LessonDetail } from "@/lib/types";
+import { qk, useInvalidateProgress, useLessonAudio, useMe } from "@/lib/queries";
+import { SKIP_MS, SLIDER_STEP_MS, SPEEDS, formatClock, lessonAudioSource, sourceVersion, type AudioSource, type Speed } from "@/lib/listen";
+import type { LessonAudio, LessonDetail, XpResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { XP } from "@shared/game";
 
@@ -22,7 +23,7 @@ import { XP } from "@shared/game";
  * "Luisteren" (`?view=listen`): the luisterles player. Audio controls only, never the
  * script. Not ready yet → a friendly notice (admins can start it from here).
  */
-export function ListenView({ lesson }: { lesson: LessonDetail }) {
+export function LessonListen({ lesson }: { lesson: LessonDetail }) {
   const { t } = useTranslation();
   const { data: audio, isError, isFetching, refetch } = useLessonAudio(lesson.id, { poll: true });
 
@@ -45,8 +46,31 @@ export function ListenView({ lesson }: { lesson: LessonDetail }) {
       </div>
     );
   if (audio.status !== "ready" || !audio.chapters.length) return <NotReady lessonId={lesson.id} audio={audio} onQueued={() => void refetch()} />;
-  // A regenerated luisterles (new ?v= urls) starts a fresh player.
-  return <Player key={audio.chapters.map((c) => c.url).join("|")} lesson={lesson} audio={audio} />;
+  return <LessonPlayer lesson={lesson} audio={audio} />;
+}
+
+/** The lesson's source, award toast and summary-read invalidation around the generic player. */
+function LessonPlayer({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio }) {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateProgress();
+  const source = useMemo(() => lessonAudioSource(lesson, audio), [lesson, audio]);
+  const lessonId = lesson.id;
+  return (
+    <ListenView
+      source={source}
+      header={({ playing }) => <Cover code={lesson.code} title={lesson.title} playing={playing} />}
+      meta={{ title: `${lesson.code} · ${lesson.title}`, artist: lesson.reader.title }}
+      awarded={audio.summaryRead || lesson.progress.summaryRead}
+      xp={XP.summaryRead}
+      onProgress={(body) =>
+        qc.setQueryData<LessonAudio>(qk.lessonAudio(lessonId), (old) => (old ? { ...old, listenMs: body.listenMs, summaryRead: body.summaryRead ?? old.summaryRead } : old))
+      }
+      onAward={(award) => {
+        celebrate(award);
+        invalidate();
+      }}
+    />
+  );
 }
 
 function NotReady({ lessonId, audio, onQueued }: { lessonId: string; audio: LessonAudio; onQueued: () => void }) {
@@ -93,22 +117,59 @@ function ownsKey(target: EventTarget | null, key: string) {
   return false;
 }
 
-function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio }) {
+/**
+ * The player card for any audio source. `source` must be stable (memoized); a new audio
+ * version (regenerated lesson audio) starts a fresh player. `header` (given the playing state) replaces the default cover.
+ */
+export function ListenView({
+  source,
+  header,
+  meta,
+  awarded = false,
+  xp,
+  onAward,
+  onProgress,
+}: {
+  source: AudioSource;
+  header?: (state: { playing: boolean }) => ReactNode;
+  meta: { title: string; artist: string };
+  /** Already credited: shows "done" and never fires `onAward`. */
+  awarded?: boolean;
+  /** XP hint under the controls, while not yet credited. */
+  xp?: number;
+  onAward?: (award: XpResult, progress: ListenReport) => void;
+  onProgress?: (progress: ListenReport) => void;
+}) {
+  return <Player key={sourceVersion(source)} source={source} header={header} meta={meta} awarded={awarded} xp={xp} onAward={onAward} onProgress={onProgress} />;
+}
+
+function Player({
+  source,
+  header,
+  meta: m,
+  awarded,
+  xp,
+  onAward,
+  onProgress,
+}: {
+  source: AudioSource;
+  header?: (state: { playing: boolean }) => ReactNode;
+  meta: { title: string; artist: string };
+  awarded: boolean;
+  xp?: number;
+  onAward?: (award: XpResult, progress: ListenReport) => void;
+  onProgress?: (progress: ListenReport) => void;
+}) {
   const { t } = useTranslation();
-  const invalidate = useInvalidateProgress();
-  const [listened, setListened] = useState(audio.summaryRead || lesson.progress.summaryRead);
-  const meta = useMemo(
-    () => ({ title: `${lesson.code} · ${lesson.title}`, artist: lesson.reader.title, album: "Windesheim Readers" }),
-    [lesson.code, lesson.title, lesson.reader.title],
-  );
-  const p = useListenPlayer({
-    lessonId: lesson.id,
-    audio,
+  const [listened, setListened] = useState(awarded);
+  const meta = useMemo(() => ({ title: m.title, artist: m.artist, album: "Windesheim Readers" }), [m.title, m.artist]);
+  const p = useListenPlayer(source, {
     meta,
-    onAward: (award) => {
+    awarded,
+    onProgress,
+    onAward: (award, progress) => {
       setListened(true);
-      celebrate(award);
-      invalidate();
+      onAward?.(award, progress);
     },
   });
 
@@ -132,7 +193,7 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
 
   return (
     <Card className="gap-0 overflow-hidden px-0 py-0">
-      <Cover code={lesson.code} title={lesson.title} playing={p.playing} />
+      {header ? header({ playing: p.playing }) : <Cover title={source.title} playing={p.playing} />}
       <div className="flex flex-col gap-5 px-5 pt-5 pb-6 md:px-8">
         <ChapterDots player={p} />
         <Scrubber player={p} />
@@ -168,7 +229,7 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
               <Check className="size-4" strokeWidth={3} /> {t("listen.done")}
             </span>
           ) : (
-            <span className="text-center text-xs font-semibold text-muted-foreground">{t("listen.xpHint", { xp: XP.summaryRead })}</span>
+            xp !== undefined && <span className="text-center text-xs font-semibold text-muted-foreground">{t("listen.xpHint", { xp })}</span>
           )}
         </div>
       </div>
@@ -177,7 +238,7 @@ function Player({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio })
 }
 
 /** The "album art": the lesson code on a primary tile with a soft equaliser. */
-const Cover = memo(function Cover({ code, title, playing }: { code: string; title: string; playing: boolean }) {
+export const Cover = memo(function Cover({ code, title, playing }: { code?: string; title: string; playing: boolean }) {
   const { t } = useTranslation();
   return (
     <div className="relative isolate overflow-hidden bg-primary px-5 pt-5 pb-5 text-primary-foreground md:px-8 md:pb-6">
@@ -188,8 +249,13 @@ const Cover = memo(function Cover({ code, title, playing }: { code: string; titl
       </span>
       <div className="mt-4 flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <div className="font-heading text-[56px] leading-none font-bold tracking-tight md:text-[64px]">{code}</div>
-          <div className="mt-1.5 line-clamp-2 font-heading text-base leading-tight font-semibold text-pretty break-words text-primary-foreground/85 hyphens-auto">
+          {code && <div className="font-heading text-[56px] leading-none font-bold tracking-tight md:text-[64px]">{code}</div>}
+          <div
+            className={cn(
+              "line-clamp-2 font-heading text-base leading-tight font-semibold text-pretty break-words hyphens-auto",
+              code ? "mt-1.5 text-primary-foreground/85" : "text-xl",
+            )}
+          >
             {title}
           </div>
         </div>

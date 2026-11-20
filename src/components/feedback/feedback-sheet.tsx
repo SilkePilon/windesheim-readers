@@ -19,8 +19,8 @@ import {
   clearDraft,
   closeFeedback,
   collectContext,
-  getDraft,
   messageValid,
+  openDraft,
   prepareScreenshot,
   saveDraft,
   useFeedbackState,
@@ -45,18 +45,20 @@ const lessonIdOf = (pathname: string) => pathname.match(/^\/lesson\/([^/?#]+)/)?
 
 /**
  * The feedback sheet, opened with `openFeedback()` from anywhere (help button, error
- * toast, crash screen). Mount it once, inside the router. A drawer on phones, a dialog
- * on desktop; the draft survives closing within the session.
+ * toast, crash screen). Lazy-loaded by `FeedbackHost` (one per app, logged in only).
+ * A drawer on phones, a dialog on desktop; the draft survives closing within the session.
  */
-export function FeedbackSheet() {
+export default function FeedbackSheet({ userId }: { userId: string }) {
   const { t } = useTranslation();
   const { open, seed } = useFeedbackState();
   const wide = useSyncExternalStore(subscribeWide, isWide, () => true);
-  // Close requests (Esc, overlay, swipe) are ignored while a send is in flight.
-  const sendingRef = useRef(false);
+  // While a send is in flight the sheet can't be closed (Esc, overlay, swipe, X).
+  const [sending, setSending] = useState(false);
   const onOpenChange = (o: boolean) => {
-    if (!o && !sendingRef.current) closeFeedback();
+    if (!o && !sending) closeFeedback();
   };
+  const block = (e: Event) => sending && e.preventDefault();
+  const form = <FeedbackForm userId={userId} seed={seed} sending={sending} setSending={setSending} />;
 
   const header = (Title: typeof DialogTitle, Description: typeof DialogDescription) => (
     <>
@@ -77,19 +79,21 @@ export function FeedbackSheet() {
               box.focus();
             }
           }}
+          onEscapeKeyDown={block}
+          onInteractOutside={block}
           className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-[26px] bg-card p-0 ring-0 shadow-[0_6px_0_var(--chunky),0_24px_48px_-16px_rgba(36,26,74,0.35)] sm:max-w-lg dark:shadow-[0_6px_0_var(--chunky),0_24px_48px_-12px_rgba(0,0,0,0.6)]">
           <DialogHeader className="gap-1.5 px-6 pt-6 pb-1 pr-12">{header(DialogTitle, DialogDescription)}</DialogHeader>
-          <FeedbackForm seed={seed} sendingRef={sendingRef} />
+          {form}
         </DialogContent>
       </Dialog>
     );
   }
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
+    <Drawer open={open} onOpenChange={onOpenChange} dismissible={!sending}>
       <DrawerContent className="mx-auto max-h-[92dvh] max-w-md rounded-t-[26px] border-0 bg-card data-[vaul-drawer-direction=bottom]:max-h-[92dvh] data-[vaul-drawer-direction=bottom]:rounded-t-[26px] data-[vaul-drawer-direction=bottom]:border-t-0">
         <div className="overflow-y-auto overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <DrawerHeader className="gap-1.5 px-6 pt-4 pb-1 text-left md:text-left">{header(DrawerTitle, DrawerDescription)}</DrawerHeader>
-          <FeedbackForm seed={seed} sendingRef={sendingRef} />
+          {form}
         </div>
       </DrawerContent>
     </Drawer>
@@ -108,28 +112,36 @@ function useScreenshotUrl(blob: Blob | null) {
   return url;
 }
 
-function FeedbackForm({ seed, sendingRef }: { seed: FeedbackSeed | null; sendingRef: { current: boolean } }) {
+function FeedbackForm({
+  userId,
+  seed,
+  sending,
+  setSending,
+}: {
+  userId: string;
+  seed: FeedbackSeed | null;
+  sending: boolean;
+  setSending: (v: boolean) => void;
+}) {
   const { t, i18n } = useTranslation();
   const { pathname } = useLocation();
   const { theme, resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
   const id = useId();
 
-  const [type, setTypeState] = useState<FeedbackType>(() => seed?.type ?? getDraft().type);
-  const [message, setMessageState] = useState(() => getDraft().message);
-  const [screenshot, setScreenshotState] = useState<Blob | null>(() => getDraft().screenshot);
+  const [start] = useState(() => openDraft(userId, seed));
+  const [type, setTypeState] = useState<FeedbackType>(start.type);
+  const [message, setMessageState] = useState(start.message);
+  const [screenshot, setScreenshotState] = useState<Blob | null>(start.screenshot);
   const [preparing, setPreparing] = useState(false);
-  const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
   const previewUrl = useScreenshotUrl(screenshot);
 
   // Each change is also kept in the session draft, so closing and reopening keeps it.
-  const setType = (v: FeedbackType) => (setTypeState(v), saveDraft({ type: v }));
-  const setMessage = (v: string) => (setMessageState(v), saveDraft({ message: v }));
-  const setScreenshot = (v: Blob | null) => (setScreenshotState(v), saveDraft({ screenshot: v }));
-  useEffect(() => {
-    if (seed?.type) saveDraft({ type: seed.type });
-  }, [seed]);
+  const setType = (v: FeedbackType) => (setTypeState(v), saveDraft(userId, { type: v }));
+  const setMessage = (v: string) => (setMessageState(v), saveDraft(userId, { message: v }));
+  const setScreenshot = (v: Blob | null) => (setScreenshotState(v), saveDraft(userId, { screenshot: v }));
 
   // Collected once per open (the form mounts with the sheet); titles come from the query
   // cache only, never fetched.
@@ -167,7 +179,6 @@ function FeedbackForm({ seed, sendingRef }: { seed: FeedbackSeed | null; sending
 
   const send = async () => {
     if (!canSend) return;
-    sendingRef.current = true;
     setSending(true);
     try {
       const form = new FormData();
@@ -179,13 +190,13 @@ function FeedbackForm({ seed, sendingRef }: { seed: FeedbackSeed | null; sending
       notify.success(t("feedback.thanks"));
       if (res.screenshotDropped) notify.info(t("feedback.screenshotDropped"));
       clearDraft();
-      sendingRef.current = false;
+      setSending(false);
       closeFeedback();
     } catch (e) {
       notify.error(errorText(e, t));
-    } finally {
-      sendingRef.current = false;
       setSending(false);
+      // Keep focus on the send button (aria-disabled, never disabled, so it isn't lost).
+      submitRef.current?.focus();
     }
   };
 
@@ -273,7 +284,16 @@ function FeedbackForm({ seed, sendingRef }: { seed: FeedbackSeed | null; sending
 
       <ContextList context={context} />
 
-      <Button type="submit" variant="chunky" size="xl" className="w-full" disabled={!canSend}>
+      {/* aria-disabled while sending (send() guards it), so focus stays on the button. */}
+      <Button
+        ref={submitRef}
+        type="submit"
+        variant="chunky"
+        size="xl"
+        className="w-full aria-disabled:cursor-progress"
+        disabled={!valid || preparing}
+        aria-disabled={sending || undefined}
+      >
         {sending ? <Spinner /> : <Send />}
         {sending ? t("feedback.sending") : t("feedback.send")}
       </Button>

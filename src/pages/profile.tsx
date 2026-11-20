@@ -24,6 +24,7 @@ import { levelTitleIndex } from "@shared/game";
 import { BADGE_CATEGORIES, BADGE_LIST, BADGES } from "@shared/badges";
 import { BadgeCell, BadgeCellSkeleton } from "@/components/game/badge-tile";
 import { useEntrance } from "@/lib/motion";
+import { resetFeedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
@@ -49,6 +50,8 @@ export default function ProfilePage() {
 
   const signOut = async () => {
     await authClient.signOut();
+    // No reload follows: forget the feedback draft so the next user on this device never sees it.
+    resetFeedback();
     qc.clear();
     navigate("/login");
   };

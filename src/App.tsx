@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useMe, useSavedLocale } from "@/lib/queries";
 import { AppLayout } from "@/components/app-layout";
 import { PageSpinner } from "@/components/page";
-import { FeedbackSheet } from "@/components/feedback/feedback-sheet";
+import { FeedbackHost } from "@/components/feedback/feedback-host";
 import LoginPage from "@/pages/login";
 import HomePage from "@/pages/home";
 import LessonPage from "@/pages/lesson";
@@ -36,8 +36,8 @@ export function App() {
   useSavedLocale();
   return (
     <>
-      {/* Opened with openFeedback() from the help button or an error; one per app. */}
-      <FeedbackSheet />
+      {/* Opened with openFeedback() from the help button or an error; one per app, logged in only. */}
+      <FeedbackHost />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         {/* Public: renders its own shell (app shell when logged in, standalone otherwise). */}

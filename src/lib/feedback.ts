@@ -41,7 +41,11 @@ export function useFeedbackState(): FeedbackState {
 
 // ----- session draft -----
 
-/** What the student typed or picked, kept while the sheet is closed and reopened (in memory only). */
+/**
+ * What the student typed or picked, kept while the sheet is closed and reopened (in
+ * memory only). It belongs to one user: read or written for another user id, it is
+ * dropped first, so a shared device never shows the previous student's draft.
+ */
 export interface FeedbackDraft {
   type: FeedbackType;
   message: string;
@@ -49,13 +53,35 @@ export interface FeedbackDraft {
 }
 const emptyDraft = (): FeedbackDraft => ({ type: "feedback", message: "", screenshot: null });
 let draft: FeedbackDraft = emptyDraft();
-export const getDraft = (): FeedbackDraft => draft;
-export const saveDraft = (patch: Partial<FeedbackDraft>) => {
+let draftOwner: string | null = null;
+
+const own = (userId: string) => {
+  if (draftOwner !== userId) {
+    draft = emptyDraft();
+    draftOwner = userId;
+  }
+};
+export const getDraft = (userId: string): FeedbackDraft => (own(userId), draft);
+export const saveDraft = (userId: string, patch: Partial<FeedbackDraft>) => {
+  own(userId);
   draft = { ...draft, ...patch };
 };
 export const clearDraft = () => {
   draft = emptyDraft();
+  draftOwner = null;
 };
+
+/** The draft to start the sheet with: a seed type (e.g. Bug from an error) overrides the draft's. */
+export function openDraft(userId: string, seed: FeedbackSeed | null): FeedbackDraft {
+  if (seed?.type) saveDraft(userId, { type: seed.type });
+  return getDraft(userId);
+}
+
+/** On sign-out: close the sheet and forget the draft. */
+export function resetFeedback(): void {
+  closeFeedback();
+  clearDraft();
+}
 
 /** Message length rule shared with the server: 10–4000 code points after trimming. */
 export function messageValid(message: string): boolean {
@@ -189,9 +215,44 @@ export function fitWithin(width: number, height: number, max: number): { width: 
   return { width: Math.max(1, Math.round(width * k)), height: Math.max(1, Math.round(height * k)) };
 }
 
+/** Decoder resize options that land on `max` for the long side (only that side, so the aspect ratio is kept), or null when it fits. */
+export function resizeOptions(
+  width: number,
+  height: number,
+  max: number,
+): { resizeWidth: number; resizeQuality: "high" } | { resizeHeight: number; resizeQuality: "high" } | null {
+  if (Math.max(width, height) <= max) return null;
+  return width >= height ? { resizeWidth: max, resizeQuality: "high" } : { resizeHeight: max, resizeQuality: "high" };
+}
+
+/** The natural size from the image header (load, not a full decode into memory we keep). */
+function naturalSize(file: Blob): Promise<{ width: number; height: number }> {
+  const url = URL.createObjectURL(file);
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("BAD_IMAGE"));
+    img.src = url;
+  }).finally(() => URL.revokeObjectURL(url));
+}
+
 async function decode(file: Blob): Promise<{ img: CanvasImageSource; width: number; height: number; done: () => void }> {
   if (typeof createImageBitmap === "function") {
-    const bmp = await createImageBitmap(file);
+    // A 48 MP photo would be a ~190 MB bitmap: let the decoder scale it down while decoding.
+    let opts: ImageBitmapOptions | null = null;
+    try {
+      const { width, height } = await naturalSize(file);
+      opts = resizeOptions(width, height, SCREENSHOT_MAX_SIDE);
+    } catch {
+      opts = null;
+    }
+    let bmp: ImageBitmap;
+    try {
+      bmp = opts ? await createImageBitmap(file, opts) : await createImageBitmap(file);
+    } catch {
+      // Resize options unsupported (older Safari): decode at full size.
+      bmp = await createImageBitmap(file);
+    }
     return { img: bmp, width: bmp.width, height: bmp.height, done: () => bmp.close() };
   }
   const url = URL.createObjectURL(file);

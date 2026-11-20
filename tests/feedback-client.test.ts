@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { LIMITS } from "@shared/limits";
 import {
+  clearDraft,
   closeFeedback,
+  getDraft,
+  openDraft,
+  resetFeedback,
+  resizeOptions,
+  saveDraft,
   collectContext,
   fitWithin,
   getFeedbackState,
@@ -145,6 +151,70 @@ describe("messageValid", () => {
     expect(messageValid("0123456789")).toBe(true);
     expect(messageValid("😀".repeat(10))).toBe(true);
     expect(messageValid("x".repeat(4001))).toBe(false);
+  });
+});
+
+describe("session draft", () => {
+  afterEach(() => clearDraft());
+  const shot = new Blob(["x"], { type: "image/webp" });
+
+  test("starts empty with type feedback", () => {
+    expect(getDraft("a")).toEqual({ type: "feedback", message: "", screenshot: null });
+  });
+
+  test("saveDraft keeps changes for the same user", () => {
+    saveDraft("a", { message: "hallo daar" });
+    saveDraft("a", { type: "idea", screenshot: shot });
+    expect(getDraft("a")).toEqual({ type: "idea", message: "hallo daar", screenshot: shot });
+  });
+
+  test("a draft saved for user a is gone when read for user b", () => {
+    saveDraft("a", { message: "geheim bericht van a", screenshot: shot });
+    expect(getDraft("b")).toEqual({ type: "feedback", message: "", screenshot: null });
+    // ... and dropped, not just hidden: a is not given it back either.
+    expect(getDraft("a").message).toBe("");
+  });
+
+  test("saving for another user never merges into the old user's draft", () => {
+    saveDraft("a", { message: "van a", screenshot: shot });
+    saveDraft("b", { type: "bug" });
+    expect(getDraft("b")).toEqual({ type: "bug", message: "", screenshot: null });
+  });
+
+  test("clearDraft empties it", () => {
+    saveDraft("a", { message: "iets", screenshot: shot });
+    clearDraft();
+    expect(getDraft("a")).toEqual({ type: "feedback", message: "", screenshot: null });
+  });
+
+  test("openDraft: a seed type overrides the draft's type and is kept", () => {
+    saveDraft("a", { type: "idea", message: "half bericht" });
+    expect(openDraft("a", { type: "bug" })).toEqual({ type: "bug", message: "half bericht", screenshot: null });
+    expect(getDraft("a").type).toBe("bug");
+  });
+
+  test("openDraft without a seed type keeps the draft's type", () => {
+    saveDraft("a", { type: "idea" });
+    expect(openDraft("a", null).type).toBe("idea");
+    expect(openDraft("a", { error: { message: "x" } }).type).toBe("idea");
+  });
+
+  test("resetFeedback (sign-out) clears the draft and closes the sheet", () => {
+    saveDraft("a", { message: "iets" });
+    openFeedback({ type: "bug" });
+    resetFeedback();
+    expect(getFeedbackState().open).toBe(false);
+    expect(getDraft("a").message).toBe("");
+  });
+});
+
+describe("resizeOptions", () => {
+  test("null when the image already fits", () => {
+    expect(resizeOptions(1600, 900, 1600)).toBeNull();
+  });
+  test("only the long side is given, so the decoder keeps the aspect ratio", () => {
+    expect(resizeOptions(8000, 6000, 1600)).toEqual({ resizeWidth: 1600, resizeQuality: "high" });
+    expect(resizeOptions(6000, 8000, 1600)).toEqual({ resizeHeight: 1600, resizeQuality: "high" });
   });
 });
 

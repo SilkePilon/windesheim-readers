@@ -220,7 +220,7 @@ export async function readerOverview(user: User, readerId: string, now = new Dat
     db
       .select()
       .from(schema.readerEpisode)
-      .where(and(eq(schema.readerEpisode.readerId, reader.id), eq(schema.readerEpisode.status, "ready")))
+      .where(eq(schema.readerEpisode.readerId, reader.id))
       .orderBy(asc(schema.readerEpisode.week)),
     db.select().from(schema.episodeProgress).where(and(eq(schema.episodeProgress.userId, user.id), eq(schema.episodeProgress.readerId, reader.id))),
     db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, reader.id), columns: { data: true } }),
@@ -248,7 +248,8 @@ export async function readerOverview(user: User, readerId: string, now = new Dat
       .sort((a, b) => a.mastery - b.mastery || a.week - b.week || a.position - b.position)
       .slice(0, WEAK_LESSONS)
       .map(({ id, code, title, mastery }) => ({ id, code, title, mastery })),
-    episodes: episodeRows.map((e) => ({
+    // Every episode with stored audio, whatever its status (as lesson audio): a regeneration doesn't hide it.
+    episodes: episodeRows.filter((e) => e.chapters.length > 0).map((e) => ({
       week: e.week,
       title: e.title ?? "",
       durationSec: Math.round(e.chapters.reduce((sum, ch) => sum + ch.durationMs, 0) / 1000),

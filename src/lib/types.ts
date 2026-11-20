@@ -261,7 +261,10 @@ export interface LessonAudio {
 export interface EpisodeMeta {
   week: number;
   title: string;
-  status: "ready";
+  /** The real generation status: a stored episode stays playable while it is regenerated or after a failed regeneration. */
+  status: "pending" | "generating" | "ready" | "error";
+  /** Changes on every regeneration; part of the chapter urls. */
+  version: string;
   chapters: { n: number; title: string; durationMs: number }[];
   totalMs: number;
   positionMs: number;

@@ -1,7 +1,7 @@
 // Student endpoints for the weekly audio episodes: meta, ranged MP3, progress + one-time XP.
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { websocket } from "@hono/bun";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { mkdir, rm } from "node:fs/promises";
 import { db, runMigrations, schema } from "../server/db";
 import { env } from "../server/env";
@@ -60,7 +60,7 @@ beforeAll(async () => {
   ];
   db.insert(schema.readerEpisode)
     .values([
-      { readerId: R, week: 1, status: "ready", title: "Aflevering 1", chapters },
+      { readerId: R, week: 1, status: "ready", title: "Aflevering 1", chapters, generatedAt: new Date(1_700_000_000_000) },
       { readerId: R, week: 2, status: "generating", title: null },
       { readerId: R_HIDDEN, week: 1, status: "ready", title: "Hidden", chapters },
     ])
@@ -106,7 +106,7 @@ describe("episode endpoints", () => {
     const r = await get(`/readers/${R}/episodes/1`);
     expect(r.status).toBe(200);
     const m = (await r.json()) as Record<string, unknown>;
-    expect(m).toMatchObject({ week: 1, title: "Aflevering 1", status: "ready", totalMs: TOTAL, positionMs: 0, listenMs: 0 });
+    expect(m).toMatchObject({ week: 1, title: "Aflevering 1", status: "ready", version: "1700000000000", totalMs: TOTAL, positionMs: 0, listenMs: 0 });
     expect((m.chapters as unknown[]).length).toBe(2);
     expect(m.script).toBeUndefined();
   });
@@ -140,5 +140,30 @@ describe("episode endpoints", () => {
   test("the learn overview lists the ready episode with the student's position", async () => {
     const o = (await (await get(`/readers/${R}/learn`)).json()) as { episodes: { week: number; positionMs: number; listenMs: number }[] };
     expect(o.episodes).toEqual([expect.objectContaining({ week: 1, positionMs: 1000, listenMs: TOTAL })]);
+  });
+
+  test("a stored episode stays listed and playable while regenerating or after a failed regeneration", async () => {
+    for (const status of ["pending", "generating", "error"] as const) {
+      db.update(schema.readerEpisode).set({ status }).where(and(eq(schema.readerEpisode.readerId, R), eq(schema.readerEpisode.week, 1))).run();
+      const o = (await (await get(`/readers/${R}/learn`)).json()) as { episodes: { week: number }[] };
+      expect(o.episodes.map((e) => e.week)).toEqual([1]);
+      const meta = await get(`/readers/${R}/episodes/1`);
+      expect(meta.status).toBe(200);
+      expect(((await meta.json()) as { status: string }).status).toBe(status);
+      expect((await get(`/readers/${R}/episodes/1/1.mp3`)).status).toBe(200);
+      expect((await post(`/readers/${R}/episodes/1/progress`, { positionMs: 2000 })).status).toBe(200);
+    }
+    db.update(schema.readerEpisode).set({ status: "ready" }).where(and(eq(schema.readerEpisode.readerId, R), eq(schema.readerEpisode.week, 1))).run();
+    // Week 2 never had chapters: still not ready, and not listed.
+    expect((await get(`/readers/${R}/episodes/2`)).status).toBe(409);
+    expect((await get(`/readers/${R}/episodes/2/1.mp3`)).status).toBe(404);
+  });
+
+  test("an episode without generatedAt gets a version from its chapters", async () => {
+    db.update(schema.readerEpisode).set({ generatedAt: null }).where(and(eq(schema.readerEpisode.readerId, R), eq(schema.readerEpisode.week, 1))).run();
+    const a = ((await (await get(`/readers/${R}/episodes/1`)).json()) as { version: string }).version;
+    expect(a).toMatch(/^\d+$/);
+    expect(a).not.toBe("1700000000000");
+    db.update(schema.readerEpisode).set({ generatedAt: new Date(1_700_000_000_000) }).where(and(eq(schema.readerEpisode.readerId, R), eq(schema.readerEpisode.week, 1))).run();
   });
 });

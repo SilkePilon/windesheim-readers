@@ -138,13 +138,15 @@ describe("audio sources", () => {
   });
 
   test("episodeAudioSource builds the episode urls (chapters are 1-based, like the server)", () => {
-    const ep: EpisodeMeta = { week: 3, title: "Week 3", status: "ready", chapters: [{ n: 1, title: "A", durationMs: 4_000 }], totalMs: 4_000, positionMs: 900, listenMs: 2_000 };
+    const ep: EpisodeMeta = { week: 3, title: "Week 3", status: "ready", version: "123", chapters: [{ n: 1, title: "A", durationMs: 4_000 }], totalMs: 4_000, positionMs: 900, listenMs: 2_000 };
     const s = episodeAudioSource("R9", ep);
     expect(s.key).toBe("episode:R9:3");
     expect(s.title).toBe("Week 3");
-    expect(s.chapterUrl(1)).toBe("/api/readers/R9/episodes/3/1.mp3");
+    expect(s.chapterUrl(1)).toBe("/api/readers/R9/episodes/3/1.mp3?v=123");
     expect(s.progressUrl).toBe("/api/readers/R9/episodes/3/progress");
     expect(s.resumeMs).toBe(900);
+    // A regenerated episode (same chapter layout) is another source version: a fresh player.
+    expect(sourceVersion(episodeAudioSource("R9", { ...ep, version: "456" }))).not.toBe(sourceVersion(s));
   });
 
   test("storage keys fall back to the legacy lesson key", () => {

@@ -15,6 +15,7 @@ import { episodeChapterPath } from "../ai/episodes";
 import { readyLessons } from "../ai/concept-map";
 import { visibleMap } from "../../shared/concept-map";
 import { serveChapter } from "../lib/audio-file";
+import { hashSeed } from "../../shared/rng";
 import { quizXpPerCorrect, sessionXpFactor, XP } from "../../shared/game";
 import { buildSessionPlan, mainLessonId, sessionMastery } from "../../shared/reader-session";
 import * as input from "../lib/input";
@@ -34,6 +35,9 @@ async function visibleEpisode(u: Parameters<typeof visibleReader>[0], readerId: 
   return ep ? { reader, week, ep } : null;
 }
 const episodeTotalMs = (chapters: { durationMs: number }[]) => chapters.reduce((a, c) => a + c.durationMs, 0);
+/** Changes whenever the audio is regenerated, so the client starts a fresh player (and drops stale local positions). */
+const episodeVersion = (ep: { generatedAt: Date | null; chapters: { n: number; durationMs: number; bytes: number }[] }) =>
+  String(ep.generatedAt?.getTime() ?? hashSeed(ep.chapters.map((c) => `${c.n}:${c.durationMs}:${c.bytes}`).join(",")));
 
 // requireUser per route, not `.use()`: mounted on /api, a router-wide middleware would also run
 // (a second session lookup) for every /api request that falls through to `learn`.
@@ -69,7 +73,8 @@ export const readerLearn = new Hono<AppEnv>()
     const found = await visibleEpisode(u, c.req.param("id"), c.req.param("week"));
     if (!found) return c.json({ error: "NOT_FOUND" }, 404);
     const { reader, week, ep } = found;
-    if (ep.status !== "ready" || !ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
+    // Playable whenever a complete audio set is stored, also while it is regenerated or after a failed regeneration.
+    if (!ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
     const p = await db.query.episodeProgress.findFirst({
       where: and(eq(schema.episodeProgress.userId, u.id), eq(schema.episodeProgress.readerId, reader.id), eq(schema.episodeProgress.week, week)),
     });
@@ -77,6 +82,7 @@ export const readerLearn = new Hono<AppEnv>()
       week,
       title: ep.title ?? "",
       status: ep.status,
+      version: episodeVersion(ep),
       chapters: ep.chapters.map((ch) => ({ n: ch.n, title: ep.script?.chapters[ch.n - 1]?.title ?? "", durationMs: ch.durationMs })),
       totalMs: episodeTotalMs(ep.chapters),
       positionMs: p?.positionMs ?? 0,
@@ -88,7 +94,7 @@ export const readerLearn = new Hono<AppEnv>()
     const found = await visibleEpisode(c.get("user"), c.req.param("id"), c.req.param("week"));
     if (!found) return c.json({ error: "NOT_FOUND" }, 404);
     const n = Number.parseInt(c.req.param("file"), 10);
-    if (found.ep.status !== "ready" || !found.ep.chapters.some((ch) => ch.n === n)) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!found.ep.chapters.some((ch) => ch.n === n)) return c.json({ error: "NOT_FOUND" }, 404);
     return serveChapter(c, episodeChapterPath(found.reader.id, found.week, n));
   })
 
@@ -99,7 +105,7 @@ export const readerLearn = new Hono<AppEnv>()
     if (!found) return c.json({ error: "NOT_FOUND" }, 404);
     const { reader, week, ep } = found;
     const body = input.audioProgress.parse(await c.req.json());
-    if (ep.status !== "ready" || !ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
+    if (!ep.chapters.length) return c.json({ error: "AUDIO_NOT_READY" }, 409);
     const totalMs = episodeTotalMs(ep.chapters);
     const positionMs = Math.min(body.positionMs, totalMs);
     const heard = Math.min(body.heardMs ?? body.positionMs, totalMs);

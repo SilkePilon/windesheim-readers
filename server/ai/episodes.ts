@@ -232,6 +232,11 @@ export async function generateEpisode(readerId: string, week: number, deps: Audi
         // Staleness is computed on read against this snapshot (lessons changed meanwhile → stale).
         sourceSnapshot: source,
       });
+      // New audio: resume positions point into the old chapters, so they start over (listen credit is kept).
+      await db
+        .update(schema.episodeProgress)
+        .set({ positionMs: 0, updatedAt: new Date() })
+        .where(and(eq(schema.episodeProgress.readerId, readerId), eq(schema.episodeProgress.week, week)));
       return { status: "ready" };
     } catch (e) {
       const { message, fatal } = audioFailure(e);

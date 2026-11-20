@@ -122,6 +122,21 @@ describe("generateEpisode", () => {
     expect(existsSync(ep.episodeChapterPath(R, 1, 6))).toBe(true);
   });
 
+  test("a successful regeneration resets resume positions, keeps listen credit", async () => {
+    const userId = db.select().from(schema.user).where(eq(schema.user.email, "ep-student@student.windesheim.nl")).get()!.id;
+    db.insert(schema.episodeProgress).values({ userId, readerId: R, week: 1, positionMs: 5_000, listenMs: 9_000, awarded: true }).run();
+    const before = (await epRow(1))!.generatedAt!.getTime();
+    await Bun.sleep(2);
+    expect((await ep.generateEpisode(R, 1, deps)).status).toBe("ready");
+    expect((await epRow(1))!.generatedAt!.getTime()).toBeGreaterThan(before);
+    const p = db
+      .select()
+      .from(schema.episodeProgress)
+      .where(and(eq(schema.episodeProgress.userId, userId), eq(schema.episodeProgress.readerId, R), eq(schema.episodeProgress.week, 1)))
+      .get()!;
+    expect(p).toMatchObject({ positionMs: 0, listenMs: 9_000, awarded: true });
+  });
+
   test("a failing chapter leaves an error and no files", async () => {
     await seedReader("ep-fail");
     const failing: SpeakFn = async () => {

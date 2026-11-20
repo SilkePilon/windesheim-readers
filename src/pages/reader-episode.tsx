@@ -79,7 +79,7 @@ function EpisodePlayer({ readerId, ep, readerTitle }: { readerId: string; ep: Ep
   const qc = useQueryClient();
   const invalidate = useInvalidateProgress();
   // Memoized on the audio itself, not the query object: a refetch with the same chapters keeps the player.
-  const version = ep.chapters.map((c) => `${c.n}:${c.durationMs}`).join(",");
+  const version = `${ep.version}:${ep.chapters.map((c) => `${c.n}:${c.durationMs}`).join(",")}`;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const source = useMemo(() => episodeAudioSource(readerId, ep), [readerId, ep.week, version]);
   const weekLabel = t("readerLearn.episode.week", { week: ep.week });

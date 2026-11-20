@@ -207,7 +207,8 @@ export function episodeAudioSource(readerId: string, ep: EpisodeMeta): AudioSour
     key: `episode:${readerId}:${ep.week}`,
     title: ep.title,
     chapters: ep.chapters,
-    chapterUrl: (n) => `${base}/${n}.mp3`,
+    // `?v=` makes `sourceVersion` change on a regeneration (fresh player, stale local position ignored).
+    chapterUrl: (n) => `${base}/${n}.mp3?v=${encodeURIComponent(ep.version)}`,
     progressUrl: `${base}/progress`,
     resumeMs: ep.positionMs,
   };

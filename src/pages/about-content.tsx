@@ -8,9 +8,9 @@ const REPO = "https://github.com/SilkePilon/windesheim-readers";
 const DEPLOY = `${REPO}#deploying`;
 const MAKER = "https://github.com/SilkePilon";
 
-function ExternalButton({ href, variant, children }: { href: string; variant: "chunky" | "chunky-surface"; children: string }) {
+function ExternalButton({ href, children }: { href: string; children: string }) {
   return (
-    <Button asChild variant={variant} size="xl" className="mt-4 w-full sm:w-auto">
+    <Button asChild variant="chunky" size="xl" className="mt-4 w-full sm:w-auto">
       <a href={href} target="_blank" rel="noopener noreferrer">
         {children}
         <ArrowUpRight />
@@ -49,14 +49,14 @@ export function AboutContent() {
 
         <Section icon={<GitFork />} title={t("about.openTitle")}>
           <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{t("about.open")}</p>
-          <ExternalButton href={REPO} variant="chunky">
+          <ExternalButton href={REPO}>
             {t("about.openButton")}
           </ExternalButton>
         </Section>
 
         <Section icon={<Container />} title={t("about.hostTitle")}>
           <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{t("about.host")}</p>
-          <ExternalButton href={DEPLOY} variant="chunky-surface">
+          <ExternalButton href={DEPLOY}>
             {t("about.hostButton")}
           </ExternalButton>
         </Section>

@@ -53,6 +53,8 @@ export const limits = {
   ai: rateLimit({ name: "ai", rules: [{ limit: 40, windowMs: 10 * MINUTE }], adminFactor: 2 }),
   /** Writes that award XP or save progress, per user. */
   writes: rateLimit({ name: "writes", rules: [{ limit: 120, windowMs: MINUTE }] }),
+  /** New reader sessions (GET /api/readers/:id/session), per user: each one can be a fresh set of questions. */
+  sessions: rateLimit({ name: "reader-sessions", rules: [{ limit: 30, windowMs: HOUR }] }),
 
   /** Feedback and issue reports (POST /api/feedback), per user. Called inline by the route, after validation. */
   feedback: rateLimit({

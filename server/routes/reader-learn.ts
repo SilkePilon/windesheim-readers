@@ -143,7 +143,7 @@ export const readerLearn = new Hono<AppEnv>()
    * session for that plan is open, a refresh gets that same session back (same id, items and
    * first checks), so peeking at the answers and starting over can't replay it.
    */
-  .get("/readers/:id/session", requireUser, limits.writes, async (c) => {
+  .get("/readers/:id/session", requireUser, limits.sessions, async (c) => {
     const u = c.get("user");
     const now = new Date();
     const data = await loadPlanInput(u, c.req.param("id"), now);

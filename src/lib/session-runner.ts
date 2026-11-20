@@ -17,10 +17,10 @@ export interface SessionState {
 }
 
 export type SessionAction =
-  | { type: "card-rated" }
-  | { type: "checked"; correct: boolean }
-  | { type: "graded" }
-  | { type: "next" }
+  | { type: "card-rated"; at: number }
+  | { type: "checked"; at: number; correct: boolean }
+  | { type: "graded"; at: number }
+  | { type: "next"; from: number }
   | { type: "submitted"; result: ReaderSessionResult }
   /** A freshly loaded session with this many items. */
   | { type: "reset"; total: number };
@@ -43,6 +43,9 @@ export function sessionReducer(s: SessionState, a: SessionAction): SessionState 
   if (a.type === "reset") return initSession(a.total);
   if (a.type === "submitted") return { ...s, done: true, result: a.result };
   if (s.done) return s;
+  // Each step names the item it belongs to: a late timer or a double tap for an item that's
+  // already gone (e.g. auto-advance and the next button both firing) changes nothing.
+  if ((a.type === "next" ? a.from : a.at) !== s.index) return s;
   switch (a.type) {
     // A card has no feedback step: rating it moves straight on.
     case "card-rated":

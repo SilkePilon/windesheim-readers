@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { GradeCard } from "@/components/grade-card";
 import { Notice } from "@/components/notice";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { requestErrorText } from "@/lib/error-text";
 import { CharCounter } from "@/components/char-counter";
 import { LIMITS } from "@shared/limits";
@@ -29,11 +29,14 @@ export function OpenQuestion({
   n,
   sessionId,
   onGraded,
+  onError,
 }: {
   question: PublicQuestion;
   n?: number;
   sessionId?: string;
   onGraded?: (g: GradeResult) => void;
+  /** Called with the API error code when grading fails (e.g. `NO_SESSION` for an expired session). */
+  onError?: (code: string) => void;
 }) {
   const { t } = useTranslation();
   const invalidate = useInvalidateProgress();
@@ -58,6 +61,7 @@ export function OpenQuestion({
     } catch (e) {
       // A used-up daily limit shows once for the whole tab (the reloaded quota says 0).
       if (!dailyLimitFeature(e)) setError(requestErrorText(e, t, t("common.errorHint")));
+      if (e instanceof ApiError) onError?.(e.code);
     } finally {
       setLoading(false);
       refresh();

@@ -260,7 +260,6 @@ const en: Messages = {
       backToReader: "Back to the reader",
       openBadge: "Explain",
       skip: "Skip",
-      next: "Next",
       finish: "Finish",
       submitting: "Finishing the session…",
       submitFailed: "Couldn't finish the session",

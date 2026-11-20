@@ -28,6 +28,11 @@ type Phase = "loading" | "error" | "playing" | "submitting" | "submitFailed" | "
  */
 export default function ReaderSessionPage() {
   const { id = "" } = useParams();
+  // A new reader id is a new session: remount so the load-once guards start over.
+  return <ReaderSession key={id} id={id} />;
+}
+
+function ReaderSession({ id }: { id: string }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const invalidate = useInvalidateProgress();
@@ -91,19 +96,26 @@ export default function ReaderSessionPage() {
     if (state.done && !state.result && phase === "playing") void submit();
   }, [state.done, state.result, phase, submit]);
 
+  // Every step carries its item's index, so a stale one (the sheet's auto-advance and its
+  // button both firing, a double tap) is dropped by the reducer.
+  const at = state.index;
   const next = useCallback(() => {
     withViewTransition("quiz", () => {
-      dispatch({ type: "next" });
+      dispatch({ type: "next", from: at });
       window.scrollTo({ top: 0 });
     });
-  }, []);
+  }, [at]);
   const onCardRated = useCallback(() => {
     invalidate();
-    dispatch({ type: "card-rated" });
+    dispatch({ type: "card-rated", at });
     window.scrollTo({ top: 0 });
+  }, [invalidate, at]);
+  const onChecked = useCallback((correct: boolean) => dispatch({ type: "checked", at, correct }), [at]);
+  // Cards rated before the session expired are saved: refresh the reader page's numbers.
+  const onExpired = useCallback(() => {
+    setPhase("expired");
+    invalidate();
   }, [invalidate]);
-  const onChecked = useCallback((correct: boolean) => dispatch({ type: "checked", correct }), []);
-  const onExpired = useCallback(() => setPhase("expired"), []);
 
   const items = session?.items ?? [];
   const item = items[state.index];
@@ -208,12 +220,13 @@ export default function ReaderSessionPage() {
             sessionId={session.sessionId}
             onGraded={(g: GradeResult) => {
               setGraded((list) => [...list.filter((o) => o.id !== q.id), { id: q.id, prompt: q.prompt, code: q.code, score: g.score }]);
-              dispatch({ type: "graded" });
+              dispatch({ type: "graded", at });
             }}
+            onError={(code) => code === "NO_SESSION" && onExpired()}
           />
           <div className="sticky bottom-0 mt-auto bg-gradient-to-t from-background from-70% to-transparent pt-3 pb-[calc(4px+env(safe-area-inset-bottom))]">
             <Button variant={isGraded ? "chunky" : "chunky-surface"} size="xl" className="w-full" onClick={next}>
-              {isGraded ? (isLast ? t("readerLearn.session.finish") : t("readerLearn.session.next")) : t("readerLearn.session.skip")}
+              {isGraded ? (isLast ? t("readerLearn.session.finish") : t("common.next")) : t("readerLearn.session.skip")}
               <ChevronRight strokeWidth={2.5} />
             </Button>
           </div>

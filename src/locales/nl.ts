@@ -258,7 +258,6 @@ const nl = {
       backToReader: "Terug naar de reader",
       openBadge: "Leg uit",
       skip: "Overslaan",
-      next: "Volgende",
       finish: "Afronden",
       submitting: "Sessie afronden…",
       submitFailed: "Afronden lukte niet",

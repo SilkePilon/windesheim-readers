@@ -253,22 +253,34 @@ export const learn = new Hono<AppEnv>()
       .where(and(inArray(schema.lesson.readerId, readers.map((r) => r.id)), eq(schema.lesson.status, "ready")))
       .orderBy(asc(schema.lesson.position));
     const progress = await db.select().from(schema.lessonProgress).where(eq(schema.lessonProgress.userId, u.id));
-    const cardMastery = await cardMasteryByLesson(u.id);
+    // Card mastery only for the lessons of the readers shown, not every lesson in the app.
+    const visibleLessonIds = db
+      .select({ id: schema.lesson.id })
+      .from(schema.lesson)
+      .where(inArray(schema.lesson.readerId, readers.map((r) => r.id)));
+    const cardMastery = await cardMasteryByLesson(u.id, { lessonIds: visibleLessonIds });
     const lastStudied = await lastStudiedByLesson(u.id, progress);
+    const lessonsByReader = new Map<string, typeof lessons>();
+    for (const l of lessons) {
+      const list = lessonsByReader.get(l.readerId);
+      if (list) list.push(l);
+      else lessonsByReader.set(l.readerId, [l]);
+    }
+    const progressByLesson = new Map(progress.map((p) => [p.lessonId, p]));
     return c.json(
-      readers.map((r) => ({
-        id: r.id,
-        title: r.title,
-        course: r.course,
-        published: r.published,
-        lastStudiedLessonId: latestLesson(
-          lessons.filter((l) => l.readerId === r.id).map((l) => l.id),
-          lastStudied,
-        ),
-        lessons: lessons
-          .filter((l) => l.readerId === r.id)
-          .map((l) => {
-            const p = progress.find((x) => x.lessonId === l.id);
+      readers.map((r) => {
+        const own = lessonsByReader.get(r.id) ?? [];
+        return {
+          id: r.id,
+          title: r.title,
+          course: r.course,
+          published: r.published,
+          lastStudiedLessonId: latestLesson(
+            own.map((l) => l.id),
+            lastStudied,
+          ),
+          lessons: own.map((l) => {
+            const p = progressByLesson.get(l.id);
             return {
               ...l,
               mastery: computeMastery({
@@ -279,7 +291,8 @@ export const learn = new Hono<AppEnv>()
               }),
             };
           }),
-      })),
+        };
+      }),
     );
   })
 
@@ -297,7 +310,7 @@ export const learn = new Hono<AppEnv>()
         .where(eq(schema.question.lessonId, l.id))
         .groupBy(schema.question.type),
       getOrCreateProgress(u.id, l.id),
-      cardMasteryByLesson(u.id),
+      cardMasteryByLesson(u.id, { lessonId: l.id }),
       db
         .select({ id: schema.lesson.id, code: schema.lesson.code, title: schema.lesson.title })
         .from(schema.lesson)
@@ -417,6 +430,7 @@ export const learn = new Hono<AppEnv>()
     const u = c.get("user");
     const lessonId = c.req.query("lessonId");
     const now = new Date();
+    if (lessonId && !(await visibleLesson(lessonId, u.role === "admin"))) return c.json({ error: "NOT_FOUND" }, 404);
     const publishedLessons = db
       .select({ id: schema.lesson.id })
       .from(schema.lesson)
@@ -426,9 +440,17 @@ export const learn = new Hono<AppEnv>()
     const scope = lessonId ? eq(schema.flashcard.lessonId, lessonId) : inArray(schema.flashcard.lessonId, publishedLessons);
 
     const due = await db
-      .select({ id: schema.flashcard.id, lessonId: schema.flashcard.lessonId, front: schema.flashcard.front, back: schema.flashcard.back, isNew: sql<boolean>`0` })
+      .select({
+        id: schema.flashcard.id,
+        lessonId: schema.flashcard.lessonId,
+        front: schema.flashcard.front,
+        back: schema.flashcard.back,
+        isNew: sql<boolean>`0`,
+        lessonCode: schema.lesson.code,
+      })
       .from(schema.cardReview)
       .innerJoin(schema.flashcard, eq(schema.flashcard.id, schema.cardReview.flashcardId))
+      .innerJoin(schema.lesson, eq(schema.lesson.id, schema.flashcard.lessonId))
       .where(and(eq(schema.cardReview.userId, u.id), lte(schema.cardReview.due, now), scope))
       .orderBy(asc(schema.cardReview.due))
       .limit(100);
@@ -436,28 +458,42 @@ export const learn = new Hono<AppEnv>()
     // New cards only when studying a specific lesson (the global queue is for reviews).
     const fresh = lessonId
       ? await db
-          .select({ id: schema.flashcard.id, lessonId: schema.flashcard.lessonId, front: schema.flashcard.front, back: schema.flashcard.back, isNew: sql<boolean>`1` })
+          .select({
+            id: schema.flashcard.id,
+            lessonId: schema.flashcard.lessonId,
+            front: schema.flashcard.front,
+            back: schema.flashcard.back,
+            isNew: sql<boolean>`1`,
+            lessonCode: schema.lesson.code,
+          })
           .from(schema.flashcard)
+          .innerJoin(schema.lesson, eq(schema.lesson.id, schema.flashcard.lessonId))
           .leftJoin(schema.cardReview, and(eq(schema.cardReview.flashcardId, schema.flashcard.id), eq(schema.cardReview.userId, u.id)))
           .where(and(scope, isNull(schema.cardReview.userId)))
           .limit(NEW_CARDS_PER_SESSION)
       : [];
 
-    const lessonCodes = new Map(
-      (await db.select({ id: schema.lesson.id, code: schema.lesson.code }).from(schema.lesson)).map((l) => [l.id, l.code]),
-    );
+    // Only the reviews of the cards in this queue (fresh cards have none).
+    const ids = due.map((d) => d.id);
     const reviews = new Map(
-      (await db.select().from(schema.cardReview).where(eq(schema.cardReview.userId, u.id))).map((r) => [r.flashcardId, r]),
+      ids.length
+        ? (
+            await db
+              .select()
+              .from(schema.cardReview)
+              .where(and(eq(schema.cardReview.userId, u.id), inArray(schema.cardReview.flashcardId, ids)))
+          ).map((r) => [r.flashcardId, r])
+        : [],
     );
     const preview = (id: string) => {
       const r = reviews.get(id);
       return previewIntervals(r ? toCard(r) : createEmptyCard(now), now);
     };
     return c.json(
-      [...due, ...shuffle(fresh)].map((card) => ({
+      [...due, ...shuffle(fresh)].map(({ lessonCode, ...card }) => ({
         ...card,
         isNew: !!card.isNew,
-        lessonCode: lessonCodes.get(card.lessonId) ?? "",
+        lessonCode,
         intervals: preview(card.id),
       })),
     );

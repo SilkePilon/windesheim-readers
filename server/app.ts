@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
 import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
-import { upgradeWebSocket, serveStatic } from "@hono/bun";
+import { compress } from "hono/compress";
+import { upgradeWebSocket } from "@hono/bun";
 import { ZodError } from "zod";
 import { auth } from "./auth";
 import { env } from "./env";
@@ -18,6 +19,7 @@ import { AUTH_IP_HEADER, clientIp } from "./lib/client-ip";
 import { magicLinkBody, publicIssues, updateUserBody } from "./lib/input";
 import { LIMITS } from "../shared/limits";
 import { og, spaShell } from "./og";
+import { mountStatic } from "./static";
 
 /** The request for better-auth, carrying our resolved client IP (a client-sent value is overwritten). */
 function withClientIp(c: Context): Request {
@@ -30,6 +32,12 @@ function withClientIp(c: Context): Request {
 
 export const app = new Hono();
 if (!env.isProd) app.use("/api/*", logger());
+
+// Dynamic gzip for API and shell responses, mounted before the routes so it wraps them. Its
+// default filter leaves event streams (the tutor), 206 ranges, audio and already-encoded
+// responses alone. Hashed assets are pre-compressed at build time instead.
+const gzip = env.httpCompress ? compress() : undefined;
+if (gzip) app.use("/api/*", gzip);
 
 app.onError((err, c) => {
   // Issues are size-capped and never echo the input back.
@@ -125,22 +133,7 @@ app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));
 // Link previews: dynamic battle invite images (the default card is the static public/og/*.png).
 app.route("/og", og);
 
-if (env.isProd) {
-  // The app shell and service worker files must revalidate on every load, or clients get
-  // stuck on an old build. Hashed /assets/* files are left to the default.
-  app.use("/*", async (c, next) => {
-    await next();
-    const p = c.req.path;
-    const noCache =
-      /^\/(sw\.js|registerSW\.js|workbox-[\w-]+\.js|manifest\.webmanifest)$/.test(p) ||
-      c.res.headers.get("Content-Type")?.startsWith("text/html");
-    if (noCache) c.header("Cache-Control", "no-cache");
-  });
-  // The SPA shell, with link-preview meta for the path (crawlers don't run JS).
-  const shell = spaShell("./dist/index.html");
-  app.get("/", shell);
-  app.get("/index.html", shell);
-  app.use("/*", serveStatic({ root: "./dist" }));
-  app.get("*", shell);
-}
+// Built files, the SPA shell (with link-preview meta for the path; crawlers don't run JS)
+// and cache headers: see server/static.ts.
+if (env.isProd) mountStatic(app, "./dist", spaShell("./dist/index.html"), gzip);
 

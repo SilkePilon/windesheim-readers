@@ -564,7 +564,7 @@ const ruins = definePiece({
     const lintel = place(cA, c.y - 64, 1, block(-8, 0, 34, 5, 5, STONE.front, STONE.side, STONE.top));
     const drum = place(X(30), c.y + 2, 1, `${sh(2, 0, 12, 2.6)}<rect x="-8" y="-9" width="16" height="9" rx="1" fill="${STONE.side}"/><ellipse cx="-8" cy="-4.5" rx="2.6" ry="4.5" fill="${STONE.top}"/>`);
     const sandStreaks = [[-50, -54, 46], [-20, -30, 50], [4, -70, 40]]
-      // Wind-blown sand: long soft wisps gliding along (the dash period matches wk-flow's 40px), not dashes.
+      // Wind-blown sand: long soft wisps shimmering with the water class, not dashes.
       .map(([d, dy, w], i) => {
         const wisp = (oy: number, dash: string, sw: number, op: number, delay: number) =>
           `<path class="water" style="animation-delay:-${r1(delay)}s" d="M${X(d)} ${c.y + dy + oy} q${r1((c.side * w) / 2)} -4 ${c.side * w} 0" stroke="${DUNE.hi}" stroke-width="${sw}" fill="none" stroke-dasharray="${dash}" stroke-linecap="round" opacity="${op}"/>`;

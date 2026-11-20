@@ -8,6 +8,7 @@
     "start": "NODE_ENV=production bun server/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun server/db/migrate.ts",
+    "budget": "bun scripts/bundle-budget.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:e2e": "scripts/e2e/run.sh"

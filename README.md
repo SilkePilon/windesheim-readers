@@ -78,6 +78,7 @@ All configuration is through environment variables.
 | `EMAIL_LIMIT_HOURLY` | | `30` | Most sign-in emails the server sends per rolling hour, all addresses together. |
 | `EMAIL_LIMIT_DAILY` | | `100` | Same, per rolling 24 hours (Resend's free tier is 100 a day). |
 | `GITHUB_REPO` | | `SilkePilon/windesheim-readers` | `owner/name` of the GitHub repo that feedback reports are drafted as issues on (the admin opens a prefilled "new issue" page; no token needed). |
+| `HTTP_COMPRESS` | | `true` | gzip API and page responses in the server. Set to `false` when a proxy in front (such as Cloudflare) already compresses. Built JS/CSS files are pre-compressed at build time either way. |
 | `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | | | Optional fallback AI keys. Keys entered under **Admin → AI settings** take precedence. |
 
 The container keeps everything under **`/app/data`**. Mount a volume there, or you lose your data when the container is replaced.

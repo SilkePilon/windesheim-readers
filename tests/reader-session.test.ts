@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   buildSessionPlan,
   daysToExam,
+  examDateMs,
+  examDateYmd,
   estimateMinutes,
   mainLessonId,
   SESSION,
@@ -228,6 +230,30 @@ describe("daysToExam", () => {
   });
   test("negative after the exam", () => {
     expect(daysToExam(Date.UTC(2027, 2, 30, 12, 0), exam)).toBe(-1);
+  });
+});
+
+describe("examDateMs / examDateYmd", () => {
+  test("Amsterdam midnight in winter time (UTC+1)", () => {
+    expect(examDateMs("2027-01-20")).toBe(Date.UTC(2027, 0, 19, 23, 0, 0));
+  });
+  test("Amsterdam midnight in summer time (UTC+2)", () => {
+    expect(examDateMs("2027-06-15")).toBe(Date.UTC(2027, 5, 14, 22, 0, 0));
+    // The DST night itself: 00:00 is still CET, the switch is at 02:00.
+    expect(examDateMs("2027-03-28")).toBe(Date.UTC(2027, 2, 27, 23, 0, 0));
+    expect(examDateMs("2027-03-29")).toBe(Date.UTC(2027, 2, 28, 22, 0, 0));
+  });
+  test("round-trips, and daysToExam reads it as day 0", () => {
+    for (const ymd of ["2027-01-20", "2027-03-28", "2027-03-29", "2027-10-31", "2027-11-01", "2028-02-29"]) {
+      expect(examDateYmd(examDateMs(ymd))).toBe(ymd);
+      expect(daysToExam(examDateMs(ymd), examDateMs(ymd))).toBe(0);
+    }
+    expect(examDateYmd(Date.UTC(2027, 0, 20, 22, 59))).toBe("2027-01-20");
+  });
+  test("NaN for a malformed date", () => {
+    expect(examDateMs("")).toBeNaN();
+    expect(examDateMs("2027-13-01")).toBeNaN();
+    expect(examDateMs("2027-02-30")).toBeNaN();
   });
 });
 

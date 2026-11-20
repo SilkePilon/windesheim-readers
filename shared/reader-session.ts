@@ -45,6 +45,30 @@ function amsterdamDay(ms: number): number {
   return Date.UTC(get("year"), get("month") - 1, get("day"));
 }
 
+/** `YYYY-MM-DD` of `ms` in Europe/Amsterdam (the admin date input's value for an exam date). */
+export function examDateYmd(ms: number): string {
+  const parts = AMS_DATE.formatToParts(new Date(ms));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * The exam date as stored: ms at 00:00 Europe/Amsterdam on `ymd` (`YYYY-MM-DD`), NaN when
+ * malformed. Amsterdam is UTC+1 or UTC+2 and never changes clocks at midnight, so one of
+ * those two instants is the local midnight.
+ */
+export function examDateMs(ymd: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return NaN;
+  const utc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(utc) || new Date(utc).toISOString().slice(0, 10) !== ymd) return NaN;
+  for (const hours of [1, 2]) {
+    const ms = utc - hours * 3_600_000;
+    if (examDateYmd(ms) === ymd && examDateYmd(ms - 1) !== ymd) return ms;
+  }
+  return NaN;
+}
+
 /** Whole calendar days until the exam in Europe/Amsterdam: 0 on exam day, negative after, null without a date. */
 export function daysToExam(now: number, examDate: number | null): number | null {
   if (examDate == null) return null;

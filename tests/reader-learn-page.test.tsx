@@ -240,6 +240,10 @@ describe("ConceptMapBody", () => {
     expect(panel).toContain("Open les 2.3");
     expect(panelOf(html)).toContain('href="/lesson/l2"');
     expect(panelOf(html)).toContain('aria-label="Sluiten"');
+    const controls = html.match(/aria-pressed="true" aria-controls="([^"]+)"/)?.[1];
+    expect(controls).toBeTruthy();
+    expect(html).toContain(`id="${controls}" role="region"`);
+    expect(html).toContain('lang="nl"');
     expect(html).not.toMatch(/readerLearn\./);
   });
 

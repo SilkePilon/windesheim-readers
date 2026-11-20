@@ -46,7 +46,7 @@ type Box = { x: number; y: number; w: number; h: number };
 
 /** The map for given data and focus (controlled, so it renders the same on the server). */
 export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: MapData; focusId: string | null; onFocus?: (id: string | null) => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [week, setWeek] = useState("all");
   const chips = useRef(new Map<string, HTMLButtonElement>());
   const box = useRef<HTMLDivElement>(null);
@@ -54,6 +54,8 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
   const reveal = useRef<{ id: string; force: boolean } | null>(null);
   const size = useSize(box);
   const marker = useId();
+  const panelId = useId();
+  const fontsReady = useFontsReady();
 
   const lessons = data.lessons;
   const lessonOf = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
@@ -85,15 +87,18 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
     if (concept && w !== "all" && String(lessonOf.get(concept.lessonId)?.week) !== w) onFocus(null);
   };
 
-  // Escape clears the focus.
+  // Escape clears the focus like the close button (keyboard focus returns to the chip), unless
+  // something else (the week Select) already handled it. The ref keeps the listener stable.
+  const closeRef = useRef(close);
+  closeRef.current = close;
   useEffect(() => {
     if (!focusId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFocus(null);
+      if (e.key === "Escape" && !e.defaultPrevented) closeRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [focusId, onFocus]);
+  }, [focusId]);
 
   // A new focus starts the panel at its top.
   useEffect(() => {
@@ -131,7 +136,7 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
         })
       : [];
     setPaths((p) => (p.length || next.length ? next : p));
-  }, [focusId, relations, week, size]);
+  }, [focusId, relations, week, size, fontsReady]);
 
   // Tapping empty map space (anything but a chip) clears the focus.
   const onMapClick = (e: MouseEvent) => {
@@ -139,7 +144,7 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
   };
 
   return (
-    <Card className="gap-3 overflow-visible px-3 py-4 sm:px-4">
+    <Card lang={i18n.language} className="gap-3 overflow-visible px-3 py-4 sm:px-4">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-2">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-heading text-lg font-semibold">
@@ -179,14 +184,14 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
           {shown.map((g) => (
             <section key={g.week} className="flex flex-col gap-2">
               <h3 className="px-2 font-heading text-sm font-semibold text-muted-foreground">{t("readerLearn.map.week", { week: g.week })}</h3>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-2">
                 {g.lessons.map(({ lesson, concepts }) => {
                   const tone = masteryTone(lesson.mastery);
                   return (
                     <div key={lesson.id} className="flex flex-col gap-2.5 rounded-[20px] bg-muted/45 p-3">
                       <div className="flex items-start gap-2 px-0.5">
                         <span aria-hidden className={cn("mt-1 size-3 shrink-0 rounded-full border-2", TONE_DOT[tone])} />
-                        <p className="min-w-0 text-sm leading-snug break-words">
+                        <p className="min-w-0 text-sm leading-snug break-words hyphens-auto">
                           <span className="font-heading font-semibold">{lesson.code}</span>{" "}
                           <span className="font-semibold text-muted-foreground">{lesson.title}</span>
                         </p>
@@ -203,9 +208,10 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
                               }}
                               type="button"
                               aria-pressed={on}
+                              aria-controls={on ? panelId : undefined}
                               onClick={() => (on ? onFocus(null) : focus(c.id))}
                               className={cn(
-                                "relative z-20 max-w-full rounded-[14px] border-2 px-3 py-1.5 text-left text-[14px] leading-snug font-bold break-words whitespace-normal outline-none",
+                                "relative z-20 max-w-full rounded-[14px] border-2 px-3 py-1.5 text-left text-[14px] leading-snug font-bold break-words hyphens-auto whitespace-normal outline-none",
                                 "transition-[opacity,transform,box-shadow] duration-200 active:translate-y-[2px] focus-visible:ring-3 focus-visible:ring-ring/50 max-md:scroll-mb-[50dvh]",
                                 TONE_CHIP[tone],
                                 on && "ring-4 ring-primary",
@@ -240,6 +246,7 @@ export function ConceptMapBody({ data, focusId, onFocus = () => {} }: { data: Ma
         {concept ? (
           <aside
             ref={panel}
+            id={panelId}
             role="region"
             aria-label={concept.label}
             className={cn(
@@ -293,13 +300,13 @@ function FocusPanel({
             <span aria-hidden className={cn("size-3 shrink-0 rounded-full border-2", TONE_DOT[tone])} />
             <span className="min-w-0 break-words">{lessonLine(t, lesson)}</span>
           </p>
-          <h3 className="mt-1 font-heading text-xl leading-tight font-semibold text-balance break-words">{concept.label}</h3>
+          <h3 className="mt-1 font-heading text-xl leading-tight font-semibold text-balance break-words hyphens-auto">{concept.label}</h3>
         </div>
         <Button type="button" variant="ghost" size="icon" className="-mt-1 -mr-1 shrink-0 rounded-full" aria-label={t("readerLearn.map.close")} onClick={onClose}>
           <X />
         </Button>
       </div>
-      {concept.description && <p className="text-[15px] leading-relaxed break-words whitespace-pre-line">{concept.description}</p>}
+      {concept.description && <p className="text-[15px] leading-relaxed font-medium break-words hyphens-auto whitespace-pre-line">{concept.description}</p>}
       <div>
         <h4 className="mb-1 font-heading text-sm font-semibold text-muted-foreground">{t("readerLearn.map.links")}</h4>
         {relations.length === 0 ? (
@@ -340,7 +347,7 @@ function LinkRow({ onClick, children }: { onClick: () => void; children: ReactNo
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-[14px] px-2 py-2 text-left text-[15px] leading-snug break-words outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="w-full rounded-[14px] px-2 py-2 text-left text-[15px] leading-snug font-medium break-words hyphens-auto outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       {children}
     </button>
@@ -417,4 +424,17 @@ function useSize(ref: RefObject<HTMLElement | null>) {
     return () => ro.disconnect();
   }, [ref]);
   return s;
+}
+
+/** Flips to true once webfonts have loaded, so chip positions (and curves) are measured again. */
+function useFontsReady() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return ready;
 }

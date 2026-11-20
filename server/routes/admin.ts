@@ -16,12 +16,17 @@ import { createModel, getAiSettingsPublic, getModelFor, resolveApiKey, updateAiS
 import { listModels, validateKey } from "../ai/models";
 import { adminAudioSummary, deleteAudioFiles, isAudioInFlight, markAudioStale, publicAudio, queueReaderAudio } from "../ai/audio";
 import { synthesize, voiceSampleText } from "../ai/speech";
+import { adminEpisodeList, deleteEpisode, deleteReaderEpisodeFiles, queueReaderEpisodes, readyWeeks } from "../ai/episodes";
 import { voiceProblem, VOICES, voicesFor } from "../ai/voices";
 import { backfillBadges } from "../lib/badges";
 import * as input from "../lib/input";
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 const pdfPath = (id: string) => join(env.uploadDir, `${id}.pdf`);
+
+const readerExists = async (id: string) => !!(await db.query.reader.findFirst({ where: eq(schema.reader.id, id), columns: { id: true } }));
+/** A week route param: a positive integer, else null. */
+const parseWeek = (s: string) => (/^[1-9]\d{0,3}$/.test(s) ? Number(s) : null);
 
 /** AI settings for the admin page, plus the usage limits that live next to them. */
 const aiSettingsView = async () => ({ ...(await getAiSettingsPublic()), ...getAiLimitSettings() });
@@ -165,6 +170,7 @@ export const admin = new Hono<AppEnv>()
     await db.delete(schema.reader).where(eq(schema.reader.id, id));
     await unlink(pdfPath(id)).catch(() => {});
     await deleteAudioFiles(lessonIds);
+    await deleteReaderEpisodeFiles(id);
     return c.json({ ok: true });
   })
 
@@ -300,6 +306,40 @@ export const admin = new Hono<AppEnv>()
       chapterList: publicAudio(id, row).chapters,
       script: row?.script ?? null,
     });
+  })
+
+  // ----- weekly episodes (whole-reader audio) -----
+  /** One entry per week with ready lessons; `stale` is computed against the week's current lessons. */
+  .get("/readers/:id/episodes", async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json(await adminEpisodeList(id));
+  })
+  /** Queue every week's episode (missing, failed or stale ones only). */
+  .post("/readers/:id/episodes", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    const weeks = await queueReaderEpisodes(id);
+    return c.json({ queued: weeks.length, weeks }, 202);
+  })
+  /** Queue or regenerate one week's episode. */
+  .post("/readers/:id/episodes/:week", limits.adminJobs, async (c) => {
+    const id = c.req.param("id");
+    const week = parseWeek(c.req.param("week"));
+    if (week === null) return c.json({ error: "INVALID_WEEK" }, 400);
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!(await readyWeeks(id)).includes(week)) return c.json({ error: "NOT_FOUND" }, 404);
+    const weeks = await queueReaderEpisodes(id, { weeks: [week], force: true });
+    if (!weeks.length) return c.json({ error: "ALREADY_RUNNING" }, 409);
+    return c.json({ queued: 1, weeks }, 202);
+  })
+  .delete("/readers/:id/episodes/:week", async (c) => {
+    const id = c.req.param("id");
+    const week = parseWeek(c.req.param("week"));
+    if (week === null) return c.json({ error: "INVALID_WEEK" }, 400);
+    if (!(await readerExists(id))) return c.json({ error: "NOT_FOUND" }, 404);
+    await deleteEpisode(id, week);
+    return c.body(null, 204);
   })
 
   // ----- lesson content editing -----

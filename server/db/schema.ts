@@ -198,7 +198,7 @@ export const readerEpisode = sqliteTable(
     error: text("error"),
     title: text("title"),
     /** Internal (admin only, never sent to students). */
-    script: text("script", { mode: "json" }).$type<import("../ai/audio-script").AudioScript>(),
+    script: text("script", { mode: "json" }).$type<import("../ai/episode-script").EpisodeScript>(),
     chapters: text("chapters", { mode: "json" }).$type<LessonAudioChapter[]>().notNull().default(sql`'[]'`),
     generatedAt: ts("generated_at"),
     provider: text("provider"),

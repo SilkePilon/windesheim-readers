@@ -6,6 +6,7 @@ import path from "node:path";
 import { injectMeta, metaForPath, renderMetaBlock } from "./server/og/meta";
 import { pickLang } from "./server/og/copy";
 import { appVersion } from "./scripts/app-version";
+import { precompress } from "./scripts/precompress";
 
 /**
  * Dev only: the per-path link-preview meta the production server injects (server/og). There
@@ -53,6 +54,8 @@ export default defineConfig({
         runtimeCaching: [{ urlPattern: ({ url }) => url.pathname.startsWith("/api/"), handler: "NetworkOnly" }],
       },
     }),
+    // After the PWA plugin: .br/.gz copies of the build (sw.js included) for server/static.ts.
+    precompress(),
   ],
   resolve: {
     alias: {

@@ -45,6 +45,11 @@ export const env = {
   githubRepo: githubRepo(process.env.GITHUB_REPO),
   /** Turns every rate limit off. Honoured only outside production (the e2e suite uses it). */
   rateLimitDisabled: !isProd && process.env.RATE_LIMIT_DISABLED === "1",
+  /**
+   * gzip API and app-shell responses in this process (on unless `false`/`0`). Turn it off when
+   * a proxy in front (e.g. Cloudflare) compresses already. Built assets are pre-compressed.
+   */
+  httpCompress: !/^(false|0)$/i.test(process.env.HTTP_COMPRESS ?? ""),
 };
 
 if (env.isProd && env.secret.startsWith("dev-secret")) {

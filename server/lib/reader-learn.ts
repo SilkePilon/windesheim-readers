@@ -8,6 +8,7 @@ import { scheduler, toCard } from "./fsrs";
 import { dayKey, previousDay } from "./time";
 import { computeMastery } from "../../shared/game";
 import { DONE_MASTERY } from "../../shared/path";
+import { visibleMap } from "../../shared/concept-map";
 import { hashSeed } from "../../shared/rng";
 import { buildSessionPlan, daysToExam, type PlanCard, type PlanLesson, type PlanQuestion, type SessionPlan, type SessionPlanInput } from "../../shared/reader-session";
 
@@ -222,7 +223,7 @@ export async function readerOverview(user: User, readerId: string, now = new Dat
       .where(and(eq(schema.readerEpisode.readerId, reader.id), eq(schema.readerEpisode.status, "ready")))
       .orderBy(asc(schema.readerEpisode.week)),
     db.select().from(schema.episodeProgress).where(and(eq(schema.episodeProgress.userId, user.id), eq(schema.episodeProgress.readerId, reader.id))),
-    db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, reader.id), columns: { status: true } }),
+    db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, reader.id), columns: { data: true } }),
   ]);
   const heard = new Map(listened.map((p) => [p.week, p]));
 
@@ -254,6 +255,7 @@ export async function readerOverview(user: User, readerId: string, now = new Dat
       positionMs: heard.get(e.week)?.positionMs ?? 0,
       listenMs: heard.get(e.week)?.listenMs ?? 0,
     })),
-    conceptMap: map?.status === "ready",
+    // Shown whenever stored data leaves a concept in a ready lesson, whatever the generation status.
+    conceptMap: !!map?.data && visibleMap(map.data, new Set(lessons.map((l) => l.id))).concepts.length > 0,
   };
 }

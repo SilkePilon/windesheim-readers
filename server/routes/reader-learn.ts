@@ -45,17 +45,20 @@ export const readerLearn = new Hono<AppEnv>()
     return c.json(o);
   })
 
-  /** The ready concept map, limited to the reader's ready lessons, with the student's mastery per lesson. */
+  /** The stored concept map, limited to the reader's ready lessons, with the student's mastery per lesson. */
   .get("/readers/:id/concept-map", requireUser, async (c) => {
     const u = c.get("user");
     const reader = await visibleReader(u, c.req.param("id"));
     if (!reader) return c.json({ error: "NOT_FOUND" }, 404);
     const m = await db.query.conceptMap.findFirst({ where: eq(schema.conceptMap.readerId, reader.id) });
-    if (m?.status !== "ready" || !m.data) return c.json({ error: "NOT_FOUND" }, 404);
+    // Any stored map is served, also while it is being regenerated or after a failed regeneration.
+    if (!m?.data) return c.json({ error: "NOT_FOUND" }, 404);
     const lessons = await readyLessons(reader.id);
+    const map = visibleMap(m.data, new Set(lessons.map((l) => l.id)));
+    if (!map.concepts.length) return c.json({ error: "NOT_FOUND" }, 404);
     const mastery = await lessonMastery(u.id, lessons.map((l) => l.id));
     return c.json({
-      ...visibleMap(m.data, new Set(lessons.map((l) => l.id))),
+      ...map,
       lessons: lessons.map((l) => ({ id: l.id, code: l.code, title: l.title, week: l.week, mastery: mastery.get(l.id) ?? 0 })),
     });
   })

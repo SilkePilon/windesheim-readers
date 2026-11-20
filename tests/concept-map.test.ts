@@ -322,10 +322,36 @@ describe("student endpoint", () => {
     expect(m.lessons[0]).toEqual({ id: "cm-L1", code: "1.1", title: "Les 1.1", week: 1, mastery: 0 });
   });
 
-  test("no ready map: 404", async () => {
+  const flag = async (id: string) => ((await (await req("GET", `/readers/${id}/learn`, student)).json()) as { conceptMap: boolean }).conceptMap;
+
+  test("no map: 404 and not flagged", async () => {
     expect((await req("GET", `/readers/${R_OTHER}/concept-map`, student)).status).toBe(404);
-    db.update(schema.conceptMap).set({ status: "generating" }).where(eq(schema.conceptMap.readerId, R)).run();
-    expect((await req("GET", `/readers/${R}/concept-map`, student)).status).toBe(404);
+    expect(await flag(R_OTHER)).toBe(false);
+  });
+
+  test("a stored map stays served and flagged while regenerating and after a failed regeneration", async () => {
+    expect(await flag(R)).toBe(true);
+    for (const status of ["generating", "error", "pending"] as const) {
+      db.update(schema.conceptMap).set({ status }).where(eq(schema.conceptMap.readerId, R)).run();
+      const r = await req("GET", `/readers/${R}/concept-map`, student);
+      expect(r.status).toBe(200);
+      expect(((await r.json()) as ConceptMapData).concepts.map((x) => x.id)).toEqual(["k1", "k2"]);
+      expect(await flag(R)).toBe(true);
+    }
     db.update(schema.conceptMap).set({ status: "ready" }).where(eq(schema.conceptMap.readerId, R)).run();
+  });
+
+  test("a map whose concepts are all in lessons that aren't ready: 404 and not flagged", async () => {
+    const before = row()!.data!;
+    db.update(schema.conceptMap)
+      .set({ data: { concepts: [c("p1", "cm-L4"), c("p2", "cm-L4")], links: [{ from: "p1", to: "p2", label: "x" }] } })
+      .where(eq(schema.conceptMap.readerId, R))
+      .run();
+    try {
+      expect((await req("GET", `/readers/${R}/concept-map`, student)).status).toBe(404);
+      expect(await flag(R)).toBe(false);
+    } finally {
+      db.update(schema.conceptMap).set({ data: before }).where(eq(schema.conceptMap.readerId, R)).run();
+    }
   });
 });

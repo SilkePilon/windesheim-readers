@@ -13,6 +13,7 @@ import ProfilePage from "@/pages/profile";
 import BattlePage from "@/pages/battle";
 import { AdminLayout } from "@/pages/admin/layout";
 
+const AboutPage = lazy(() => import("@/pages/about"));
 const AdminReadersPage = lazy(() => import("@/pages/admin/readers"));
 const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
 const AdminLessonPage = lazy(() => import("@/pages/admin/lesson"));
@@ -35,6 +36,15 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Public: renders its own shell (app shell when logged in, standalone otherwise). */}
+      <Route
+        path="/about"
+        element={
+          <Suspense fallback={<PageSpinner />}>
+            <AboutPage />
+          </Suspense>
+        }
+      />
       {DevWorldPage && (
         <Route
           path="/dev/world"

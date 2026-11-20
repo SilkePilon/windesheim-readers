@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { ChevronDown, ImagePlus, Send, X } from "lucide-react";
 import { FEEDBACK_TYPES, type FeedbackContext, type FeedbackType } from "@shared/feedback";
+import { stripControl } from "@shared/control";
 import { LIMITS } from "@shared/limits";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -158,8 +159,11 @@ function FeedbackForm({
     });
   });
 
-  const valid = messageValid(message);
-  const showInvalid = message.trim().length > 0 && !valid;
+  // Pasted text can carry invisible characters (zero-width, bidi, controls) the server refuses:
+  // check and send the message without them.
+  const clean = stripControl(message);
+  const valid = messageValid(clean);
+  const showInvalid = clean.trim().length > 0 && !valid;
   const canSend = valid && !sending && !preparing;
 
   const pick = async (file: File | undefined) => {
@@ -183,7 +187,7 @@ function FeedbackForm({
     try {
       const form = new FormData();
       form.append("type", type);
-      form.append("message", message);
+      form.append("message", clean);
       form.append("context", JSON.stringify(context));
       if (screenshot) form.append("screenshot", screenshot, screenshot.type === "image/webp" ? "screenshot.webp" : "screenshot.jpg");
       const res = await api.post<{ id: string; screenshotDropped?: true }>("/feedback", form);
@@ -221,7 +225,7 @@ function FeedbackForm({
           <label htmlFor={`${id}-message`} className="text-sm font-bold">
             {t("feedback.message")}
           </label>
-          <CharCounter value={message} max={LIMITS.feedback.message.max} />
+          <CharCounter value={clean} max={LIMITS.feedback.message.max} />
         </div>
         <Textarea
           id={`${id}-message`}

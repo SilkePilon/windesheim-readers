@@ -178,3 +178,16 @@ describe("fix round 1", () => {
     expect(showHelpButton("/Lesson/x", "?view=read")).toBe(false);
   });
 });
+
+describe("stripControl", () => {
+  test("drops the characters the server refuses, keeps newlines and tabs", async () => {
+    const { CONTROL, stripControl } = await import("../shared/control");
+    const pasted = "Hal​lo‮ daar﻿\u0007\nregel\ttwee\r\n";
+    const clean = stripControl(pasted);
+    expect(clean).toBe("Hallo daar\nregel\ttwee\r\n");
+    expect(CONTROL.test(clean)).toBe(false);
+    // Stateless: the shared test regex has no /g flag.
+    expect(CONTROL.test("​")).toBe(true);
+    expect(CONTROL.test("​")).toBe(true);
+  });
+});

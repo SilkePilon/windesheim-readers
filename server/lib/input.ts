@@ -8,10 +8,8 @@ import { COUNT_MAX, COUNT_MIN, DEFAULT_BATTLE_SETTINGS, DIFFICULTIES, POINTS_MOD
 import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
 import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
+import { CONTROL } from "../../shared/control";
 import { FEEDBACK_STATUSES, FEEDBACK_TYPES, GITHUB_URL } from "../../shared/feedback";
-
-/** No control or zero-width characters, except newlines and tabs in multi-line text. */
-const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤﻿]/;
 
 /** Trimmed text of at most `max` characters (and at least `min`, default 1: blank is refused). */
 export const text = (max: number, min = 1) =>

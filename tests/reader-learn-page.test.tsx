@@ -8,7 +8,8 @@ import en from "../src/locales/en";
 import { estimateParts, examLabel } from "../src/lib/reader-learn";
 import { ReaderLearnView } from "../src/components/reader-learn/reader-learn-view";
 import { ReaderHomeCard } from "../src/components/reader-learn/home-card";
-import type { ReaderLearn } from "../src/lib/types";
+import { SessionResultView } from "../src/components/reader-session/session-result";
+import type { ReaderLearn, ReaderSessionResult } from "../src/lib/types";
 
 describe("examLabel", () => {
   test("no date", () => expect(examLabel(null)).toEqual({ key: "readerLearn.exam.none" }));
@@ -147,5 +148,39 @@ describe("ReaderHomeCard", () => {
     const html = await render("nl", <ReaderHomeCard data={data} />);
     expect(html).toContain("Geen tentamendatum");
     expect(html).toContain("Vandaag gedaan ✓");
+  });
+});
+
+describe("SessionResultView", () => {
+  const result: ReaderSessionResult = {
+    xp: 50,
+    correct: 5,
+    total: 8,
+    perLesson: [
+      { lessonId: "l1", code: "1.1", correct: 4, total: 4 },
+      { lessonId: "l2", code: "1.2", correct: 1, total: 4 },
+    ],
+    dayStreak: 3,
+    award: { xp: 250, gained: 50 } as ReaderSessionResult["award"],
+  };
+  const open = [{ id: "o1", prompt: "Leg het geheugen uit", code: "2.1", score: 72 }];
+
+  test("nl: XP, correct/total, per-lesson links and open answers", async () => {
+    const html = await render("nl", <SessionResultView readerId="r1" result={result} open={open} />);
+    expect(html).toContain("+50");
+    expect(html).toContain("5 van 8 goed");
+    expect(html).toContain('href="/lesson/l1"');
+    expect(html).toContain('href="/lesson/l2"');
+    expect(html).toContain('data-weak="true"');
+    expect(html).toContain("Leg het geheugen uit");
+    expect(html).toContain("72");
+    expect(html).toContain("Vandaag gedaan");
+    expect(html).toContain('href="/reader/r1"');
+  });
+
+  test("en: no quiz questions still renders", async () => {
+    const html = await render("en", <SessionResultView readerId="r1" result={{ ...result, correct: 0, total: 0, perLesson: [], xp: 0 }} open={[]} />);
+    expect(html).toContain("Done for today");
+    expect(html).not.toContain("/lesson/");
   });
 });

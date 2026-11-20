@@ -89,7 +89,7 @@ export function WorldMap({ seed, groups, onOpen }: { seed: string; groups: PathG
     return () => io.disconnect();
   }, [svg]);
 
-  // Far-off week segments are not rendered; all start visible so first paint is never missing art.
+  // Far-off week segments are not painted (visibility, never display:none, so the observer still fires); all start visible so first paint is never missing art.
   useEffect(() => {
     const segs = artRef.current?.querySelectorAll<SVGSVGElement>(".world-seg");
     if (!segs?.length || typeof IntersectionObserver === "undefined") return;

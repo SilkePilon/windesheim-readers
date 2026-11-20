@@ -58,11 +58,11 @@
 .world .paused,
 .world .paused * { animation-play-state: paused !important; }
 
-/* While the page scrolls (scroll-pause.ts) the art holds still; far-off week segments are not rendered at all. */
+/* While the page scrolls (scroll-pause.ts) the art holds still; far-off week segments are not painted (visibility keeps their box, so the observer still sees them return). */
 .world.scrolling .wseg,
 .world.scrolling .wseg *,
 .world.scrolling .world-top * { animation-play-state: paused !important; }
-.world-art > .world-seg.seg-off { display: none; }
+.world-art > .world-seg.seg-off { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .world * { animation: none !important; }

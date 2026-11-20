@@ -53,7 +53,11 @@ export function LessonListen({ lesson }: { lesson: LessonDetail }) {
 function LessonPlayer({ lesson, audio }: { lesson: LessonDetail; audio: LessonAudio }) {
   const qc = useQueryClient();
   const invalidate = useInvalidateProgress();
-  const source = useMemo(() => lessonAudioSource(lesson, audio), [lesson, audio]);
+  // Memoized on the audio itself, not the query objects: a refetch or a progress update (new
+  // `audio`/`lesson` objects, same chapters) keeps the player and its source.
+  const version = audio.chapters.map((c) => `${c.n}:${c.durationMs}:${c.url}`).join("|");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const source = useMemo(() => lessonAudioSource(lesson, audio), [lesson.id, lesson.title, version]);
   const lessonId = lesson.id;
   return (
     <ListenView

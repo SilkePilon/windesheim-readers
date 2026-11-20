@@ -54,6 +54,7 @@ export function metaForPath(
   const clean = path.replace(/\/+$/, "") || "/";
 
   if (clean === "/login") return { ...defaults, title: t.loginTitle, description: t.loginDescription, url: `${base}/login` };
+  if (clean === "/about") return { ...defaults, title: t.aboutTitle, description: t.aboutDescription, url: `${base}/about` };
   if (clean.startsWith("/lesson/")) return { ...defaults, title: t.lessonTitle, description: t.lessonDescription };
 
   const m = BATTLE_PATH.exec(path);

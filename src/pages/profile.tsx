@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { notify } from "@/lib/notify";
-import { Check, ChevronRight, Download, LogOut } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Check, ChevronRight, Download, Info, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
 import { Card } from "@/components/ui/card";
@@ -104,6 +104,14 @@ export default function ProfilePage() {
           </SettingRow>
           <ThemeRow />
           <InstallRow />
+          <Link
+            to="/about"
+            className="flex min-h-12 items-center gap-3 border-t-2 border-background px-4 py-3 text-left text-sm font-bold outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+          >
+            <Info className="size-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">{t("profile.aboutRow")}</span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
           <button
             type="button"
             onClick={signOut}

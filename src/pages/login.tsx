@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Navigate, useSearchParams } from "react-router";
+import { Link, Navigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -196,7 +196,14 @@ export default function LoginPage() {
         )}
       </Card>
 
-      <div className="mt-6 flex gap-1" role="group" aria-label={t("profile.language")}>
+      <Link
+        to="/about"
+        className="mt-1 inline-flex min-h-11 items-center rounded-md px-2 text-xs font-bold text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        {t("login.about")}
+      </Link>
+
+      <div className="mt-4 flex gap-1" role="group" aria-label={t("profile.language")}>
         {(["nl", "en"] as const).map((l) => (
           <button
             key={l}

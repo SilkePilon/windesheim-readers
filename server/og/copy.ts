@@ -14,6 +14,8 @@ export const OG_COPY = {
     features: ["Flashcards", "Quiz", "Luisterles", "Battle"],
     loginTitle: "Inloggen · Windesheim Readers",
     loginDescription: "Log in met je Windesheim-mail. Je krijgt een inloglink, geen wachtwoord nodig.",
+    aboutTitle: "Over Windesheim Readers",
+    aboutDescription: "Gemaakt door een student, voor studenten: korte lessen, flashcards, quizzen, luisterlessen en battles om je reader echt te leren.",
     lessonTitle: "Les in Windesheim Readers",
     lessonDescription: "Een les uit je reader: samenvatting, flashcards en een quiz. Log in om verder te spelen.",
     battle: {
@@ -53,6 +55,8 @@ export const OG_COPY = {
     features: ["Flashcards", "Quiz", "Listen", "Battle"],
     loginTitle: "Sign in · Windesheim Readers",
     loginDescription: "Sign in with your Windesheim email. You get a sign-in link, no password needed.",
+    aboutTitle: "About Windesheim Readers",
+    aboutDescription: "Made by a student, for students: short lessons, flashcards, quizzes, audio lessons and battles to really learn your reader.",
     lessonTitle: "Lesson in Windesheim Readers",
     lessonDescription: "A lesson from your reader: summary, flashcards and a quiz. Sign in to keep playing.",
     battle: {

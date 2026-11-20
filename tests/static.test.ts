@@ -41,7 +41,7 @@ describe("mountStatic", () => {
   test("a missing asset is a plain 404, never cached as immutable", async () => {
     const r = await app.request("/assets/missing.js");
     expect(r.status).toBe(404);
-    expect(r.headers.get("Cache-Control")).toBeNull();
+    expect(r.headers.get("Cache-Control")).toBe("no-store");
     expect(await r.text()).toBe("Not Found");
   });
 

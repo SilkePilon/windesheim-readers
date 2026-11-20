@@ -30,7 +30,10 @@ export function mountStatic(app: Hono<any>, root: string, shell: Handler, wrap?:
   app.get(
     "/assets/*",
     serveStatic({ root, precompressed: true, onFound: (_path, c) => void c.header("Cache-Control", IMMUTABLE) }),
-    (c) => c.text("Not Found", 404),
+    (c) => {
+      c.header("Cache-Control", "no-store");
+      return c.text("Not Found", 404);
+    },
   );
   app.use("/*", serveStatic({ root, precompressed: true }));
   shellRoute("*");

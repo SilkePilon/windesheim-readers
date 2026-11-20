@@ -8,7 +8,7 @@ import "@fontsource/fredoka/700.css";
 import "@fontsource/nunito/600.css";
 import "@fontsource/nunito/700.css";
 import "@fontsource/nunito/800.css";
-import "@/lib/i18n";
+import i18n, { ensureLocale } from "@/lib/i18n";
 import "./index.css";
 import { App } from "./App";
 import { Toaster } from "@/components/ui/sonner";
@@ -78,7 +78,8 @@ installPageTransitions(router);
 // Marking it as a data block silences that; the pre-paint theme script lives in index.html.
 const THEME_SCRIPT_PROPS = { type: "application/json" } as const;
 
-createRoot(document.getElementById("root")!).render(
+const start = () =>
+  createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange scriptProps={THEME_SCRIPT_PROPS}>
       <QueryClientProvider client={queryClient}>
@@ -90,3 +91,7 @@ createRoot(document.getElementById("root")!).render(
     </ThemeProvider>
   </StrictMode>,
 );
+
+// The first paint waits for the English strings when the language starts as English; if
+// that fails, render anyway (Dutch fallback) rather than block forever.
+ensureLocale(i18n.language as "nl" | "en").then(start, start);

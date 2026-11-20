@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const BUDGET_RAW_BYTES = 1_450_000;
+export const BUDGET_RAW_BYTES = 800_000;
 
 export function initialAssets(html: string): string[] {
   const out: string[] = [];

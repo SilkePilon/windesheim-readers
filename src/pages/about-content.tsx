@@ -62,14 +62,17 @@ export function AboutContent() {
         </Section>
 
         <Card className="flex-row items-center gap-4 p-5 md:p-6">
-          <img
-            src="/brand/maker.jpg"
-            alt={t("about.makerPhotoAlt")}
-            width={192}
-            height={192}
-            loading="lazy"
-            className="size-20 shrink-0 rounded-full bg-track object-cover shadow-[0_4px_0_var(--chunky)] md:size-24"
-          />
+          {/* Wrapped: Card styles a first-child <img> as a cover photo (square top, no top padding). */}
+          <div className="size-20 shrink-0 overflow-hidden rounded-full bg-track shadow-[0_4px_0_var(--chunky)] md:size-24">
+            <img
+              src="/brand/maker.jpg"
+              alt={t("about.makerPhotoAlt")}
+              width={192}
+              height={192}
+              loading="lazy"
+              className="size-full object-cover"
+            />
+          </div>
           <div className="min-w-0">
             <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">{t("about.makerTitle")}</p>
             <h2 className="font-heading text-xl font-semibold">Silke Pilon</h2>

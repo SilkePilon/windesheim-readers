@@ -106,7 +106,7 @@ All limits are enforced on the server and answer `429` with `{"error":"RATE_LIMI
 | AI explain-it-back grading | user | 4 per minute, 15 per 10 minutes |
 | AI open-question grading | user | 6 per minute, 25 per 10 minutes |
 | All three AI features together | user | 40 per 10 minutes |
-| Feedback and issue reports | user | 5 per hour, 20 per day |
+| Feedback and issue reports (valid ones only; refused reports don't count) | user | 5 per hour, 20 per day |
 | Progress and XP writes (reviews, quiz checks and submits, read, listen progress, profile) | user | 120 per minute |
 | Admin AI calls (key checks, model lists, test prompt, voice models and samples) | admin | 30 per 10 minutes |
 | Admin uploads and jobs (upload, retry, restructure, generate, audio, badge backfill) | admin | 30 per hour |

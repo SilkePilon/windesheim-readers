@@ -54,7 +54,7 @@ export const limits = {
   /** Writes that award XP or save progress, per user. */
   writes: rateLimit({ name: "writes", rules: [{ limit: 120, windowMs: MINUTE }] }),
 
-  /** Feedback and issue reports (POST /api/feedback), per user. */
+  /** Feedback and issue reports (POST /api/feedback), per user. Called inline by the route, after validation. */
   feedback: rateLimit({
     name: "feedback",
     rules: [

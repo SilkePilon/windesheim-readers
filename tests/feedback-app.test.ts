@@ -209,6 +209,38 @@ describe("POST /api/feedback", () => {
     await expectError(r, 429, "RATE_LIMITED");
   });
 
+  test("only valid reports count: 5 refused posts don't lock the user out, the 6th valid one is 429", async () => {
+    for (let i = 0; i < 5; i++) await expectError(await post(form({ message: "too short" }), student, false), 400, "VALIDATION");
+    await expectError(await post(form({ screenshot: new Blob(["<html>"], { type: "image/png" }) }), student, false), 400, "BAD_IMAGE");
+    for (let i = 0; i < 5; i++) expect((await post(form({}), student, false)).status).toBe(201);
+    const before = db.select().from(schema.feedback).all().length;
+    const r = await post(form({ screenshot: new Blob([PNG_1x1], { type: "image/png" }) }), student, false);
+    expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
+    const body = await r.clone().json();
+    expect(body.retryAfter).toBeGreaterThan(0);
+    await expectError(r, 429, "RATE_LIMITED");
+    // A refused report writes nothing.
+    expect(db.select().from(schema.feedback).all().length).toBe(before);
+  });
+
+  test("malformed multipart: 400 VALIDATION without parser text, nothing stored", async () => {
+    const errSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const raw = (contentType: string, body: string) =>
+        fetch(`${base}/api/feedback`, { method: "POST", headers: { cookie: student, origin: "http://localhost:5173", "content-type": contentType }, body });
+      for (const r of [
+        await raw("multipart/form-data; boundary=xx", "--xx\r\ngarbage"),
+        await raw("multipart/form-data", "--xx\r\ngarbage"),
+      ]) {
+        const text = await r.text();
+        expect([r.status, JSON.parse(text)]).toEqual([400, { error: "VALIDATION", issues: [] }]);
+      }
+      expect(errSpy).not.toHaveBeenCalled();
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
   test("over the 500 MB directory cap: saved without the screenshot", async () => {
     const spy = spyOn(store, "feedbackDirBytes").mockResolvedValue(store.FEEDBACK_DIR_CAP + 1);
     try {

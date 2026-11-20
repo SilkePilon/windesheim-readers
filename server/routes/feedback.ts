@@ -23,8 +23,27 @@ import {
 
 const invalid = (c: Context) => c.json({ error: "VALIDATION", issues: [] }, 400);
 
-export const feedback = new Hono<AppEnv>().post("/", requireUser, limits.feedback, async (c) => {
-  const body = await c.req.parseBody();
+/**
+ * Runs `limits.feedback` inline, so only reports that passed validation count (a client bug
+ * mustn't lock a user out for an hour; the /api flood limit covers invalid spam). Returns the
+ * middleware's own 429 response (RATE_LIMITED, retryAfter, Retry-After), or null to go on.
+ */
+async function feedbackLimit(c: Context): Promise<Response | null> {
+  let allowed = false;
+  const res = await limits.feedback(c, async () => {
+    allowed = true;
+  });
+  return allowed ? null : (res ?? c.json({ error: "RATE_LIMITED" }, 429));
+}
+
+export const feedback = new Hono<AppEnv>().post("/", requireUser, async (c) => {
+  // Malformed multipart (no boundary, a missing final boundary, ...): a 400, never the parser's text.
+  let body: Awaited<ReturnType<typeof c.req.parseBody>>;
+  try {
+    body = await c.req.parseBody();
+  } catch {
+    return invalid(c);
+  }
 
   // The context is a JSON string field: size-check it before parsing.
   const rawContext = body.context;
@@ -49,6 +68,10 @@ export const feedback = new Hono<AppEnv>().post("/", requireUser, limits.feedbac
     if (!ext) return c.json({ error: "BAD_IMAGE" }, 400);
     image = { bytes, ext };
   }
+
+  // Valid: now it counts towards the limit, before anything is written.
+  const limited = await feedbackLimit(c);
+  if (limited) return limited;
 
   const id = nanoid();
   // Millisecond timestamps (the column default is whole seconds): the inbox sorts by createdAt.
@@ -143,8 +166,9 @@ export const adminFeedback = new Hono<AppEnv>()
     const id = c.req.param("id");
     const row = db.select({ screenshot: schema.feedback.screenshot }).from(schema.feedback).where(eq(schema.feedback.id, id)).get();
     if (!row) return notFound(c);
-    db.delete(schema.feedback).where(eq(schema.feedback.id, id)).run();
+    // The file first (a missing one is fine): a failing delete leaves the row, so the admin can retry.
     if (row.screenshot) await deleteScreenshot(row.screenshot);
+    db.delete(schema.feedback).where(eq(schema.feedback.id, id)).run();
     return c.json({ ok: true });
   })
 

@@ -245,6 +245,8 @@ const en: Messages = {
       tone: { new: "Not started", learning: "Learning", mastered: "Mastered" },
       links: "Links",
       noLinks: "No links yet",
+      close: "Close",
+      focusHint: "Tap a concept to see how it connects to the rest.",
       from: "← {{label}}",
       openLesson: "Open lesson {{code}}",
       lessonOf: "Lesson {{code}} · {{title}}",

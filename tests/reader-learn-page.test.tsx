@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 import i18next from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
@@ -9,7 +9,12 @@ import { estimateParts, examLabel } from "../src/lib/reader-learn";
 import { ReaderLearnView } from "../src/components/reader-learn/reader-learn-view";
 import { ReaderHomeCard } from "../src/components/reader-learn/home-card";
 import { SessionResultView } from "../src/components/reader-session/session-result";
-import type { ReaderLearn, ReaderSessionResult } from "../src/lib/types";
+import type { ReaderConceptMap as MapData, ReaderLearn, ReaderSessionResult } from "../src/lib/types";
+
+// concept-map.tsx imports queries.ts, which pulls in src/lib/i18n.ts (reads `navigator`, crashes
+// under bun). Same process-wide stub as study-parts.test.tsx; it must cover every export.
+mock.module("../src/lib/i18n", () => ({ default: i18next.createInstance(), setLocale: async () => {}, ensureLocale: async () => {} }));
+const { ConceptMapBody } = await import("../src/components/reader-learn/concept-map");
 
 describe("examLabel", () => {
   test("no date", () => expect(examLabel(null)).toEqual({ key: "readerLearn.exam.none" }));
@@ -182,5 +187,76 @@ describe("SessionResultView", () => {
     const html = await render("en", <SessionResultView readerId="r1" result={{ ...result, correct: 0, total: 0, perLesson: [], xp: 0 }} open={[]} />);
     expect(html).toContain("Done for today");
     expect(html).not.toContain("/lesson/");
+  });
+});
+
+describe("ConceptMapBody", () => {
+  const data: MapData = {
+    lessons: [
+      { id: "l1", code: "2.1", title: "Netwerkmodellen", week: 2, mastery: 0.9 },
+      { id: "l2", code: "2.3", title: "IP-adressering", week: 2, mastery: 0.4 },
+      { id: "l3", code: "3.1", title: "Routeringsprotocollen", week: 3, mastery: 0 },
+    ],
+    concepts: [
+      { id: "net", label: "Netwerklaag", description: "Laag 3 van het OSI-model.", lessonId: "l1" },
+      { id: "mask", label: "Subnetmasker", description: "Bepaalt welk deel van een adres het netwerk is.", lessonId: "l2" },
+      { id: "route", label: "Routering", description: "Pakketten de weg wijzen.", lessonId: "l3" },
+      { id: "vlr", label: "Verbindingsloze routering", description: "", lessonId: "l3" },
+    ],
+    links: [
+      { from: "net", to: "mask", label: "verdeelt" },
+      { from: "mask", to: "route", label: "is nodig voor" },
+      { from: "route", to: "vlr", label: "omvat" },
+    ],
+  };
+  const panelOf = (html: string) => html.slice(html.indexOf('role="region"'));
+  const strip = (html: string) => html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, "");
+
+  test("nl, no focus: weeks, lessons and every label in full; no links drawn, no panel", async () => {
+    const html = await render("nl", <ConceptMapBody data={data} focusId={null} />);
+    expect(html).toContain("Conceptkaart");
+    expect(html).toContain("Week 2");
+    expect(html).toContain("Week 3");
+    for (const s of ["2.1", "Netwerkmodellen", "2.3", "IP-adressering", "3.1", "Routeringsprotocollen"]) expect(html).toContain(s);
+    for (const c of data.concepts) expect(html).toContain(`>${c.label}<`);
+    expect(html).not.toContain("Verbindingsloze routering…");
+    expect(html).not.toContain("truncate");
+    expect(html).not.toContain("data-link");
+    expect(html).not.toContain('role="region"');
+    expect(html).not.toContain('aria-pressed="true"');
+    expect(html).not.toMatch(/readerLearn\./);
+  });
+
+  test("nl, focus: panel with lesson line, description, relation sentences and Open les", async () => {
+    const html = await render("nl", <ConceptMapBody data={data} focusId="mask" />);
+    expect(html).toContain('aria-pressed="true"');
+    const panel = strip(panelOf(html));
+    expect(panel).toContain("Subnetmasker");
+    expect(panel).toContain("Les 2.3 · IP-adressering");
+    expect(panel).toContain("Bepaalt welk deel van een adres het netwerk is.");
+    expect(panel).toContain("→ is nodig voor Routering");
+    expect(panel).toContain("← Netwerklaag verdeelt");
+    expect(panel.indexOf("→ is nodig voor")).toBeLessThan(panel.indexOf("← Netwerklaag"));
+    expect(panel).toContain("Open les 2.3");
+    expect(panelOf(html)).toContain('href="/lesson/l2"');
+    expect(panelOf(html)).toContain('aria-label="Sluiten"');
+    const controls = html.match(/aria-pressed="true" aria-controls="([^"]+)"/)?.[1];
+    expect(controls).toBeTruthy();
+    expect(html).toContain(`id="${controls}" role="region"`);
+    expect(html).toContain('lang="nl"');
+    expect(html).not.toMatch(/readerLearn\./);
+  });
+
+  test("en, focus on an unlinked-out concept: incoming only; a concept with no links says so", async () => {
+    let html = await render("en", <ConceptMapBody data={data} focusId="vlr" />);
+    let panel = strip(panelOf(html));
+    expect(panel).toContain("Lesson 3.1 · Routeringsprotocollen");
+    expect(panel).toContain("← Routering omvat");
+    expect(panel).toContain("Open lesson 3.1");
+    expect(panelOf(html)).toContain('aria-label="Close"');
+    html = await render("en", <ConceptMapBody data={{ ...data, links: [] }} focusId="net" />);
+    panel = strip(panelOf(html));
+    expect(panel).toContain("No links yet");
+    expect(html).not.toMatch(/readerLearn\./);
   });
 });

@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import type { FeedbackContext } from "../../shared/feedback";
 
 const now = sql`(unixepoch() * 1000)`;
 const ts = (name: string) => integer(name, { mode: "timestamp_ms" });
@@ -310,4 +311,27 @@ export const aiUsage = sqliteTable(
     count: integer("count").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
+);
+
+// ---------- feedback ----------
+
+/** Feedback and issue reports from users; the admin inbox. */
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    // SET NULL: a report outlives the account that sent it.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    type: text("type", { enum: ["feedback", "bug", "idea"] }).notNull(),
+    message: text("message").notNull(),
+    context: text("context", { mode: "json" }).$type<FeedbackContext>().notNull(),
+    /** File name in UPLOAD_DIR/feedback (`<id>.<ext>`), null when none or swept. */
+    screenshot: text("screenshot"),
+    status: text("status", { enum: ["new", "in_progress", "done"] }).notNull().default("new"),
+    githubUrl: text("github_url"),
+    createdAt: ts("created_at").notNull().default(now),
+    /** Set explicitly on admin changes (the retention sweep counts from it, and doesn't touch it). */
+    updatedAt: ts("updated_at").notNull().default(now),
+  },
+  (t) => [index("feedback_status_created_idx").on(t.status, t.createdAt)],
 );

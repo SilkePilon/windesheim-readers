@@ -8,6 +8,7 @@ import { COUNT_MAX, COUNT_MIN, DEFAULT_BATTLE_SETTINGS, DIFFICULTIES, POINTS_MOD
 import { PROVIDERS, VOICE_PROVIDERS } from "../ai/providers";
 import { AI_DAILY_LIMIT_MAX } from "./ai-quota";
 import type { QuestionData } from "../db/schema";
+import { FEEDBACK_STATUSES, FEEDBACK_TYPES } from "../../shared/feedback";
 
 /** No control or zero-width characters, except newlines and tabs in multi-line text. */
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤﻿]/;
@@ -248,6 +249,62 @@ export const patchUser = z
   .object({ role: z.enum(["user", "admin"]).optional(), nickname: nickname.nullable().optional() })
   .strict()
   .refine((b) => b.role !== undefined || b.nickname !== undefined, { message: "Nothing to change" });
+
+// ----- feedback -----
+const capped = (max: number) => z.string().max(max);
+/**
+ * The automatic context of a report (shared/feedback.ts FeedbackContext). Unlike the other
+ * schemas, unknown keys are stripped rather than refused, so an older or newer client still
+ * gets its report through; every string is capped.
+ */
+export const feedbackContext = z.object({
+  // The route path only: a query string or hash (tokens, search terms) is cut off.
+  path: capped(300).transform((p) => p.split(/[?#]/)[0]!),
+  readerTitle: capped(200).optional(),
+  lessonCode: capped(50).optional(),
+  lessonTitle: capped(200).optional(),
+  appVersion: capped(50),
+  userAgent: capped(400),
+  browser: capped(100),
+  viewport: capped(30),
+  locale: capped(20),
+  theme: capped(20),
+  standalone: z.boolean(),
+  error: z
+    .object({
+      message: capped(500),
+      status: z.number().int().min(0).max(999).optional(),
+      code: capped(100).optional(),
+      apiPath: capped(300).optional(),
+      stack: capped(4096).optional(),
+    })
+    .optional(),
+});
+
+/** POST /api/feedback form fields (the context arrives as a JSON string, parsed and size-checked first). */
+export const feedbackCreate = z
+  .object({
+    type: z.enum(FEEDBACK_TYPES),
+    message: text(LIMITS.feedback.message.max, LIMITS.feedback.message.min),
+    context: feedbackContext,
+  })
+  .strict();
+
+/** A link to the issue on GitHub: https://github.com/... only (never another host or scheme). */
+const githubUrl = z
+  .string()
+  .max(LIMITS.feedback.githubUrl)
+  .regex(/^https:\/\/github\.com\/[!-~]*$/, "Must be a https://github.com/ link"); // printable ASCII: no spaces or control characters
+
+export const feedbackPatch = z
+  .object({ status: z.enum(FEEDBACK_STATUSES).optional(), githubUrl: githubUrl.nullable().optional() })
+  .strict()
+  .refine((b) => b.status !== undefined || b.githubUrl !== undefined, { message: "Nothing to change" });
+
+export const feedbackFilter = z.object({
+  status: z.enum(FEEDBACK_STATUSES).optional(),
+  type: z.enum(FEEDBACK_TYPES).optional(),
+});
 
 // ----- better-auth bodies we check before better-auth sees them -----
 export const magicLinkBody = z.looseObject({

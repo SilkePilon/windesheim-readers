@@ -70,7 +70,14 @@ export const LIMITS = {
 
   // ----- transport -----
   /** Request body caps (bytes). */
-  body: { default: 64 * 1024, tutor: 256 * 1024, admin: 256 * 1024, upload: 51 * 1024 * 1024 },
+  body: {
+    default: 64 * 1024,
+    tutor: 256 * 1024,
+    admin: 256 * 1024,
+    upload: 51 * 1024 * 1024,
+    /** POST /api/feedback: a 5 MB screenshot, the message and context, and multipart overhead. */
+    feedback: 6 * 1024 * 1024,
+  },
   /** One battle websocket message (bytes). */
   battleMessage: { max: 4 * 1024 },
 } as const;

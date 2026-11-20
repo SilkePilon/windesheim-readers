@@ -127,6 +127,7 @@ export function ListenView({
   meta,
   awarded = false,
   xp,
+  xpHint,
   onAward,
   onProgress,
 }: {
@@ -137,10 +138,12 @@ export function ListenView({
   awarded?: boolean;
   /** XP hint under the controls, while not yet credited. */
   xp?: number;
+  /** Replaces the lesson wording of the XP hint (e.g. for an episode). */
+  xpHint?: string;
   onAward?: (award: XpResult, progress: ListenReport) => void;
   onProgress?: (progress: ListenReport) => void;
 }) {
-  return <Player key={sourceVersion(source)} source={source} header={header} meta={meta} awarded={awarded} xp={xp} onAward={onAward} onProgress={onProgress} />;
+  return <Player key={sourceVersion(source)} source={source} header={header} meta={meta} awarded={awarded} xp={xp} xpHint={xpHint} onAward={onAward} onProgress={onProgress} />;
 }
 
 function Player({
@@ -149,6 +152,7 @@ function Player({
   meta: m,
   awarded,
   xp,
+  xpHint,
   onAward,
   onProgress,
 }: {
@@ -157,6 +161,7 @@ function Player({
   meta: { title: string; artist: string };
   awarded: boolean;
   xp?: number;
+  xpHint?: string;
   onAward?: (award: XpResult, progress: ListenReport) => void;
   onProgress?: (progress: ListenReport) => void;
 }) {
@@ -229,7 +234,7 @@ function Player({
               <Check className="size-4" strokeWidth={3} /> {t("listen.done")}
             </span>
           ) : (
-            xp !== undefined && <span className="text-center text-xs font-semibold text-muted-foreground">{t("listen.xpHint", { xp })}</span>
+            xp !== undefined && <span className="text-center text-xs font-semibold text-muted-foreground">{xpHint ?? t("listen.xpHint", { xp })}</span>
           )}
         </div>
       </div>
@@ -237,15 +242,15 @@ function Player({
   );
 }
 
-/** The "album art": the lesson code on a primary tile with a soft equaliser. */
-export const Cover = memo(function Cover({ code, title, playing }: { code?: string; title: string; playing: boolean }) {
+/** The "album art": the lesson code (or any short label) on a primary tile with a soft equaliser; `badge` replaces "Luisterles". */
+export const Cover = memo(function Cover({ code, title, playing, badge }: { code?: string; title: string; playing: boolean; badge?: string }) {
   const { t } = useTranslation();
   return (
     <div className="relative isolate overflow-hidden bg-primary px-5 pt-5 pb-5 text-primary-foreground md:px-8 md:pb-6">
       <span aria-hidden className="absolute -top-16 -right-10 -z-10 size-48 rounded-full bg-white/10" />
       <span aria-hidden className="absolute -bottom-20 -left-12 -z-10 size-44 rounded-full bg-primary-shade/50" />
       <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 font-heading text-xs font-semibold">
-        <Headphones className="size-3.5" strokeWidth={2.5} /> {t("listen.badge")}
+        <Headphones className="size-3.5" strokeWidth={2.5} /> {badge ?? t("listen.badge")}
       </span>
       <div className="mt-4 flex items-end justify-between gap-4">
         <div className="min-w-0">

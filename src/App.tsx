@@ -15,6 +15,9 @@ const ReviewPage = lazy(PAGE_LOADERS.review);
 const LeaderboardPage = lazy(PAGE_LOADERS.leaderboard);
 const ProfilePage = lazy(PAGE_LOADERS.profile);
 const BattlePage = lazy(PAGE_LOADERS.battle);
+const ReaderLearnPage = lazy(PAGE_LOADERS.readerLearn);
+const ReaderEpisodePage = lazy(PAGE_LOADERS.readerEpisode);
+const ReaderSessionPage = lazy(PAGE_LOADERS.readerSession);
 const AboutPage = lazy(() => import("@/pages/about"));
 const AdminReadersPage = lazy(() => import("@/pages/admin/readers"));
 const AdminReaderPage = lazy(() => import("@/pages/admin/reader"));
@@ -76,6 +79,7 @@ export function App() {
           <Route path="lesson/:id/cards" element={<LessonStudyPage mode="cards" />} />
           <Route path="lesson/:id/quiz" element={<LessonStudyPage mode="quiz" />} />
           <Route path="review" element={<ReviewPage />} />
+          <Route path="reader/:id/session" element={<ReaderSessionPage />} />
           {/* Battle picks its shell itself: AppLayout to join or host, StudyShell once in a room. */}
           <Route path="battle" element={<BattlePage />} />
           <Route path="battle/:code" element={<BattlePage />} />
@@ -90,6 +94,8 @@ export function App() {
           <Route index element={<HomePage />} />
           <Route path="learn" element={<Navigate to="/" replace />} />
           <Route path="lesson/:id" element={<LessonPage />} />
+          <Route path="reader/:id" element={<ReaderLearnPage />} />
+          <Route path="reader/:id/episode/:week" element={<ReaderEpisodePage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route

@@ -60,7 +60,7 @@ describe("reloadOnceForStaleChunk", () => {
 describe("PAGE_LOADERS", () => {
   test("has every page key", () => {
     expect(Object.keys(PAGE_LOADERS).sort()).toEqual(
-      ["battle", "leaderboard", "lesson", "profile", "review", "study", "world"],
+      ["battle", "leaderboard", "lesson", "profile", "readerEpisode", "readerLearn", "readerSession", "review", "study", "world"],
     );
   });
 });

@@ -8,7 +8,8 @@ import { Chip } from "@/components/game/chip";
 import { QuestCard } from "@/components/game/quest-card";
 import { InstallNudge } from "@/components/install-drawer";
 import { WORLD_WIDTH, worldHeight } from "@/lib/world/compose";
-import { useLeaderboard, useMe, useReaders } from "@/lib/queries";
+import { useLeaderboard, useMe, useReaderLearn, useReaders } from "@/lib/queries";
+import { ReaderHomeCard, ReaderHomeCardSkeleton } from "@/components/reader-learn/home-card";
 import type { LeaderboardEntry, Me, ReaderWithLessons } from "@/lib/types";
 import { DAILY_XP_GOAL } from "@shared/game";
 import { pathNodes } from "@shared/path";
@@ -66,6 +67,7 @@ export default function HomePage() {
             ) : (
               <h1 className="hidden font-heading text-2xl font-semibold tracking-tight lg:block">{reader.title}</h1>
             )}
+            <ReaderLearnCard readerId={reader.id} />
             <Suspense fallback={<WorldMapSkeleton lessons={reader.lessons.length} />}>
               <WorldMap
                 seed={reader.id}
@@ -79,6 +81,13 @@ export default function HomePage() {
       <InstallNudge />
     </div>
   );
+}
+
+/** "De hele reader leren" for the selected reader: a same-size skeleton while loading, nothing on an error. */
+function ReaderLearnCard({ readerId }: { readerId: string }) {
+  const { data, isPending } = useReaderLearn(readerId);
+  if (!data && !isPending) return null;
+  return <div className="mt-2 mb-1">{data ? <ReaderHomeCard data={data} /> : <ReaderHomeCardSkeleton />}</div>;
 }
 
 function HeaderChips({ me }: { me: Me }) {

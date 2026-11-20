@@ -11,6 +11,9 @@ export const PAGE_LOADERS = {
   profile: () => import("@/pages/profile"),
   battle: () => import("@/pages/battle"),
   world: () => import("@/components/world/world-map"),
+  readerLearn: () => import("@/pages/reader-learn"),
+  readerEpisode: () => import("@/pages/reader-episode"),
+  readerSession: () => import("@/pages/reader-session"),
 } satisfies Record<string, () => Promise<unknown>>;
 
 /** Skip the background downloads when the user asked to save data. */

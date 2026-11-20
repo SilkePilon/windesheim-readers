@@ -1,6 +1,6 @@
 // Whole-reader learning: the overview and today's mixed session (spec: "The daily session (server)").
 import { Hono } from "hono";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, schema } from "../db";
 import { limits } from "../limits";
@@ -10,7 +10,7 @@ import { previewIntervals, toCard } from "../lib/fsrs";
 import { updateProgress } from "../lib/game";
 import { dayKey } from "../lib/time";
 import { lessonMastery, loadPlanInput, readerOverview, sessionDayStreak, visibleReader } from "../lib/reader-learn";
-import { award, createQuizSession, findOpenReaderSession, getQuizSession, LISTENED_SHARE } from "./learn";
+import { award, createQuizSession, findOpenReaderSession, getQuizSession, LISTENED_SHARE, type QuizSession } from "./learn";
 import { episodeChapterPath } from "../ai/episodes";
 import { readyLessons } from "../ai/concept-map";
 import { visibleMap } from "../../shared/concept-map";
@@ -38,6 +38,34 @@ const episodeTotalMs = (chapters: { durationMs: number }[]) => chapters.reduce((
 /** Changes whenever the audio is regenerated, so the client starts a fresh player (and drops stale local positions). */
 const episodeVersion = (ep: { generatedAt: Date | null; chapters: { n: number; durationMs: number; bytes: number }[] }) =>
   String(ep.generatedAt?.getTime() ?? hashSeed(ep.chapters.map((c) => `${c.n}:${c.durationMs}:${c.bytes}`).join(",")));
+
+/**
+ * A resumed session's items minus what was already done in it: cards reviewed since it was
+ * built, questions checked and open questions graded under it. Empty: the client finishes it.
+ */
+async function remainingItems(userId: string, session: QuizSession) {
+  const items = (session.items ?? []) as ({ kind: "card"; card: { id: string } } | { kind: "question" | "open"; question: { id: string } })[];
+  const cardIds = items.flatMap((i) => (i.kind === "card" ? [i.card.id] : []));
+  const reviewed = new Set(
+    cardIds.length
+      ? (
+          await db
+            .select({ id: schema.cardReview.flashcardId })
+            .from(schema.cardReview)
+            .where(
+              and(
+                eq(schema.cardReview.userId, userId),
+                inArray(schema.cardReview.flashcardId, cardIds),
+                gte(schema.cardReview.lastReview, new Date(session.createdAt)),
+              ),
+            )
+        ).map((r) => r.id)
+      : [],
+  );
+  return items.filter((i) =>
+    i.kind === "card" ? !reviewed.has(i.card.id) : !session.results.has(i.question.id) && !session.graded?.has(i.question.id),
+  );
+}
 
 // requireUser per route, not `.use()`: mounted on /api, a router-wide middleware would also run
 // (a second session lookup) for every /api request that falls through to `learn`.
@@ -151,7 +179,7 @@ export const readerLearn = new Hono<AppEnv>()
     const xpPerCorrect = quizXpPerCorrect(sessionXpFactor(data.sessionsToday));
     const planKey = `${dayKey(now)}:${data.sessionsToday}`;
     const open = findOpenReaderSession(u.id, data.reader.id, planKey);
-    if (open) return c.json({ sessionId: open.id, needsStart: false, xpPerCorrect, items: open.session.items ?? [] });
+    if (open) return c.json({ sessionId: open.id, needsStart: false, xpPerCorrect, items: await remainingItems(u.id, open.session), resumed: true });
     const plan = buildSessionPlan(data.input);
     if (plan.needsStart) return c.json({ sessionId: null, needsStart: true, xpPerCorrect, items: [] });
 

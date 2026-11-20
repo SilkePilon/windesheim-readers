@@ -22,8 +22,8 @@ export type SessionAction =
   | { type: "graded"; at: number }
   | { type: "next"; from: number }
   | { type: "submitted"; result: ReaderSessionResult }
-  /** A freshly loaded session with this many items. */
-  | { type: "reset"; total: number };
+  /** A freshly loaded session with this many items (`done`: a resumed session with nothing left, submit it). */
+  | { type: "reset"; total: number; done?: boolean };
 
 export function initSession(total: number): SessionState {
   return { index: 0, total, done: false, answered: new Set() };
@@ -40,7 +40,7 @@ function advance(s: SessionState): SessionState {
 }
 
 export function sessionReducer(s: SessionState, a: SessionAction): SessionState {
-  if (a.type === "reset") return initSession(a.total);
+  if (a.type === "reset") return a.done ? { ...initSession(a.total), done: true } : initSession(a.total);
   if (a.type === "submitted") return { ...s, done: true, result: a.result };
   if (s.done) return s;
   // Each step names the item it belongs to: a late timer or a double tap for an item that's

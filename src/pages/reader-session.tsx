@@ -43,7 +43,7 @@ function ReaderSession({ id }: { id: string }) {
   const [confirming, setConfirming] = useState(false);
   const back = useCallback(() => navigate(`/reader/${id}`), [navigate, id]);
 
-  // Every GET opens a new server session, so fetch once (the ref also covers StrictMode's double effect).
+  // Fetch once (the ref also covers StrictMode's double effect); a refresh resumes the open server session.
   const loading = useRef(false);
   const load = useCallback(async () => {
     if (loading.current) return;
@@ -56,7 +56,8 @@ function ReaderSession({ id }: { id: string }) {
         return;
       }
       setSession(res);
-      dispatch({ type: "reset", total: res.items.length });
+      // A resumed session whose items were all done before the refresh: straight to the submit.
+      dispatch({ type: "reset", total: res.items.length, done: !!res.resumed && !res.items.length });
       setPhase("playing");
     } catch {
       setPhase("error");

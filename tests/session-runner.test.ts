@@ -89,6 +89,12 @@ describe("sessionReducer", () => {
     expect(s).toEqual(initSession(5));
   });
 
+  test("a resumed session with nothing left resets straight to done (the page submits it)", () => {
+    const s = sessionReducer(initSession(3), { type: "reset", total: 0, done: true });
+    expect(s).toMatchObject({ index: 0, total: 0, done: true });
+    expect(s.result).toBeUndefined();
+  });
+
   test("an empty session has no progress and is not done", () => {
     const s = initSession(0);
     expect(sessionProgress(s)).toBe(0);

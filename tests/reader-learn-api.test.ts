@@ -165,7 +165,7 @@ async function ok<T = any>(who: Who, path: string, body?: unknown): Promise<T> {
 }
 
 type Item = { kind: "card"; card: { id: string; lessonId: string; lessonCode: string } } | { kind: "question" | "open"; question: { id: string; lessonId: string; code: string; type: string } };
-type Session = { sessionId: string | null; needsStart: boolean; xpPerCorrect: number; items: Item[] };
+type Session = { sessionId: string | null; needsStart: boolean; xpPerCorrect: number; resumed?: boolean; items: Item[] };
 const questionsOf = (s: Session) => s.items.flatMap((i) => (i.kind === "question" ? [i.question] : []));
 const check = (sessionId: string, questionId: string, right: boolean) => ok("student", `/questions/${questionId}/check`, { sessionId, answer: right ? 0 : 1 });
 
@@ -233,7 +233,8 @@ describe("GET /readers/:id/session", () => {
       await check(a.sessionId!, q.id, false);
       const b = await ok<Session>("student", `/readers/${R}/session`);
       expect(b.sessionId).toBe(a.sessionId);
-      expect(b.items).toEqual(a.items);
+      // The checked question isn't offered again; the rest is unchanged.
+      expect(b.items).toEqual(a.items.filter((i) => i.kind === "card" || i.question.id !== q.id));
       const again = await check(b.sessionId!, q.id, true);
       expect(again.correct).toBe(true);
       expect(getQuizSession(a.sessionId!)!.results.get(q.id)).toBe(false);
@@ -249,6 +250,7 @@ describe("GET /readers/:id/session", () => {
     expect(s.needsStart).toBe(false);
     expect(typeof s.sessionId).toBe("string");
     expect(s.xpPerCorrect).toBe(10);
+    expect(s.resumed).toBeUndefined();
     const lessons = s.items.map((i) => (i.kind === "card" ? i.card.lessonId : i.question.lessonId));
     expect(lessons).not.toContain(L[3]);
     expect(lessons).not.toContain(L_PENDING);
@@ -271,6 +273,7 @@ describe("GET /readers/:id/session", () => {
     const b = await ok<Session>("student", `/readers/${R}/session`);
     expect(b.sessionId).toBe(a.sessionId);
     expect(b.items).toEqual(a.items);
+    expect(b.resumed).toBe(true);
   });
 });
 
@@ -437,5 +440,26 @@ describe("exam pull-forward", () => {
     expect(cards).toContain("rl-c31");
     // Due after the exam, but not a review card in state 2/3 → never pulled; due before the exam → not pulled either.
     expect(cards).not.toContain("rl-c22");
+  });
+});
+
+describe("resuming an open session", () => {
+  test("a refresh leaves out the cards reviewed, questions checked and open answers graded in it", async () => {
+    const a = await ok<Session>("student", `/readers/${R}/session`);
+    const card = a.items.find((i) => i.kind === "card") as { card: { id: string } };
+    const q = questionsOf(a)[0]!;
+    const open = a.items.find((i) => i.kind === "open") as { question: { id: string } };
+    expect(card && q && open).toBeTruthy();
+    await ok("student", `/review`, { flashcardId: card.card.id, rating: 3 });
+    await check(a.sessionId!, q.id, true);
+    await ok("student", `/questions/${open.question.id}/grade`, { answer: "abcdefghij", sessionId: a.sessionId });
+    const b = await ok<Session>("student", `/readers/${R}/session`);
+    expect(b.sessionId).toBe(a.sessionId);
+    expect(b.resumed).toBe(true);
+    const keys = (s: Session) => s.items.map((i) => (i.kind === "card" ? i.card.id : i.question.id));
+    expect(keys(b)).not.toContain(card.card.id);
+    expect(keys(b)).not.toContain(q.id);
+    expect(keys(b)).not.toContain(open.question.id);
+    expect(keys(b)).toEqual(keys(a).filter((k) => ![card.card.id, q.id, open.question.id].includes(k)));
   });
 });

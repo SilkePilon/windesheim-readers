@@ -114,6 +114,8 @@ export interface ReaderSession {
   sessionId: string | null;
   needsStart: boolean;
   xpPerCorrect: number;
+  /** An open session given back by a refresh: `items` holds only what is left in it. */
+  resumed?: boolean;
   items: ReaderSessionItem[];
 }
 

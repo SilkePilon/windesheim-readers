@@ -63,6 +63,8 @@ export interface QuizSession {
   /** Reader sessions: the plan they were built for (day and sessions done that day) and the items as sent. */
   planKey?: string;
   items?: unknown[];
+  /** Reader sessions: open questions graded under this session (left out when the session is resumed). */
+  graded?: Set<string>;
   /** Reader sessions are kept after submit (their open answers may still be graded) but can't be checked or submitted again. */
   submitted?: boolean;
 }
@@ -607,6 +609,7 @@ export const learn = new Hono<AppEnv>()
     // In a reader session one answer is weaker evidence than the full explain exercise: 0.6 weight.
     const session = sessionId ? getQuizSession(sessionId) : undefined;
     if (session?.readerId && session.userId === u.id && session.questionIds.includes(q.id)) {
+      (session.graded ??= new Set()).add(q.id);
       await updateProgress(u.id, q.lessonId, { explain: (grade.score / 100) * SESSION_EXPLAIN_WEIGHT });
     }
     const res = await award(u.id, grade.score * XP.openPerPoint, "open", [{ kind: "open", lessonId: q.lessonId }]);

@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { notify } from "@/lib/notify";
-import { Lock } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageSpinner } from "@/components/page";
 import { PlayerAvatar } from "@/components/game/player-avatar";
+import { NicknameDialog } from "@/components/admin/nickname-dialog";
 import { Pill } from "@/components/admin/status-pill";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/error-text";
@@ -29,6 +31,7 @@ export default function AdminUsersPage() {
   const { t, i18n } = useTranslation();
   const { data: me } = useMe();
   const [saving, setSaving] = useState<string | null>(null);
+  const [editing, setEditing] = useState<UserRow | null>(null);
   const { data, isLoading, refetch } = useQuery({ queryKey: ["admin", "users"], queryFn: () => api.get<UserRow[]>("/admin/users") });
   if (isLoading || !data) return <PageSpinner />;
 
@@ -68,13 +71,22 @@ export default function AdminUsersPage() {
                   <TableCell className="w-full max-w-0 pl-4">
                     <div className="flex items-center gap-2.5">
                       <PlayerAvatar name={display} className="size-7 text-xs" />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate font-bold">
                           {display}
                           {isMe && <span className="ml-1.5 text-xs font-semibold text-muted-foreground">({t("home.you")})</span>}
                         </div>
                         <div className="truncate text-xs text-muted-foreground">{u.email}</div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        aria-label={t("admin.nickname.edit", { name: display })}
+                        onClick={() => setEditing(u)}
+                      >
+                        <Pencil />
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-heading font-semibold tabular-nums">{u.xp ?? 0}</TableCell>
@@ -104,6 +116,7 @@ export default function AdminUsersPage() {
           </TableBody>
         </Table>
       </Card>
+      <NicknameDialog user={editing} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} onSaved={refetch} />
     </>
   );
 }

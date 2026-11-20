@@ -718,6 +718,13 @@ const nl = {
       saveAnyway: "Toch opslaan",
       leaveText: "Je hebt AI-instellingen aangepast maar nog niet opgeslagen. Als je weggaat, ben je deze wijzigingen kwijt.",
     },
+    nickname: {
+      edit: "Bijnaam van {{name}} aanpassen",
+      title: "Bijnaam van {{name}}",
+      hint: "Wordt getoond op de ranglijst en in battles. Leeg = de voornaam.",
+      clear: "Bijnaam wissen",
+      saved: "Bijnaam opgeslagen",
+    },
     usersTable: {
       name: "Naam",
       role: "Rol",

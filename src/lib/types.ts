@@ -97,6 +97,9 @@ export type PublicQuestion =
 /** A card in a reader session: the `/review/queue` item shape. */
 export type ReviewCard = QueueCard;
 
+/** `POST /review` response. */
+export type ReviewResult = XpResult & { due: string; intervals: QueueCard["intervals"] };
+
 /** A question in a reader session, with its lesson. */
 export type SessionQuestion = PublicQuestion & { lessonId: string; code: string };
 
